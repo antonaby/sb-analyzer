@@ -23,7 +23,7 @@ def download_video(url: str, path: str):
     info = ydl.extract_info(url, download=True)
     return info
     
-def extract_video(path: str, interval_seconds: float = 5.0) -> List[Dict]:
+def extract_video(path: str, interval_seconds: float = 1.0) -> List[Dict]:
   cap = cv2.VideoCapture(path, cv2.CAP_FFMPEG)
   if not cap.isOpened():
     raise ValueError(f"Cannot open video: {path}")
