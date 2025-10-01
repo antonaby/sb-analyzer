@@ -23,6 +23,13 @@ def download_video(url: str, path: str):
     info = ydl.extract_info(url, download=True)
     return info
     
+def frame_to_base64(frame: np.ndarray) -> str:
+  # Encode as JPEG
+  _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+  # Convert to base64
+  return base64.b64encode(buffer).decode('utf-8')    
+    
+# TODO: add better logging
 def extract_video(path: str, interval_seconds: float = 1.0) -> List[Dict]:
   cap = cv2.VideoCapture(path, cv2.CAP_FFMPEG)
   if not cap.isOpened():
@@ -47,7 +54,7 @@ def extract_video(path: str, interval_seconds: float = 1.0) -> List[Dict]:
 
     if ret:
       frames.append({
-        'image': frame,
+        'frame': frame_to_base64(frame),
         'frame_number': frame_number,
         'timestamp': current_time
       })
@@ -58,9 +65,3 @@ def extract_video(path: str, interval_seconds: float = 1.0) -> List[Dict]:
   cap.release()
   print(f"Extracted {len(frames)} frames")
   return frames
-
-def frame_to_base64(frame: np.ndarray) -> str:
-  # Encode as JPEG
-  _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-  # Convert to base64
-  return base64.b64encode(buffer).decode('utf-8')

@@ -1,7 +1,9 @@
-import asyncio
 import os
+from tempfile import NamedTemporaryFile
 from typing import Any
 from apify_client import ApifyClientAsync
+
+from .vloader import extract_video
 
 def create_apify_client() -> ApifyClientAsync:
   return ApifyClientAsync(os.getenv("APIFY_API_KEY"))
@@ -39,16 +41,31 @@ async def run_tiktok_scrapper(apify_client: ApifyClientAsync) -> dict[str, Any]:
     "result": call_result
   }
   
-async def upload_tiktok_videos_to_s3(apify_client: ApifyClientAsync, kv_store_id: str):
-  kvStore = apify_client.key_value_store(kv_store_id)
-  try:
-    keys = await kvStore.list_keys()
-  except Exception as e:
-    print("An unexpected error occurred:", e)
-    return
+async def get_tiktok_video_keys(apify_client: ApifyClientAsync, kv_store_id: str) -> list[str]:
+  kv_store = apify_client.key_value_store(kv_store_id)
+  keys = await kv_store.list_keys()
   
   video_keys = []
-  
   for item in keys["items"]:
-    if item["key"].lower().startswith("video"):
+    if item["key"].lower().startswith("video-"):
       video_keys.append(item["key"])
+      
+  return video_keys
+
+async def download_and_split_video(apify_client: ApifyClientAsync, kv_store_id: str, record: str) -> dict[str, Any]:
+  kv_store = apify_client.key_value_store(kv_store_id)
+  entry = await kv_store.get_record(record)
+  
+  if entry is None:
+    return {
+      "ok": False
+    }
+  
+  video_bytes = entry["value"]
+  with NamedTemporaryFile(delete=True, suffix=".mp4") as f:
+    f.write(video_bytes)
+    frames = extract_video(f.name)
+    return {
+      "ok": True,
+      "frames": frames
+    }
