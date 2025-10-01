@@ -11,6 +11,15 @@
       "program": "${workspaceFolder}/main.py",
       "console": "internalConsole",
       "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "name": "Run apify.py",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/core/apify.py",
+      "console": "internalConsole",
+      "envFile": "${workspaceFolder}/.env",
+      "cwd": "${workspaceFolder}"
     }
   ]
 }
