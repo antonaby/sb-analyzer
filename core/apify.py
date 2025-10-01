@@ -3,12 +3,10 @@ import os
 from typing import Any
 from apify_client import ApifyClientAsync
 
+def create_apify_client() -> ApifyClientAsync:
+  return ApifyClientAsync(os.getenv("APIFY_API_KEY"))
 
-
-async def run_tiktok_scrapper() -> dict[str, Any]:
-  # TODO: move somewhere else
-  apify_client = ApifyClientAsync(os.getenv("APIFY_API_KEY"))
-  
+async def run_tiktok_scrapper(apify_client: ApifyClientAsync) -> dict[str, Any]:
   actor_client = apify_client.actor('clockworks/tiktok-scraper')
   
   run_input = {
@@ -41,10 +39,7 @@ async def run_tiktok_scrapper() -> dict[str, Any]:
     "result": call_result
   }
   
-async def upload_tiktok_videos_to_s3(kv_store_id: str):
-  # TODO: move somewhere else
-  apify_client = ApifyClientAsync(os.getenv("APIFY_API_KEY"))
-  
+async def upload_tiktok_videos_to_s3(apify_client: ApifyClientAsync, kv_store_id: str):
   kvStore = apify_client.key_value_store(kv_store_id)
   try:
     keys = await kvStore.list_keys()
