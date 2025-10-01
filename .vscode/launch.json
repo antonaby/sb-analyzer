@@ -5,19 +5,34 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run main.py",
+      "name": "worker",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/main.py",
-      "console": "internalConsole",
-      "envFile": "${workspaceFolder}/.env"
+      "module": "celery",
+      "args": [
+        "-A", "workers.main",
+        "worker",
+        "--loglevel=DEBUG",
+        "--concurrency=1"
+      ],
+      "console": "integratedTerminal",
+      "consoleName": "Celery Worker",
+      "envFile": "${workspaceFolder}/.env",
+      "cwd": "${workspaceFolder}"
     },
     {
-      "name": "Run apify.py",
+      "name": "api",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/core/apify.py",
-      "console": "internalConsole",
+      "module": "uvicorn",
+      "args": [
+        "api.main:app",
+        "--reload",
+        "--host", "127.0.0.1",
+        "--port", "8000"
+      ],
+      "console": "integratedTerminal",
+      "consoleName": "FastAPI Server",
       "envFile": "${workspaceFolder}/.env",
       "cwd": "${workspaceFolder}"
     }
