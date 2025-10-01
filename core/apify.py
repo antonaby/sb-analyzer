@@ -1,12 +1,12 @@
 import asyncio
 import os
+from typing import Any
 from apify_client import ApifyClientAsync
 
 
 
-
-
-async def runTikTokScrapper():
+async def run_tiktok_scrapper() -> dict[str, Any]:
+  # TODO: move somewhere else
   apify_client = ApifyClientAsync(os.getenv("APIFY_API_KEY"))
   
   actor_client = apify_client.actor('clockworks/tiktok-scraper')
@@ -32,13 +32,28 @@ async def runTikTokScrapper():
   
   if call_result is None:
     print('Actor run failed.')
+    return {
+      "ok": False
+    }
+   
+  return {
+    "ok": True,
+    "result": call_result
+  }
+  
+async def upload_tiktok_videos_to_s3(kv_store_id: str):
+  # TODO: move somewhere else
+  apify_client = ApifyClientAsync(os.getenv("APIFY_API_KEY"))
+  
+  kvStore = apify_client.key_value_store(kv_store_id)
+  try:
+    keys = await kvStore.list_keys()
+  except Exception as e:
+    print("An unexpected error occurred:", e)
     return
   
-  dataset_client = apify_client.dataset(call_result['defaultDatasetId'])
-  list_items_result = await dataset_client.list_items()
+  video_keys = []
   
-  kvStore = apify_client.key_value_store(call_result['defaultKeyValueStoreId'])
-  
-
-if __name__ == "__main__":
-  asyncio.run(runTikTokScrapper())
+  for item in keys["items"]:
+    if item["key"].lower().startswith("video"):
+      video_keys.append(item["key"])
