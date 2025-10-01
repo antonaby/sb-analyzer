@@ -1,23 +1,12 @@
 import asyncio
 import os
 from apify_client import ApifyClientAsync
-import logging
+
+
+
+
 
 async def runTikTokScrapper():
-  
-  apify_client_logger = logging.getLogger('apify_client')
-  apify_client_logger.setLevel(logging.DEBUG)
-  apify_client_logger.addHandler(logging.StreamHandler())
-  
-  apify_logger = logging.getLogger("apify")
-  apify_logger.setLevel(logging.DEBUG)
-
-  handler = logging.StreamHandler()
-  handler.setFormatter(logging.Formatter(
-      "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-  ))
-  apify_logger.addHandler(handler)
-  
   apify_client = ApifyClientAsync(os.getenv("APIFY_API_KEY"))
   
   actor_client = apify_client.actor('clockworks/tiktok-scraper')
