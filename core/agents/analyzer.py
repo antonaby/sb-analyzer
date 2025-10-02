@@ -7,6 +7,8 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.profiles.openai import OpenAIModelProfile
 
+from core.videos import VideoFrame
+
 class ClipTaggerResponse(BaseModel):
   """Schema for structured video frame analysis"""
   description: str
@@ -59,11 +61,11 @@ frame_analyzer = Agent(
   system_prompt=SYSTEM_PROMPT_FRAMES,
 )
 
-async def analyze_frames(frame):
-  return await frame_analyzer.run(
+async def analyze_frame(frame: VideoFrame) -> ClipTaggerResponse:
+  res = await frame_analyzer.run(
     [
       USER_PROMPT_FRAMES,
-      ImageUrl(url=f"data:image/jpeg;base64,{frame["frame"]}")
+      ImageUrl(url=f"data:image/jpeg;base64,{frame['base64']}")
     ],
     model_settings=OpenAIChatModelSettings(
       temperature=0.1,
@@ -76,5 +78,5 @@ async def analyze_frames(frame):
     )
   )
   
-  
+  return ClipTaggerResponse.model_validate_json(res.output)
   

@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from openai import OpenAI
 import pandas as pd
 
-from core.vloader import frame_to_base64
+from core.videos import _frame_to_base64
 
 
 class ClipTaggerResponse(BaseModel):
@@ -44,7 +44,7 @@ Maximum 10 objects and 5 actions. Return only valid JSON."""
 def caption_single_frame(client: OpenAI, frame_data, index: int):
   print(f"Processing frame {index}")
   
-  base64_image = frame_to_base64(frame_data['image'])
+  base64_image = _frame_to_base64(frame_data['image'])
 
   messages = [
     {"role": "system", "content": SYSTEM_PROMPT_FRAMES},

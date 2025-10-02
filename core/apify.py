@@ -1,9 +1,9 @@
 import os
-from tempfile import NamedTemporaryFile
+
 from typing import Any
 from apify_client import ApifyClientAsync
 
-from .vloader import extract_video
+from .videos import VideoFrame, split_video
 
 def create_apify_client() -> ApifyClientAsync:
   return ApifyClientAsync(os.getenv("APIFY_API_KEY"))
@@ -52,20 +52,11 @@ async def get_tiktok_video_keys(apify_client: ApifyClientAsync, kv_store_id: str
       
   return video_keys
 
-async def download_and_split_video(apify_client: ApifyClientAsync, kv_store_id: str, record: str) -> dict[str, Any]:
+async def download_video(apify_client: ApifyClientAsync, kv_store_id: str, record: str) -> bytes:
   kv_store = apify_client.key_value_store(kv_store_id)
   entry = await kv_store.get_record(record)
   
   if entry is None:
-    return {
-      "ok": False
-    }
+    raise ValueError(f"cannot get record: {kv_store_id}/{record}")
   
-  video_bytes = entry["value"]
-  with NamedTemporaryFile(delete=True, suffix=".mp4") as f:
-    f.write(video_bytes)
-    frames = extract_video(f.name)
-    return {
-      "ok": True,
-      "frames": frames
-    }
+  return entry["value"]
