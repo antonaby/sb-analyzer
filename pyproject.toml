@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aiohttp>=3.12.15",
     "alembic>=1.16.5",
     "apify-client>=2.1.0",
     "asyncpg>=0.30.0",

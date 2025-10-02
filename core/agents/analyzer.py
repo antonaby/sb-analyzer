@@ -3,8 +3,9 @@ import json
 import logging
 import os
 import traceback
-from typing import TypedDict, cast
+from typing import List, TypedDict, cast
 
+import aiohttp
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ImageUrl
@@ -13,6 +14,54 @@ from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.profiles.openai import OpenAIModelProfile
 
 from core.videos import VideoFrame
+
+class Word(TypedDict):
+  word: str
+  start: float
+  end: float
+  score: float
+  speaker: str
+
+class Segment(TypedDict):
+  id: int
+  text: str
+  start: float
+  end: float
+  avg_logprob: float
+  language: str
+  speaker: str
+  words: List[Word]
+
+class Transcript(TypedDict):
+  task: str
+  language: str
+  duration: float
+  text: str
+  segments: List[Segment]
+
+LEMONFOX_API_KEY_ENV_VAR_NAME = "LEMONFOX_API_KEY"
+
+async def transcribe_audio(file_bytes: bytes) -> Transcript:
+  key = os.getenv(LEMONFOX_API_KEY_ENV_VAR_NAME)
+  
+  url = "https://api.lemonfox.ai/v1/audio/transcriptions"
+  headers = {
+    "Authorization": f"Bearer {key}"
+  }
+  
+  form = aiohttp.FormData()
+  form.add_field("file", file_bytes,
+    filename="audio.mp3",  
+    content_type="audio/mpeg"
+  )
+  form.add_field("response_format", "verbose_json")
+  form.add_field("speaker_labels", "true")
+  form.add_field("translate", "true")
+
+  async with aiohttp.ClientSession() as session:
+    async with session.post(url, headers=headers, data=form) as response:
+      result = await response.json()
+      return result
 
 INFERENCE_API_KEY_ENV_VAR_NAME = "INFERENCE_API_KEY"
 

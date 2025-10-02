@@ -2717,6 +2717,7 @@ name = "sb-videoanalyzer"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "alembic" },
     { name = "apify-client" },
     { name = "asyncpg" },
@@ -2741,6 +2742,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.12.15" },
     { name = "alembic", specifier = ">=1.16.5" },
     { name = "apify-client", specifier = ">=2.1.0" },
     { name = "asyncpg", specifier = ">=0.30.0" },

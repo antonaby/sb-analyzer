@@ -1,4 +1,6 @@
 import logging
+import os
+import subprocess
 
 import yt_dlp
 import cv2
@@ -6,7 +8,6 @@ import base64
 import numpy as np
 from typing import TypedDict
 from tempfile import NamedTemporaryFile
-
 
 class VideoFrame(TypedDict, total=True):
   base64: str  
@@ -60,6 +61,26 @@ def _split_video(path: str, interval_seconds) -> list[VideoFrame]:
 def _frame_to_base64(frame: np.ndarray) -> str:
   _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
   return base64.b64encode(buffer).decode('utf-8')    
+
+def _extract_audio(input_file: str) -> bytes:
+  base, _ = os.path.splitext(input_file)
+  output_file = base + ".mp3"
+  
+  command = [
+    "ffmpeg",
+    "-i", input_file,   # input video
+    "-vn",              # no video
+    "-q:a", "0",        # highest quality VBR
+    output_file
+  ]
+  
+  subprocess.run(command, check=True)
+  
+  with open(output_file, "rb") as f:
+    data = f.read()
+  
+  os.remove(output_file)
+  return data
 
 def download_yt_video(url: str, path: str):
   ydl_opts = {
