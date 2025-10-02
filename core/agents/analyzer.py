@@ -115,6 +115,8 @@ class ClipTaggerResponse(BaseModel):
 class FrameResult(TypedDict, total=True):
   frame: VideoFrame
   description: ClipTaggerResponse
+  input_tokens: int
+  output_tokens: int
   
 class Word(TypedDict):
   word: str
@@ -139,13 +141,30 @@ class Transcript(TypedDict):
   duration: float
   text: str
   segments: list[Segment]
-  
-class VideoSummary(BaseModel):
+
+class SummaryResponse(BaseModel):
   main_idea: str
   theme: list[str]
   video_type: list[str]
   synopsis: str
   plot: str
+  
+class VideoSummary(TypedDict):
+  summary: SummaryResponse
+  input_tokens: int
+  output_tokens: int
+
+class TotalUsage(TypedDict):
+  cp_input_tokens: int
+  cp_output_tokens: int
+  gm_input_tokens: int
+  gm_output_tokens: int
+  
+class Summary(TypedDict):
+  frames: list[FrameResult]
+  transcription: Transcript
+  video_summary: VideoSummary
+  usage: TotalUsage
 
 class VideoAnalyzer:
   
@@ -191,14 +210,28 @@ class VideoAnalyzer:
       system_prompt=SYSTEM_PROMPT_SUMMARY,
     )
   
-  async def summary(self, video_datails: VideoDetails) -> tuple[list[FrameResult], Transcript, VideoSummary]:
+  async def summary(self, video_datails: VideoDetails) -> Summary:
     frames, transcription = await asyncio.gather(
       self._analyze(video_datails["frames"]), 
       self._transcribe_audio(video_datails["audio"])
     )
     
+    total_cp_input_tokens = sum([f["input_tokens"] for f in frames])
+    total_cp_output_tokens = sum([f["output_tokens"] for f in frames])
+    
     summary = await self._summary(frames, transcription)
-    return frames, transcription, summary
+    
+    return {
+      "frames": frames,
+      "transcription": transcription,
+      "video_summary": summary,
+      "usage": {
+        "cp_input_tokens": total_cp_input_tokens,
+        "cp_output_tokens": total_cp_output_tokens,
+        "gm_input_tokens": summary["input_tokens"],
+        "gm_output_tokens": summary["output_tokens"]
+      }
+    }
   
   async def _summary(self, descriptions: list[FrameResult], transcription: Transcript) -> VideoSummary:
     only_desc = [r["description"].model_dump_json() for r in descriptions]
@@ -218,7 +251,13 @@ class VideoAnalyzer:
       )
     )
     
-    return VideoSummary.model_validate_json(res.output)
+    usage = res.usage()
+    
+    return {
+      "summary": SummaryResponse.model_validate_json(res.output),
+      "input_tokens": usage.input_tokens,
+      "output_tokens": usage.output_tokens
+    } 
   
   async def _analyze(self, frames: list[VideoFrame]) -> list[FrameResult]:
     tasks = [asyncio.create_task(self._analyze_frame(f)) for f in frames]
@@ -253,9 +292,13 @@ class VideoAnalyzer:
       )
     )
   
+    usage = res.usage()
+  
     return {
       "frame": frame,
-      "description": ClipTaggerResponse.model_validate_json(res.output)
+      "description": ClipTaggerResponse.model_validate_json(res.output),
+      "input_tokens": usage.input_tokens,
+      "output_tokens": usage.output_tokens
     }
     
   async def _transcribe_audio(self, file_bytes: bytes) -> Transcript:
