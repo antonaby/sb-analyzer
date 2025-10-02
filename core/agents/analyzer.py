@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 from openai import AsyncOpenAI
@@ -9,17 +10,7 @@ from pydantic_ai.profiles.openai import OpenAIModelProfile
 
 from core.videos import VideoFrame
 
-class ClipTaggerResponse(BaseModel):
-  """Schema for structured video frame analysis"""
-  description: str
-  objects: list[str] = Field(..., max_length=10)
-  actions: list[str] = Field(..., max_length=5)
-  environment: str
-  content_type: str
-  specific_style: str
-  production_quality: str
-  summary: str
-  logos: list[str]
+INFERENCE_API_KEY_ENV_VAR_NAME = "INFERENCE_API_KEY"
 
 SYSTEM_PROMPT_FRAMES = """
 You are an image annotation API trained to analyze YouTube video keyframes. 
@@ -55,12 +46,29 @@ Rules:
 - Output **only the JSON**, no extra text or explanation.
 """
 
+class ClipTaggerResponse(BaseModel):
+  """Schema for structured video frame analysis"""
+  description: str
+  objects: list[str] = Field(..., max_length=10)
+  actions: list[str] = Field(..., max_length=5)
+  environment: str
+  content_type: str
+  specific_style: str
+  production_quality: str
+  summary: str
+  logos: list[str]
+  
+
 class VideoAnalyzer:
   
   def __init__(self):
+    key = os.getenv(INFERENCE_API_KEY_ENV_VAR_NAME)
+    if not key or not key.strip():
+      raise EnvironmentError(f"{INFERENCE_API_KEY_ENV_VAR_NAME} not set or empty")
+      
     client = AsyncOpenAI(
       base_url="https://api.inference.net/v1",
-      api_key=os.getenv("INFERENCE_API_KEY")
+      api_key=key
     )
 
     model = OpenAIChatModel(
@@ -77,9 +85,12 @@ class VideoAnalyzer:
     )
    
   async def analyze(self, frames: list[VideoFrame]):
-    pass  
+    tasks = [asyncio.create_task(self._analyze_frame(f)) for f in frames]
+    results = await asyncio.gather(*tasks)
     
-  async def _analyze_frame(self, frame: VideoFrame) -> ClipTaggerResponse:
+    return results
+      
+  async def _analyze_frame(self, frame: VideoFrame) -> tuple[VideoFrame, ClipTaggerResponse]:
     res = await self._agent.run(
       [
         USER_PROMPT_FRAMES,
@@ -96,5 +107,5 @@ class VideoAnalyzer:
       )
     )
   
-    return ClipTaggerResponse.model_validate_json(res.output)
+    return frame, ClipTaggerResponse.model_validate_json(res.output)
  
