@@ -1,5 +1,8 @@
 import asyncio
+import logging
 import os
+import traceback
+from typing import cast
 
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
@@ -57,11 +60,14 @@ class ClipTaggerResponse(BaseModel):
   production_quality: str
   summary: str
   logos: list[str]
-  
+
+FrameResultType = tuple[VideoFrame, ClipTaggerResponse]
 
 class VideoAnalyzer:
   
   def __init__(self):
+    self.log = logging.getLogger("analyzer")
+    
     key = os.getenv(INFERENCE_API_KEY_ENV_VAR_NAME)
     if not key or not key.strip():
       raise EnvironmentError(f"{INFERENCE_API_KEY_ENV_VAR_NAME} not set or empty")
@@ -84,13 +90,23 @@ class VideoAnalyzer:
       system_prompt=SYSTEM_PROMPT_FRAMES,
     )
    
-  async def analyze(self, frames: list[VideoFrame]):
+  async def analyze(self, frames: list[VideoFrame]) -> list[FrameResultType]:
     tasks = [asyncio.create_task(self._analyze_frame(f)) for f in frames]
-    results = await asyncio.gather(*tasks)
+    # TODO: add semaphore
+    results = await asyncio.gather(*tasks, return_exceptions=True)
     
-    return results
+    successes = [cast(FrameResultType, r) for r in results if not isinstance(r, Exception)]
+    errors = [
+      "".join(traceback.format_exception_only(type(r), r)) 
+      for r in results if isinstance(r, Exception)
+    ]
+    
+    if len(errors) > 0:
+      self.log.error(f"There are a few errors: {", ".join(errors)}")
+    
+    return successes
       
-  async def _analyze_frame(self, frame: VideoFrame) -> tuple[VideoFrame, ClipTaggerResponse]:
+  async def _analyze_frame(self, frame: VideoFrame) -> FrameResultType:
     res = await self._agent.run(
       [
         USER_PROMPT_FRAMES,
