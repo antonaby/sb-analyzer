@@ -13,11 +13,24 @@ class VideoFrame(TypedDict, total=True):
   base64: str  
   frame_number: int
   timestamp: float
+  
+class VideoDetails(TypedDict, total=True):
+  frames: list[VideoFrame]
+  audio: bytes
 
-def split_video(data: bytes, interval_seconds: float = 1.0) -> list[VideoFrame]: 
-  with NamedTemporaryFile(delete=True, suffix=".mp4") as f:
+def split_video(data: bytes, interval_seconds: float = 1.0) -> VideoDetails: 
+  with NamedTemporaryFile(delete=False, suffix=".mp4") as f:
     f.write(data)
-    return _split_video(f.name, interval_seconds)
+    tmp_file = f.name
+   
+  frames = _split_video(tmp_file, interval_seconds)
+  audio = _extract_audio(tmp_file)  
+  os.remove(tmp_file)
+  
+  return {
+    "frames": frames,
+    "audio": audio
+  }
     
 def _split_video(path: str, interval_seconds) -> list[VideoFrame]:
   log = logging.getLogger("analyzer")

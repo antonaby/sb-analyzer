@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import traceback
-from typing import List, TypedDict, cast
+from typing import TypedDict, cast
 
 import aiohttp
 from openai import AsyncOpenAI
@@ -13,56 +13,9 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.profiles.openai import OpenAIModelProfile
 
-from core.videos import VideoFrame
-
-class Word(TypedDict):
-  word: str
-  start: float
-  end: float
-  score: float
-  speaker: str
-
-class Segment(TypedDict):
-  id: int
-  text: str
-  start: float
-  end: float
-  avg_logprob: float
-  language: str
-  speaker: str
-  words: List[Word]
-
-class Transcript(TypedDict):
-  task: str
-  language: str
-  duration: float
-  text: str
-  segments: List[Segment]
+from core.videos import VideoDetails, VideoFrame
 
 LEMONFOX_API_KEY_ENV_VAR_NAME = "LEMONFOX_API_KEY"
-
-async def transcribe_audio(file_bytes: bytes) -> Transcript:
-  key = os.getenv(LEMONFOX_API_KEY_ENV_VAR_NAME)
-  
-  url = "https://api.lemonfox.ai/v1/audio/transcriptions"
-  headers = {
-    "Authorization": f"Bearer {key}"
-  }
-  
-  form = aiohttp.FormData()
-  form.add_field("file", file_bytes,
-    filename="audio.mp3",  
-    content_type="audio/mpeg"
-  )
-  form.add_field("response_format", "verbose_json")
-  form.add_field("speaker_labels", "true")
-  form.add_field("translate", "true")
-
-  async with aiohttp.ClientSession() as session:
-    async with session.post(url, headers=headers, data=form) as response:
-      result = await response.json()
-      return result
-
 INFERENCE_API_KEY_ENV_VAR_NAME = "INFERENCE_API_KEY"
 
 SYSTEM_PROMPT_FRAMES = """
@@ -121,6 +74,10 @@ USER_PROMPT_SUMMARY = """
     "summary": "One sentence summary",
     "logos": ["any visible logos"]
   }
+  You also receive a video transcription, as a list of stings:
+  [
+    "One", "Two", "Three"
+  ]
 
   Rules:
   - Read all frame descriptions carefully. Be specific and literal.
@@ -128,17 +85,19 @@ USER_PROMPT_SUMMARY = """
   - Include interpretations of emotion, mood, or narrative if it's visually explicit.
   - Do atistic/cinematic analysis, but be factual, not speculative.
   - Condense into one clear, concise sentence that expresses the main idea or purpose of the video (e.g., "A cooking tutorial on making spaghetti," "A vlog of a trip to the beach," "A commercial for a sports drink").
+  - 1-3 themes (1-2 words each), 1-3 video types
+  - Plot: Describe the scene in short, direct sentences. Output only simple subject-verb-object descriptions. Example: 'dog runs across the street'.
   - Always output strictly valid JSON with proper escaping.
   - Output **only the JSON**, no extra text or explanation.
   
   Output format (return exactly this JSON):
   {
     "main_idea": "string (1 sentence)",
-    "theme": "string (1-10 words)",
-    "synopsis": "string (2-3 sentences)"
+    "theme": ["theme_one", "theme_two"],
+    "video_type": ['original', 'compilation', 'reaction', 'parody', 'review', 'tutorial', 'unboxing', 'explainer', 'vlog', 'livestream', 'podcast', 'interview', 'storytime', 'challenge', 'music video', 'dance', 'animation', 'short film', 'gaming', 'skits', 'documentary', 'news', 'debunking', 'analysis', 'shortform', 'memes', 'asmr', 'pov']
+    "synopsis": "string (3-4 sentences)"
+    "plot": "string, "
   }
-  
-  frame analyses: 
 """
 
 class ClipTaggerResponse(BaseModel):
@@ -153,27 +112,59 @@ class ClipTaggerResponse(BaseModel):
   summary: str
   logos: list[str]
   
-class VideoSummary(BaseModel):
-  main_idea: str
-  theme: str
-  synopsis: str
-
 class FrameResult(TypedDict, total=True):
   frame: VideoFrame
   description: ClipTaggerResponse
+  
+class Word(TypedDict):
+  word: str
+  start: float
+  end: float
+  score: float
+  speaker: str
+
+class Segment(TypedDict):
+  id: int
+  text: str
+  start: float
+  end: float
+  avg_logprob: float
+  language: str
+  speaker: str
+  words: list[Word]
+
+class Transcript(TypedDict):
+  task: str
+  language: str
+  duration: float
+  text: str
+  segments: list[Segment]
+  
+class VideoSummary(BaseModel):
+  main_idea: str
+  theme: list[str]
+  video_type: list[str]
+  synopsis: str
+  plot: str
 
 class VideoAnalyzer:
   
   def __init__(self):
     self.log = logging.getLogger("analyzer")
     
-    key = os.getenv(INFERENCE_API_KEY_ENV_VAR_NAME)
-    if not key or not key.strip():
+    lemonfox_key = os.getenv(LEMONFOX_API_KEY_ENV_VAR_NAME)
+    if not lemonfox_key or not lemonfox_key.strip():
+      raise EnvironmentError(f"{LEMONFOX_API_KEY_ENV_VAR_NAME} not set or empty")
+    
+    self.lemonfox_key = lemonfox_key
+    
+    inference_key = os.getenv(INFERENCE_API_KEY_ENV_VAR_NAME)
+    if not inference_key or not inference_key.strip():
       raise EnvironmentError(f"{INFERENCE_API_KEY_ENV_VAR_NAME} not set or empty")
       
     client = AsyncOpenAI(
       base_url="https://api.inference.net/v1",
-      api_key=key
+      api_key=inference_key
     )
 
     ct_model = OpenAIChatModel(
@@ -200,17 +191,24 @@ class VideoAnalyzer:
       system_prompt=SYSTEM_PROMPT_SUMMARY,
     )
   
-  async def summary(self, frames: list[VideoFrame]) -> tuple[list[FrameResult], VideoSummary]:
-    descriptions = await self._analyze(frames)
-    summary = await self._summary(descriptions)
-    return descriptions, summary
+  async def summary(self, video_datails: VideoDetails) -> tuple[list[FrameResult], Transcript, VideoSummary]:
+    frames, transcription = await asyncio.gather(
+      self._analyze(video_datails["frames"]), 
+      self._transcribe_audio(video_datails["audio"])
+    )
+    
+    summary = await self._summary(frames, transcription)
+    return frames, transcription, summary
   
-  async def _summary(self, descriptions: list[FrameResult]) -> VideoSummary:
+  async def _summary(self, descriptions: list[FrameResult], transcription: Transcript) -> VideoSummary:
     only_desc = [r["description"].model_dump_json() for r in descriptions]
-    json_str = json.dumps(only_desc)
+    desc_json_str = json.dumps(only_desc)
+    
+    trans_segments = [s["text"] for s in transcription["segments"]]
+    trans_json_str = json.dumps(trans_segments)
     
     res = await self._gm_agent.run(
-      f"{USER_PROMPT_SUMMARY}\n{json_str}",
+      f"{USER_PROMPT_SUMMARY}\nframes: {desc_json_str}\ntranscription: {trans_json_str}",
       model_settings=OpenAIChatModelSettings(
         extra_body={
           "response_format": {
@@ -259,4 +257,23 @@ class VideoAnalyzer:
       "frame": frame,
       "description": ClipTaggerResponse.model_validate_json(res.output)
     }
- 
+    
+  async def _transcribe_audio(self, file_bytes: bytes) -> Transcript:
+    url = "https://api.lemonfox.ai/v1/audio/transcriptions"
+    headers = {
+      "Authorization": f"Bearer {self.lemonfox_key}"
+    }
+    
+    form = aiohttp.FormData()
+    form.add_field("file", file_bytes,
+      filename="audio.mp3",  
+      content_type="audio/mpeg"
+    )
+    form.add_field("response_format", "verbose_json")
+    form.add_field("speaker_labels", "true")
+    form.add_field("translate", "true")
+
+    async with aiohttp.ClientSession() as session:
+      async with session.post(url, headers=headers, data=form) as response:
+        result = await response.json()
+        return result
