@@ -74,7 +74,12 @@ def _extract_audio(input_file: str) -> bytes:
     output_file
   ]
   
-  subprocess.run(command, check=True)
+  result = subprocess.run(command, check=True, capture_output=True, text=True)
+  
+  log = logging.getLogger("analyzer")
+  log.debug(f"ffmpeg finished. Exit code: {result.returncode}.")
+  if result.returncode != 0:
+    log.error(f"ffmpeg error: {result.stderr}")
   
   with open(output_file, "rb") as f:
     data = f.read()
