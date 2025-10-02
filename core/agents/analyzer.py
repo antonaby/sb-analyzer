@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import traceback
-from typing import cast
+from typing import TypedDict, cast
 
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
@@ -109,7 +109,9 @@ class VideoSummary(BaseModel):
   theme: str
   synopsis: str
 
-FrameResultType = tuple[VideoFrame, ClipTaggerResponse]
+class FrameResult(TypedDict, total=True):
+  frame: VideoFrame
+  description: ClipTaggerResponse
 
 class VideoAnalyzer:
   
@@ -149,12 +151,13 @@ class VideoAnalyzer:
       system_prompt=SYSTEM_PROMPT_SUMMARY,
     )
   
-  async def summary(self, frames: list[VideoFrame]) -> VideoSummary:
+  async def summary(self, frames: list[VideoFrame]) -> tuple[list[FrameResult], VideoSummary]:
     descriptions = await self._analyze(frames)
-    return await self._summary(descriptions)
+    summary = await self._summary(descriptions)
+    return descriptions, summary
   
-  async def _summary(self, descriptions: list[FrameResultType]) -> VideoSummary:
-    only_desc = [d.model_dump_json() for _, d in descriptions]
+  async def _summary(self, descriptions: list[FrameResult]) -> VideoSummary:
+    only_desc = [r["description"].model_dump_json() for r in descriptions]
     json_str = json.dumps(only_desc)
     
     res = await self._gm_agent.run(
@@ -170,12 +173,12 @@ class VideoAnalyzer:
     
     return VideoSummary.model_validate_json(res.output)
   
-  async def _analyze(self, frames: list[VideoFrame]) -> list[FrameResultType]:
+  async def _analyze(self, frames: list[VideoFrame]) -> list[FrameResult]:
     tasks = [asyncio.create_task(self._analyze_frame(f)) for f in frames]
     # TODO: add semaphore
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
-    successes = [cast(FrameResultType, r) for r in results if not isinstance(r, Exception)]
+    successes = [cast(FrameResult, r) for r in results if not isinstance(r, Exception)]
     errors = [
       "".join(traceback.format_exception_only(type(r), r)) 
       for r in results if isinstance(r, Exception)
@@ -186,7 +189,7 @@ class VideoAnalyzer:
     
     return successes
       
-  async def _analyze_frame(self, frame: VideoFrame) -> FrameResultType:
+  async def _analyze_frame(self, frame: VideoFrame) -> FrameResult:
     res = await self._ct_agent.run(
       [
         USER_PROMPT_FRAMES,
@@ -203,5 +206,8 @@ class VideoAnalyzer:
       )
     )
   
-    return frame, ClipTaggerResponse.model_validate_json(res.output)
+    return {
+      "frame": frame,
+      "description": ClipTaggerResponse.model_validate_json(res.output)
+    }
  
