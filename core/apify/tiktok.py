@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any, TypedDict, cast
 
 from apify_client import ApifyClientAsync
@@ -160,6 +161,7 @@ class ClockworksTiktokScrapper:
   
   def __init__(self, client: ApifyClientAsync):
     self.client = client
+    self.actor_client = client.actor('clockworks/tiktok-scraper')
     self.log = logging.getLogger("app.apify.tiktok")
   
   async def scrape_hashtags(
@@ -169,8 +171,6 @@ class ClockworksTiktokScrapper:
     download: bool = True
   ) -> tuple[ActorRun, list[TikTokPost]]:
     try:
-      actor_client = self.client.actor('clockworks/tiktok-scraper')
-      
       run_input = {
         "excludePinnedPosts": True,
         "hashtags": hashtags,
@@ -186,7 +186,7 @@ class ClockworksTiktokScrapper:
         "shouldDownloadVideos": download
       }
       
-      call_result = await actor_client.call(run_input=run_input, logger=self.log)
+      call_result = await self.actor_client.call(run_input=run_input, logger=self.log)
       
       if call_result is None:
         raise TikTokScrapperError("no call result")
@@ -204,7 +204,23 @@ class ClockworksTiktokScrapper:
     
     return items.items
 
-  async def download_video(self, kv_store_id: str, record: str) -> bytes:
+  async def download_video(self, post: TikTokPost) -> bytes:
+    url = post.get("videoMeta", {}).get("downloadAddr")
+    if not url:
+      raise TikTokScrapperError("no valid video url")
+    
+    match = re.search(r"/key-value-stores/([^/]+)/records/(.+)$", url)
+    if match:
+      store_id = match.group(1)
+      filename = match.group(2)
+      try:
+        return await self._download_video(store_id, filename)
+      except Exception as e:
+        raise TikTokScrapperError("donwload filed") from e
+
+    raise TikTokScrapperError("no valid video url")
+
+  async def _download_video(self, kv_store_id: str, record: str) -> bytes:
     kv_store = self.client.key_value_store(kv_store_id)
     entry = await kv_store.get_record(record)
     
