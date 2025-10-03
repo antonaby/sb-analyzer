@@ -124,7 +124,7 @@ USER_PROMPT_SUMMARY_TEMPLATE = """
   {{ trans_json }}
 """
 
-class ClipTaggerResponse(BaseModel):
+class FrameDetails(BaseModel):
   """Schema for structured video frame analysis"""
   description: str
   objects: list[str] = Field(..., max_length=10)
@@ -136,10 +136,10 @@ class ClipTaggerResponse(BaseModel):
   summary: str
   logos: list[str]
   
-class FrameResult(BaseModel):
+class Frame(BaseModel):
   frame_number: int
   timestamp: float
-  description: ClipTaggerResponse
+  details: FrameDetails
   
 class Word(BaseModel):
   word: str = ""
@@ -165,7 +165,7 @@ class Transcript(BaseModel):
   text: str = ""
   segments: list[Segment] = []
 
-class SummaryResponse(BaseModel):
+class VideoSummary(BaseModel):
   main_idea: str
   theme: list[str]
   video_type: list[str]
@@ -173,9 +173,9 @@ class SummaryResponse(BaseModel):
   plot: str
   
 class Summary(BaseModel):
-  frames: list[FrameResult]
+  frames: list[Frame]
   transcription: Transcript
-  summary: SummaryResponse
+  details: VideoSummary
 
 class VideoAnalyzer:
   
@@ -234,17 +234,17 @@ class VideoAnalyzer:
     return Summary(
       frames=frames,
       transcription=transcription,
-      summary=summary
+      details=summary
     )
  
-  async def _summary_tiktok(self, post: TikTokPost, descriptions: list[FrameResult], transcription: Transcript) -> SummaryResponse:
+  async def _summary_tiktok(self, post: TikTokPost, frames: list[Frame], transcription: Transcript) -> VideoSummary:
     metadata_json = json.dumps({
       "from": "tiktok",
       "title": post.get("text", "no title"),
       "hashtags": post.get("hashtags", [])
     })
     
-    only_desc = [r.description.model_dump() for r in descriptions]
+    only_desc = [r.details.model_dump() for r in frames]
     desc_json = json.dumps(only_desc)
     
     trans_segments = [s.text for s in transcription.segments]
@@ -267,13 +267,13 @@ class VideoAnalyzer:
     usage = res.usage()
     self.log.debug(f"Finish: summary request, input_tokens={usage.input_tokens}, output_tokens={usage.output_tokens}")
     
-    return SummaryResponse.model_validate_json(res.output)
+    return VideoSummary.model_validate_json(res.output)
   
-  async def _analyze(self, frames: list[VideoFrame]) -> list[FrameResult]:
+  async def _analyze(self, frames: list[VideoFrame]) -> list[Frame]:
     tasks = [asyncio.create_task(self._analyze_frame(f)) for f in frames]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
-    successes = [cast(FrameResult, r) for r in results if not isinstance(r, Exception)]
+    successes = [cast(Frame, r) for r in results if not isinstance(r, Exception)]
     errors = [
       "".join(traceback.format_exception_only(type(r), r)) 
       for r in results if isinstance(r, Exception)
@@ -284,7 +284,7 @@ class VideoAnalyzer:
     
     return successes
       
-  async def _analyze_frame(self, frame: VideoFrame) -> FrameResult:
+  async def _analyze_frame(self, frame: VideoFrame) -> Frame:
     async with self.frame_semaphore:
       self.log.debug("Start: Frame request")
       
@@ -306,10 +306,10 @@ class VideoAnalyzer:
       usage = res.usage()
       self.log.debug(f"Finish: frame request, input_tokens={usage.input_tokens}, output_tokens={usage.output_tokens}")
   
-    return FrameResult(
+    return Frame(
       frame_number=frame["frame_number"],
       timestamp=frame["timestamp"],
-      description=ClipTaggerResponse.model_validate_json(res.output)
+      details=FrameDetails.model_validate_json(res.output)
     )
     
   async def _transcribe_audio(self, file_bytes: bytes) -> Transcript:
