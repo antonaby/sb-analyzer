@@ -5,13 +5,13 @@ from typing import Any, TypedDict, cast
 from apify_client import ApifyClientAsync
 
 
-class Meta(TypedDict):
+class Meta(TypedDict, total=False):
   origin: str
 
-class PricingPerEvent(TypedDict):
+class PricingPerEvent(TypedDict, total=False):
   actorChargeEvents: dict[str, Any]
 
-class PricingInfo(TypedDict):
+class PricingInfo(TypedDict, total=False):
   apifyMarginPercentage: int
   createdAt: str
   startedAt: str
@@ -22,7 +22,7 @@ class PricingInfo(TypedDict):
   pricingPerEvent: PricingPerEvent
   minimalMaxTotalChargeUsd: float
 
-class Stats(TypedDict):
+class Stats(TypedDict, total=False):
   inputBodyLen: int
   migrationCount: int
   restartCount: int
@@ -40,14 +40,14 @@ class Stats(TypedDict):
   metamorph: int
   computeUnits: float
 
-class Options(TypedDict):
+class Options(TypedDict, total=False):
   build: str
   timeoutSecs: int
   memoryMbytes: int
   diskMbytes: int
 
 # ---------- Root type of Actor ----------
-class ActorRun(TypedDict):
+class ActorRun(TypedDict, total=False):
   id: str
   actId: str
   userId: str
@@ -73,7 +73,7 @@ class ActorRun(TypedDict):
   gitBranchName: str
   usageTotalUsd: float
 
-class AuthorMeta(TypedDict):
+class AuthorMeta(TypedDict, total=False):
   id: str
   name: str
   profileUrl: str
@@ -91,16 +91,17 @@ class AuthorMeta(TypedDict):
   video: int
   digg: int
 
-class MusicMeta(TypedDict):
+class MusicMeta(TypedDict, total=False):
   musicName: str
   musicAuthor: str
   musicOriginal: bool
+  musicAlbum: str
   playUrl: str
   coverMediumUrl: str
   originalCoverMediumUrl: str
   musicId: str
 
-class SubtitleLink(TypedDict):
+class SubtitleLink(TypedDict, total=False):
   language: str
   downloadLink: str
   tiktokLink: str
@@ -108,7 +109,7 @@ class SubtitleLink(TypedDict):
   sourceUnabbreviated: str
   version: str
 
-class VideoMeta(TypedDict):
+class VideoMeta(TypedDict, total=False):
   height: int
   width: int
   duration: int  # seconds
@@ -119,15 +120,23 @@ class VideoMeta(TypedDict):
   subtitleLinks: list[SubtitleLink]
   downloadAddr: str
 
-class Hashtag(TypedDict):
+class Hashtag(TypedDict, total=False):
   name: str
 
-class SearchHashtag(TypedDict):
+class SearchHashtag(TypedDict, total=False):
   views: int
   name: str
 
+class StickerStats(TypedDict, total=False):
+  useCount: int
+
+class EffectSticker(TypedDict, total=False):
+  ID: str
+  name: str
+  stickerStats: StickerStats
+
 # ---------- Root type of Dataset ----------
-class TikTokPost(TypedDict):
+class TikTokPost(TypedDict, total=False):
   id: str
   text: str
   textLanguage: str
@@ -147,7 +156,7 @@ class TikTokPost(TypedDict):
   mentions: list[str]
   detailedMentions: list[str]
   hashtags: list[Hashtag]
-  effectStickers: list[str]
+  effectStickers: list[str] | list[EffectSticker]
   isSlideshow: bool
   isPinned: bool
   isSponsored: bool

@@ -6,6 +6,7 @@ import traceback
 from typing import TypedDict, cast
 
 import aiohttp
+from jinja2 import Template
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ImageUrl
@@ -13,6 +14,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.profiles.openai import OpenAIModelProfile
 
+from core.apify.tiktok import TikTokPost
 from core.videos import VideoDetails, VideoFrame
 
 LEMONFOX_API_KEY_ENV_VAR_NAME = "LEMONFOX_API_KEY"
@@ -58,27 +60,40 @@ SYSTEM_PROMPT_SUMMARY = """
   Follow those instructions.
 """
 
-USER_PROMPT_SUMMARY = """
+USER_PROMPT_SUMMARY_TEMPLATE = """
   You are given frame analyses for a single video. Aggregate them into an overall summary.
-  You receive a chronological list of frame analyses produced by another model, each following this schema:
-  {
-    "timestamp": "number",
-    "frame_number": "number",
-    "description": "Detailed factual account of what's visible (2 sentences max)",
-    "objects": ["list of visible objects with details"],
-    "actions": ["list of visible actions"],
-    "environment": "Description of the setting",
-    "content_type": "Type like 'real-world footage', 'animation', 'CGI', etc",
-    "specific_style": "Genre/aesthetic like 'vlog', 'documentary', 'tutorial', etc",
-    "production_quality": "Like 'professional', 'amateur', 'TV broadcast', etc",
-    "summary": "One sentence summary",
-    "logos": ["any visible logos"]
-  }
-  You also receive a video transcription, as a list of stings:
-  [
-    "One", "Two", "Three"
-  ]
-
+  You receive thw following data
+  - Video metadata in the following format
+    {
+      "from": "video source like: tiktok, youtube shorts, etc",
+      "title": "video title",
+      "hashtags": [{
+        "name": "one"
+      },{
+        "name": "two"
+      },{
+        "name": "three"
+      }]
+    }
+  - A chronological list of frame analyses produced by another model, each following this schema:
+    {
+      "timestamp": "number",
+      "frame_number": "number",
+      "description": "Detailed factual account of what's visible (2 sentences max)",
+      "objects": ["list of visible objects with details"],
+      "actions": ["list of visible actions"],
+      "environment": "Description of the setting",
+      "content_type": "Type like 'real-world footage', 'animation', 'CGI', etc",
+      "specific_style": "Genre/aesthetic like 'vlog', 'documentary', 'tutorial', etc",
+      "production_quality": "Like 'professional', 'amateur', 'TV broadcast', etc",
+      "summary": "One sentence summary",
+      "logos": ["any visible logos"]
+    }
+  - You also receive a video transcription, as a list of stings:
+    [
+      "One", "Two", "Three"
+    ]
+    
   Rules:
   - Read all frame descriptions carefully. Be specific and literal.
   - Identify recurring themes, actions, settings, and objects.
@@ -98,6 +113,15 @@ USER_PROMPT_SUMMARY = """
     "synopsis": "string (3-4 sentences)"
     "plot": "string, "
   }
+  
+  video metadata:
+  {{ metadata_json }}
+  
+  frames:
+  {{ desc_json }}
+  
+  transcription:
+  {{ trans_json }}
 """
 
 class ClipTaggerResponse(BaseModel):
@@ -112,35 +136,34 @@ class ClipTaggerResponse(BaseModel):
   summary: str
   logos: list[str]
   
-class FrameResult(TypedDict, total=True):
-  frame: VideoFrame
+class FrameResult(BaseModel):
+  frame_number: int
+  timestamp: float
   description: ClipTaggerResponse
-  input_tokens: int
-  output_tokens: int
   
-class Word(TypedDict):
-  word: str
-  start: float
-  end: float
-  score: float
-  speaker: str
+class Word(BaseModel):
+  word: str = ""
+  start: float = 0
+  end: float = 0
+  score: float = 0
+  speaker: str | None = ""
 
-class Segment(TypedDict):
-  id: int
-  text: str
-  start: float
-  end: float
-  avg_logprob: float
-  language: str
-  speaker: str
-  words: list[Word]
+class Segment(BaseModel):
+  id: int = 0
+  text: str = ""
+  start: float = 0
+  end: float = 0
+  avg_logprob: float = 0
+  language: str = "en"
+  speaker: str | None = ""
+  words: list[Word] = []
 
-class Transcript(TypedDict):
-  task: str
-  language: str
-  duration: float
-  text: str
-  segments: list[Segment]
+class Transcript(BaseModel):
+  task: str = ""
+  language: str = "en"
+  duration: float = 0
+  text: str = ""
+  segments: list[Segment] = []
 
 class SummaryResponse(BaseModel):
   main_idea: str
@@ -149,27 +172,15 @@ class SummaryResponse(BaseModel):
   synopsis: str
   plot: str
   
-class VideoSummary(TypedDict):
-  summary: SummaryResponse
-  input_tokens: int
-  output_tokens: int
-
-class TotalUsage(TypedDict):
-  cp_input_tokens: int
-  cp_output_tokens: int
-  gm_input_tokens: int
-  gm_output_tokens: int
-  
-class Summary(TypedDict):
+class Summary(BaseModel):
   frames: list[FrameResult]
   transcription: Transcript
-  video_summary: VideoSummary
-  usage: TotalUsage
+  summary: SummaryResponse
 
 class VideoAnalyzer:
   
-  def __init__(self):
-    self.log = logging.getLogger("analyzer")
+  def __init__(self, concurrency: int = 10):
+    self.log = logging.getLogger("app.analyzer")
     
     lemonfox_key = os.getenv(LEMONFOX_API_KEY_ENV_VAR_NAME)
     if not lemonfox_key or not lemonfox_key.strip():
@@ -209,39 +220,42 @@ class VideoAnalyzer:
       model=gemma_model,
       system_prompt=SYSTEM_PROMPT_SUMMARY,
     )
+
+    self.frame_semaphore = asyncio.Semaphore(concurrency)
   
-  async def summary(self, video_datails: VideoDetails) -> Summary:
+  async def summary_tiktok(self, post: TikTokPost, video_datails: VideoDetails) -> Summary:
     frames, transcription = await asyncio.gather(
       self._analyze(video_datails["frames"]), 
       self._transcribe_audio(video_datails["audio"])
     )
     
-    total_cp_input_tokens = sum([f["input_tokens"] for f in frames])
-    total_cp_output_tokens = sum([f["output_tokens"] for f in frames])
+    summary = await self._summary_tiktok(post, frames, transcription)
     
-    summary = await self._summary(frames, transcription)
+    return Summary(
+      frames=frames,
+      transcription=transcription,
+      summary=summary
+    )
+ 
+  async def _summary_tiktok(self, post: TikTokPost, descriptions: list[FrameResult], transcription: Transcript) -> SummaryResponse:
+    metadata_json = json.dumps({
+      "from": "tiktok",
+      "title": post.get("text", "no title"),
+      "hashtags": post.get("hashtags", [])
+    })
     
-    return {
-      "frames": frames,
-      "transcription": transcription,
-      "video_summary": summary,
-      "usage": {
-        "cp_input_tokens": total_cp_input_tokens,
-        "cp_output_tokens": total_cp_output_tokens,
-        "gm_input_tokens": summary["input_tokens"],
-        "gm_output_tokens": summary["output_tokens"]
-      }
-    }
-  
-  async def _summary(self, descriptions: list[FrameResult], transcription: Transcript) -> VideoSummary:
-    only_desc = [r["description"].model_dump_json() for r in descriptions]
-    desc_json_str = json.dumps(only_desc)
+    only_desc = [r.description.model_dump() for r in descriptions]
+    desc_json = json.dumps(only_desc)
     
-    trans_segments = [s["text"] for s in transcription["segments"]]
-    trans_json_str = json.dumps(trans_segments)
+    trans_segments = [s.text for s in transcription.segments]
+    trans_json = json.dumps(trans_segments)
+    
+    self.log.debug("Start: Summary request")
+    template = Template(USER_PROMPT_SUMMARY_TEMPLATE)
+    user_prompt = template.render(metadata_json=metadata_json, desc_json=desc_json, trans_json=trans_json)
     
     res = await self._gm_agent.run(
-      f"{USER_PROMPT_SUMMARY}\nframes: {desc_json_str}\ntranscription: {trans_json_str}",
+      user_prompt,
       model_settings=OpenAIChatModelSettings(
         extra_body={
           "response_format": {
@@ -250,18 +264,13 @@ class VideoAnalyzer:
         }
       )
     )
-    
     usage = res.usage()
+    self.log.debug(f"Finish: summary request, input_tokens={usage.input_tokens}, output_tokens={usage.output_tokens}")
     
-    return {
-      "summary": SummaryResponse.model_validate_json(res.output),
-      "input_tokens": usage.input_tokens,
-      "output_tokens": usage.output_tokens
-    } 
+    return SummaryResponse.model_validate_json(res.output)
   
   async def _analyze(self, frames: list[VideoFrame]) -> list[FrameResult]:
     tasks = [asyncio.create_task(self._analyze_frame(f)) for f in frames]
-    # TODO: add semaphore
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
     successes = [cast(FrameResult, r) for r in results if not isinstance(r, Exception)]
@@ -276,30 +285,32 @@ class VideoAnalyzer:
     return successes
       
   async def _analyze_frame(self, frame: VideoFrame) -> FrameResult:
-    res = await self._ct_agent.run(
-      [
-        USER_PROMPT_FRAMES,
-        ImageUrl(url=f"data:image/jpeg;base64,{frame['base64']}")
-      ],
-      model_settings=OpenAIChatModelSettings(
-        temperature=0.1,
-        max_tokens=2000,
-        extra_body={
-          "response_format": {
-            "type": "json_object"
+    async with self.frame_semaphore:
+      self.log.debug("Start: Frame request")
+      
+      res = await self._ct_agent.run(
+        [
+          USER_PROMPT_FRAMES,
+          ImageUrl(url=f"data:image/jpeg;base64,{frame['base64']}")
+        ],
+        model_settings=OpenAIChatModelSettings(
+          temperature=0.1,
+          max_tokens=2000,
+          extra_body={
+            "response_format": {
+              "type": "json_object"
+            }
           }
-        }
+        )
       )
+      usage = res.usage()
+      self.log.debug(f"Finish: frame request, input_tokens={usage.input_tokens}, output_tokens={usage.output_tokens}")
+  
+    return FrameResult(
+      frame_number=frame["frame_number"],
+      timestamp=frame["timestamp"],
+      description=ClipTaggerResponse.model_validate_json(res.output)
     )
-  
-    usage = res.usage()
-  
-    return {
-      "frame": frame,
-      "description": ClipTaggerResponse.model_validate_json(res.output),
-      "input_tokens": usage.input_tokens,
-      "output_tokens": usage.output_tokens
-    }
     
   async def _transcribe_audio(self, file_bytes: bytes) -> Transcript:
     url = "https://api.lemonfox.ai/v1/audio/transcriptions"
@@ -319,4 +330,4 @@ class VideoAnalyzer:
     async with aiohttp.ClientSession() as session:
       async with session.post(url, headers=headers, data=form) as response:
         result = await response.json()
-        return result
+        return Transcript.model_validate(result)
