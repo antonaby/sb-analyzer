@@ -12,3 +12,4 @@ videos
 .env
 
 .idea
+qdrant_storage
