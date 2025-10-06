@@ -64,8 +64,44 @@ class VideoFile:
     return {
       'base64': self._frame_to_base64(frame),
       'frame_number': frame_number,
-      'timestamp': timestamp
+      'timestamp': round(timestamp, 2)
     }
+    
+  def get_frames_with_interval(
+    self, 
+    start_timestamp: float = 0.1, 
+    interval: float = 10,
+    include_last: bool = True,
+    last_before: float = 0.1
+  ) -> list[VideoFrame]:
+    frames: list[VideoFrame] = []
+    current_time = start_timestamp
+    
+    while current_time < self._duration:
+      frames.append(self.get_frame(current_time))
+      current_time += interval
+      
+    if include_last:
+      last_frame_timestamp = self._duration - last_before
+      last_step_timestamp = current_time - interval
+      if last_frame_timestamp > last_step_timestamp:
+        frames.append(self.get_frame(last_frame_timestamp))
+      else:
+        frames.append(self.get_frame(last_step_timestamp))
+
+    return frames
+
+  def get_n_frames(
+    self,
+    frame_n: int = 5, 
+    min_interval: float = 3.0, 
+    *args, **kwargs
+  ) -> list[VideoFrame]:
+    interval = round(self._duration / frame_n, 2)
+    if interval < min_interval:
+      interval = min_interval
+    
+    return self.get_frames_with_interval(interval=interval, *args, **kwargs) 
     
   def _frame_to_base64(self, frame: np.ndarray) -> str:
     _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
