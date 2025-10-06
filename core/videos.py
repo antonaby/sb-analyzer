@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess
 
+import aiohttp
 import yt_dlp
 import cv2
 import base64
@@ -9,6 +10,7 @@ import numpy as np
 from typing import TypedDict
 from abc import ABC, abstractmethod
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 class VideoSource(ABC):
@@ -31,6 +33,9 @@ class VideoSource(ABC):
     self._tmp_files.append(output_file)
     return output_file
 
+  def _delete_tmp_files(self):
+    for f in self._tmp_files:
+      os.remove(f)
 
 class FilesystemVideoSource(VideoSource):
   
@@ -42,7 +47,7 @@ class FilesystemVideoSource(VideoSource):
     return self._path
   
   def delete(self):
-    pass
+    self._delete_tmp_files()
   
 
 class YtDlpVideoSource(VideoSource):
@@ -77,9 +82,55 @@ class YtDlpVideoSource(VideoSource):
   
   def delete(self):
     os.remove(self._file_path)
-    for f in self._tmp_files:
-      os.remove(f)
+    self._delete_tmp_files()
 
+
+class UrlVideoSourceError(Exception):
+  pass
+
+
+class UrlVideoSource(VideoSource):
+  
+  @classmethod
+  async def new(cls, video_url: str, download_dir: str) -> "UrlVideoSource":
+    source = cls(video_url, download_dir)
+    await source.load()
+    return source
+  
+  def __init__(self, video_url: str, download_dir: str):
+    super().__init__()
+    self._video_url = video_url
+    self._download_dir = download_dir
+    self._loaded = False
+    
+  async def load(self):
+    try:
+      download_dir = Path(self._download_dir)
+      parsed_url = urlparse(self._video_url)
+      filename = Path(parsed_url.path).name
+      file_path = (download_dir / filename).resolve()
+      
+      async with aiohttp.ClientSession() as session:
+        async with session.get(self._video_url) as resp:
+          with open(file_path, 'wb') as f:
+            async for chunk in resp.content.iter_chunked(1024):
+              f.write(chunk)
+              
+      self._file_path = file_path
+      self._loaded = True
+    except Exception as e:
+      raise UrlVideoSourceError(f"filed to download video: {self._video_url}") from e
+
+  def get_video_file_path(self) -> str:
+    if not self._loaded or not self._file_path:
+      raise UrlVideoSourceError("file not loaded")
+    
+    return str(self._file_path)
+  
+  def delete(self):
+    self._file_path.unlink(missing_ok=True) 
+    self._delete_tmp_files()
+  
 
 class VideoFileError(Exception):
   pass
