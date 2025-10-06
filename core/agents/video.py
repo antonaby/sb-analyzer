@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import traceback
+from typing import cast
 from openai import AsyncOpenAI
 from core.utils import var_or_exception
 from pydantic import BaseModel, Field
@@ -7,6 +9,8 @@ from pydantic_ai import Agent, ImageUrl
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.profiles.openai import OpenAIModelProfile
+
+from core.videos import VideoFile, VideoFrame
 
 
 INFERENCE_API_KEY_VAR = "INFERENCE_API_KEY"
@@ -25,15 +29,15 @@ USER_PROMPT_FRAMES = """
   Return JSON in this structure:
 
   {
-      "description": "A detailed, factual account of what is visibly happening (4 sentences max). Only mention concrete elements or actions that are clearly shown. Do not include anything about how the image is styled, shot, or composed. Do not lead the description with something like 'This image shows' or 'this keyframe is...', just get right into the details.",
-      "objects": ["object1 with relevant visual details", "object2 with relevant visual details", ...],
-      "actions": ["action1 with participants and context", "action2 with participants and context", ...],
-      "environment": "Detailed factual description of the setting and atmosphere based on visible cues (e.g., interior of a classroom with fluorescent lighting, or outdoor forest path with snow-covered trees).",
-      "content_type": "The type of content it is, e.g. 'real-world footage', 'video game', 'animation', 'cartoon', 'CGI', 'VTuber', etc.",
-      "specific_style": "Specific genre, aesthetic, or platform style (e.e., anime, 3D animation, mobile gameplay, vlog, tutorial, news broadcast, etc.)",
-      "production_quality": "Visible production level: e.g., 'professional studio', 'amateur handheld', 'webcam recording', 'TV broadcast', etc.",
-      "summary": "One clear, comprehensive sentence summarizing the visual content of the frame. Like the description, get right to the point.",
-      "logos": ["logo1 with visual description", "logo2 with visual description", ...]
+    "description": "A detailed, factual account of what is visibly happening (4 sentences max). Only mention concrete elements or actions that are clearly shown. Do not include anything about how the image is styled, shot, or composed. Do not lead the description with something like 'This image shows' or 'this keyframe is...', just get right into the details.",
+    "objects": ["object1 with relevant visual details", "object2 with relevant visual details", ...],
+    "actions": ["action1 with participants and context", "action2 with participants and context", ...],
+    "environment": "Detailed factual description of the setting and atmosphere based on visible cues (e.g., interior of a classroom with fluorescent lighting, or outdoor forest path with snow-covered trees).",
+    "content_type": "The type of content it is, e.g. 'real-world footage', 'video game', 'animation', 'cartoon', 'CGI', 'VTuber', etc.",
+    "specific_style": "Specific genre, aesthetic, or platform style (e.e., anime, 3D animation, mobile gameplay, vlog, tutorial, news broadcast, etc.)",
+    "production_quality": "Visible production level: e.g., 'professional studio', 'amateur handheld', 'webcam recording', 'TV broadcast', etc.",
+    "summary": "One clear, comprehensive sentence summarizing the visual content of the frame. Like the description, get right to the point.",
+    "logos": ["logo1 with visual description", "logo2 with visual description", ...]
   }
 
   Rules:
@@ -59,6 +63,10 @@ class FrameContent(BaseModel):
   production_quality: str
   summary: str
   logos: list[str]
+
+
+class ClipTaggerError(Exception):
+  pass
 
 
 class ClipTaggerClient:
@@ -91,26 +99,71 @@ class ClipTaggerClient:
     self._frame_semaphore = asyncio.Semaphore(concurrency)
   
   async def analyze(self, frame_base64: str, temperature: float = 0.1, max_tokens: int = 2000) -> FrameContent:
-    async with self._frame_semaphore:
-      self._log.debug("Start: Frame request")
-      
-      res = await self._agent.run(
-        [
-          USER_PROMPT_FRAMES,
-          ImageUrl(url=f"data:image/jpeg;base64,{frame_base64}")
-        ],
-        model_settings=OpenAIChatModelSettings(
-          temperature=temperature,
-          max_tokens=max_tokens,
-          extra_body={
-            "response_format": {
-              "type": "json_object"
+    try:
+      async with self._frame_semaphore:
+        self._log.debug("Start: Frame request")
+        
+        res = await self._agent.run(
+          [
+            USER_PROMPT_FRAMES,
+            ImageUrl(url=f"data:image/jpeg;base64,{frame_base64}")
+          ],
+          model_settings=OpenAIChatModelSettings(
+            temperature=temperature,
+            max_tokens=max_tokens,
+            extra_body={
+              "response_format": {
+                "type": "json_object"
+              }
             }
-          }
+          )
         )
-      )
-      usage = res.usage()
-      self._log.debug(f"Finish: frame request, input_tokens={usage.input_tokens}, output_tokens={usage.output_tokens}")
+        usage = res.usage()
+        self._log.debug(f"Finish: frame request, input_tokens={usage.input_tokens}, output_tokens={usage.output_tokens}")
+    
+      return FrameContent.model_validate_json(res.output)
+    except Exception as e:
+      raise ClipTaggerError(f"Cannot get frame content") from e
+
+
+class FrameAnalyzer:
   
-    return FrameContent.model_validate_json(res.output)
+  def __init__(self, ct_client: ClipTaggerClient, video_file: VideoFile, temperature: float = 0.1, max_tokens: int = 2000):
+    self._log = logging.getLogger("app.videoframeanalyzer")
+    self._ct_client = ct_client
+    self._video_file = video_file
+    self._temperature = temperature
+    self._max_tokens = max_tokens
+    
+  async def get_frame_content(self, timetamp: float) -> FrameContent:
+    frame = self._video_file.get_frame(timetamp)  
+    return await self._ct_client.analyze(frame["base64"], self._temperature, self._max_tokens)
+  
+  async def get_frame_content_with_interval(self, *args, **kwargs) -> list[FrameContent]:
+    frames = self._video_file.get_frames_with_interval(*args, **kwargs)
+    return await self._get_frames_content(frames)
+  
+  async def get_n_frames(self, *args, **kwargs) -> list[FrameContent]:
+    frames = self._video_file.get_n_frames(*args, **kwargs)
+    return await self._get_frames_content(frames)
+  
+  async def _get_frames_content(self, frames: list[VideoFrame]) -> list[FrameContent]:
+    tasks = [
+      asyncio.create_task(
+        self._ct_client.analyze(f["base64"], self._temperature, self._max_tokens)
+      ) 
+      for f in frames
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    successes = [cast(FrameContent, r) for r in results if not isinstance(r, Exception)]
+    errors = [
+      "".join(traceback.format_exception_only(type(r), r)) 
+      for r in results if isinstance(r, Exception)
+    ]
+    
+    if len(errors) > 0:
+      self._log.error(f"There are a few errors: {", ".join(errors)}")
+    
+    return successes
   
