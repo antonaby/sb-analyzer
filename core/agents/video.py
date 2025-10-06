@@ -96,11 +96,11 @@ class ClipTaggerClient:
       model=model,
       system_prompt=SYSTEM_PROMPT_FRAMES,
     )
-    self._frame_semaphore = asyncio.Semaphore(concurrency)
+    self._api_semaphore = asyncio.Semaphore(concurrency)
   
   async def analyze(self, frame_base64: str, temperature: float = 0.1, max_tokens: int = 2000) -> FrameContent:
     try:
-      async with self._frame_semaphore:
+      async with self._api_semaphore:
         self._log.debug("Start: Frame request")
         
         res = await self._agent.run(
@@ -126,7 +126,7 @@ class ClipTaggerClient:
       raise ClipTaggerError(f"Cannot get frame content") from e
 
 
-class FrameAnalyzer:
+class VideoAnalyzer:
   
   def __init__(self, ct_client: ClipTaggerClient, video_file: VideoFile, temperature: float = 0.1, max_tokens: int = 2000):
     self._log = logging.getLogger("app.videoframeanalyzer")
