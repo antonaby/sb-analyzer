@@ -7,28 +7,48 @@ import cv2
 import base64
 import numpy as np
 from typing import TypedDict
-from tempfile import NamedTemporaryFile
+from abc import ABC, abstractmethod
+from pathlib import Path
+
+
+class VideoSource(ABC):
+  
+  @abstractmethod
+  def get_video_file_path(self) -> str:
+    pass
+
+
+class VideoSourceFilesystem(VideoSource):
+  
+  def __init__(self, path: str) -> None:
+    self._path = path
+  
+  def get_video_file_path(self) -> str:
+    return self._path
 
 
 class VideoFileError(Exception):
   pass
+
 
 class VideoFrame(TypedDict, total=True):
   base64: str  
   frame_number: int
   timestamp: float
 
+
 class VideoFile:
   
-  def __init__(self, path: str):
+  def __init__(self, source: VideoSource):
     self._log = logging.getLogger("app:videofile")
-    self._file_path = path
+    self._source = source
     self._open()
     
   def _open(self):
-    cap = cv2.VideoCapture(self._file_path, cv2.CAP_FFMPEG)
+    file_path = self._source.get_video_file_path()
+    cap = cv2.VideoCapture(file_path, cv2.CAP_FFMPEG)
     if not cap.isOpened():
-      raise VideoFileError(f"Cannot open file: {self._file_path}")
+      raise VideoFileError(f"Cannot open file: {file_path}")
     
     self._cap = cap
     self._fps = cap.get(cv2.CAP_PROP_FPS)
@@ -106,97 +126,48 @@ class VideoFile:
   def _frame_to_base64(self, frame: np.ndarray) -> str:
     _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
     return base64.b64encode(buffer).decode('utf-8')    
-  
-  # def get_audio(self) -> bytes:
-  #   pass
 
-  
-class VideoDetails(TypedDict, total=True):
-  frames: list[VideoFrame]
-  audio: bytes
 
-def split_video(data: bytes, interval_seconds: float = 1.0) -> VideoDetails: 
-  with NamedTemporaryFile(delete=False, suffix=".mp4") as f:
-    f.write(data)
-    tmp_file = f.name
-   
-  frames = _split_video(tmp_file, interval_seconds)
-  audio = _extract_audio(tmp_file)  
-  os.remove(tmp_file)
+class AudioFileError(Exception):
+  pass
+
+
+class AudioFile:
   
-  return {
-    "frames": frames,
-    "audio": audio
-  }
+  def __init__(self, source: VideoSource) -> None:
+    self._log = logging.getLogger("app:audiofile")
+    self._source = source
+    self._extract_audio()
+  
+  def _extract_audio(self):
+    input_file = self._source.get_video_file_path()
+    base, _ = os.path.splitext(input_file)
+    output_file = base + ".mp3"
     
-def _split_video(path: str, interval_seconds) -> list[VideoFrame]:
-  log = logging.getLogger("analyzer")
-  
-  cap = cv2.VideoCapture(path, cv2.CAP_FFMPEG)
-  if not cap.isOpened():
-    raise ValueError(f"Cannot open file: {path}")
-  
-  fps = cap.get(cv2.CAP_PROP_FPS)
-  total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-  duration = total_frames / fps
+    command = [
+      "ffmpeg",
+      "-i", input_file,   # input video
+      "-vn",              # no video
+      "-q:a", "0",        # highest quality VBR
+      output_file
+    ]
+    
+    result = subprocess.run(command, check=True, capture_output=True, text=True)
+    
+    self._log.debug(f"ffmpeg finished. Exit code: {result.returncode}.")
+    if result.returncode != 0:
+      raise AudioFileError(f"ffmpeg error: {result.stderr}")
+    
+    result = Path(output_file)
+    if not (result.is_file() and result.stat().st_size > 0):
+      raise AudioFileError(f"output file not found or empty: {output_file}")
 
-  width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-  height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    self._output_file = output_file
   
-  log.debug(f"Video info: {duration:.1f}s duration, {fps:.1f} fps, width {width}, height {height}")
-  
-  frames: list[VideoFrame] = []
-  current_time = 0
-  
-  while current_time < duration:
-    frame_number = int(current_time * fps)
-    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-    ret, frame = cap.read()
-
-    if ret:
-      frames.append({
-        'base64': _frame_to_base64(frame),
-        'frame_number': frame_number,
-        'timestamp': current_time
-      })
-      log.debug(f"  Extracted frame at {current_time:.1f}s")
-
-    current_time += interval_seconds
-
-  cap.release()
-  log.debug(f"Extracted {len(frames)} frames")
-  
-  return frames
-
-def _frame_to_base64(frame: np.ndarray) -> str:
-  _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-  return base64.b64encode(buffer).decode('utf-8')    
-
-def _extract_audio(input_file: str) -> bytes:
-  base, _ = os.path.splitext(input_file)
-  output_file = base + ".mp3"
-  
-  command = [
-    "ffmpeg",
-    "-i", input_file,   # input video
-    "-vn",              # no video
-    "-q:a", "0",        # highest quality VBR
-    output_file
-  ]
-  
-  result = subprocess.run(command, check=True, capture_output=True, text=True)
-  
-  log = logging.getLogger("analyzer")
-  log.debug(f"ffmpeg finished. Exit code: {result.returncode}.")
-  if result.returncode != 0:
-    log.error(f"ffmpeg error: {result.stderr}")
-  
-  with open(output_file, "rb") as f:
-    data = f.read()
-  
-  os.remove(output_file)
-  return data
-
+  def get_audio_file_path(self) -> str:
+    return self._output_file
+    
+ 
 def download_yt_video(url: str, path: str):
   ydl_opts = {
     "format": "bestvideo[height<=1280]+bestaudio/best",   
