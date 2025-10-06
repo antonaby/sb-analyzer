@@ -141,29 +141,7 @@ class Frame(BaseModel):
   timestamp: float
   details: FrameDetails
   
-class Word(BaseModel):
-  word: str = ""
-  start: float = 0
-  end: float = 0
-  score: float = 0
-  speaker: str | None = ""
 
-class Segment(BaseModel):
-  id: int = 0
-  text: str = ""
-  start: float = 0
-  end: float = 0
-  avg_logprob: float = 0
-  language: str = "en"
-  speaker: str | None = ""
-  words: list[Word] = []
-
-class Transcript(BaseModel):
-  task: str = ""
-  language: str = "en"
-  duration: float = 0
-  text: str = ""
-  segments: list[Segment] = []
 
 class VideoSummary(BaseModel):
   main_idea: str
