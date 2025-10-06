@@ -22,7 +22,7 @@ class VideoSource(ABC):
     pass
   
   @abstractmethod
-  def clear(self):
+  def delete(self):
     pass
   
   def new_tmp_file_name(self, ext: str) -> str:
@@ -31,7 +31,8 @@ class VideoSource(ABC):
     self._tmp_files.append(output_file)
     return output_file
 
-class VideoSourceFilesystem(VideoSource):
+
+class FilesystemVideoSource(VideoSource):
   
   def __init__(self, path: str) -> None:
     super().__init__()
@@ -40,8 +41,44 @@ class VideoSourceFilesystem(VideoSource):
   def get_video_file_path(self) -> str:
     return self._path
   
-  def clear(self):
+  def delete(self):
     pass
+  
+
+class YtDlpVideoSource(VideoSource):
+  
+  def __init__(self, video_url: str, download_dir: str):
+    super().__init__()
+    self._video_url = video_url
+    self._download_dir = download_dir
+    self._download()
+
+  def _download(self):
+    ydl_opts = {
+      "format": "bestvideo[height<=1280]+bestaudio/best",   
+      "outtmpl": f"{self._download_dir}/%(upload_date)s-%(id)s.%(ext)s",  
+      "quiet": True,                                        
+      "noplaylist": True,                                   
+      "postprocessors": [
+        {  
+          "key": "FFmpegVideoConvertor",
+          "preferedformat": "mp4",
+        }
+      ],
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl: # type: ignore
+      info = ydl.extract_info(self._video_url, download=True)
+      self._info = info
+      self._file_path = info["requested_downloads"][0]["filepath"] # type: ignore
+
+  def get_video_file_path(self) -> str:
+    return self._file_path
+  
+  def delete(self):
+    os.remove(self._file_path)
+    for f in self._tmp_files:
+      os.remove(f)
 
 
 class VideoFileError(Exception):
@@ -182,22 +219,3 @@ class AudioFile:
   
   def get_audio_file_path(self) -> str:
     return self._output_file
-    
- 
-def download_yt_video(url: str, path: str):
-  ydl_opts = {
-    "format": "bestvideo[height<=1280]+bestaudio/best",   
-    "outtmpl": f"{path}/%(upload_date)s-%(id)s.%(ext)s",  
-    "quiet": True,                                        
-    "noplaylist": True,                                   
-    "postprocessors": [
-      {  
-        "key": "FFmpegVideoConvertor",
-        "preferedformat": "mp4",
-      }
-    ],
-  }
-
-  with yt_dlp.YoutubeDL(ydl_opts) as ydl: # type: ignore
-    info = ydl.extract_info(url, download=True)
-    return info
