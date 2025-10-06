@@ -13,6 +13,10 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
+class BaseVideoFileError(Exception):
+  pass
+
+
 class VideoSource(ABC):
   
   def __init__(self):
@@ -85,7 +89,7 @@ class YtDlpVideoSource(VideoSource):
     self._delete_tmp_files()
 
 
-class UrlVideoSourceError(Exception):
+class UrlVideoSourceError(BaseVideoFileError):
   pass
 
 
@@ -119,11 +123,11 @@ class UrlVideoSource(VideoSource):
       self._file_path = file_path
       self._loaded = True
     except Exception as e:
-      raise UrlVideoSourceError(f"filed to download video: {self._video_url}") from e
+      raise UrlVideoSourceError(f"Cannot download video: {self._video_url}") from e
 
   def get_video_file_path(self) -> str:
     if not self._loaded or not self._file_path:
-      raise UrlVideoSourceError("file not loaded")
+      raise UrlVideoSourceError("File not loaded")
     
     return str(self._file_path)
   
@@ -132,7 +136,7 @@ class UrlVideoSource(VideoSource):
     self._delete_tmp_files()
   
 
-class VideoFileError(Exception):
+class VideoFileError(BaseVideoFileError):
   pass
 
 
@@ -233,7 +237,7 @@ class VideoFile:
     return base64.b64encode(buffer).decode('utf-8')    
 
 
-class AudioFileError(Exception):
+class AudioFileError(BaseVideoFileError):
   pass
 
 
