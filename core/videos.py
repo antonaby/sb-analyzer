@@ -13,18 +13,35 @@ from pathlib import Path
 
 class VideoSource(ABC):
   
+  def __init__(self):
+    super().__init__()
+    self._tmp_files: list[str] = []
+  
   @abstractmethod
   def get_video_file_path(self) -> str:
     pass
-
+  
+  @abstractmethod
+  def clear(self):
+    pass
+  
+  def new_tmp_file_name(self, ext: str) -> str:
+    base, _ = os.path.splitext(self.get_video_file_path())
+    output_file = base + "." + ext
+    self._tmp_files.append(output_file)
+    return output_file
 
 class VideoSourceFilesystem(VideoSource):
   
   def __init__(self, path: str) -> None:
+    super().__init__()
     self._path = path
   
   def get_video_file_path(self) -> str:
     return self._path
+  
+  def clear(self):
+    pass
 
 
 class VideoFileError(Exception):
@@ -141,8 +158,7 @@ class AudioFile:
   
   def _extract_audio(self):
     input_file = self._source.get_video_file_path()
-    base, _ = os.path.splitext(input_file)
-    output_file = base + ".mp3"
+    output_file = self._source.new_tmp_file_name("mp3")
     
     command = [
       "ffmpeg",
