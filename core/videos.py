@@ -9,10 +9,71 @@ import numpy as np
 from typing import TypedDict
 from tempfile import NamedTemporaryFile
 
+
+class VideoFileError(Exception):
+  pass
+
 class VideoFrame(TypedDict, total=True):
   base64: str  
   frame_number: int
   timestamp: float
+
+class VideoFile:
+  
+  def __init__(self, path: str):
+    self._log = logging.getLogger("app:videofile")
+    self._file_path = path
+    self._open()
+    
+  def _open(self):
+    cap = cv2.VideoCapture(self._file_path, cv2.CAP_FFMPEG)
+    if not cap.isOpened():
+      raise VideoFileError(f"Cannot open file: {self._file_path}")
+    
+    self._cap = cap
+    self._fps = cap.get(cv2.CAP_PROP_FPS)
+    self._total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    self._duration = self._total_frames / self._fps
+
+    width  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    self._log.debug(f"Video info: {self._duration:.1f}s duration, {self._fps:.1f} fps, width {width}, height {height}")
+    
+  def get_duration(self) -> float:
+    return self._duration
+  
+  def get_total_frames(self) -> int:
+    return self._total_frames
+  
+  def close(self):
+    self._cap.release()
+  
+  def get_frame(self, timestamp: float) -> VideoFrame:
+    if timestamp > self._duration or timestamp < 0:
+      raise VideoFileError(f"out of video duration: {timestamp}, duration: {self._duration}")
+    
+    frame_number = min(int(timestamp * self._fps), self._total_frames - 1)
+    self._cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+    ret, frame = self._cap.read()
+
+    if not ret:
+      raise VideoFileError(f"Cannot get frame at: {timestamp}")
+    
+    self._log.debug(f"Extracted frame at {timestamp:.1f}s")
+    return {
+      'base64': self._frame_to_base64(frame),
+      'frame_number': frame_number,
+      'timestamp': timestamp
+    }
+    
+  def _frame_to_base64(self, frame: np.ndarray) -> str:
+    _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    return base64.b64encode(buffer).decode('utf-8')    
+  
+  # def get_audio(self) -> bytes:
+  #   pass
+
   
 class VideoDetails(TypedDict, total=True):
   frames: list[VideoFrame]
