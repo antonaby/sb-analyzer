@@ -1,10 +1,21 @@
 import asyncio
 
+from celery import signals
 from core.apify.actor import ActorRun
 from core.apify.client import ApifyClient
 from core.apify.tiktok.apidojo import DateRange, SortType
 from .main import app
 from dotenv import load_dotenv
+
+
+apify_client: ApifyClient | None = None
+
+
+@signals.worker_process_init.connect
+def init_worker_process(**kwargs):
+  global apify_client
+  load_dotenv()            
+  apify_client = ApifyClient()
 
 
 @app.task
@@ -15,9 +26,10 @@ def run_apidojo_scrapper(
   location: str = "US", 
   max_items: int = 1000
 ) -> ActorRun:
-    
-  load_dotenv()
-  apify_client = ApifyClient()
+  global apify_client
+  if apify_client is None:
+    raise RuntimeError("Apify client not initialized")
+  
   apidojo_client = apify_client.apidojo_tiktok_scrapper()  
   
   run, posts = asyncio.run(
