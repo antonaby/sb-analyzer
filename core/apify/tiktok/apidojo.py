@@ -1,5 +1,5 @@
 import logging
-from typing import Any, cast, TypedDict
+from typing import Any, Literal, cast, TypedDict
 from apify_client import ApifyClientAsync
 from core.apify.actor import BaseApifyActor
 from core.apify.tiktok.clockwork import ActorRun
@@ -80,24 +80,46 @@ class TikTokScrapperError(Exception):
   pass
 
 
+SortType = Literal[
+  "RELEVANCE",
+  "MOST_LIKED",
+  "DATE_POSTED",
+]
+
+
+DateRange = Literal[
+  "DEFAULT",
+  "ALL_TIME",
+  "YESTERDAY",
+  "THIS_WEEK",
+  "THIS_MONTH",
+  "LAST_THREE_MONTHS",
+  "LAST_SIX_MONTHS",
+]
+
+
 class ApidojoTiktokScrapper(BaseApifyActor):
   
   def __init__(self, client: ApifyClientAsync):
     super().__init__(client)
     self.actor_client = client.actor('apidojo/tiktok-scraper')
-    self._log = logging.getLogger("app.apify.tiktok.ad")
+    self._log = logging.getLogger("app.apify.tiktok.apidojo")
   
-  async def scrape_videos(self) -> tuple[ActorRun, list[TikTokPost]]:
+  async def search(self, 
+                   keywords: list[str], 
+                   date_range: DateRange,
+                   sort_type: SortType,
+                   location: str = "US", 
+                   max_items: int = 1000,
+                  ) -> tuple[ActorRun, list[TikTokPost]]:
     try:
       run_input = {
-        "dateRange": "THIS_MONTH",
+        "dateRange": date_range,
         "includeSearchKeywords": True,
-        "keywords": [
-          "cat"
-        ],
-        "location": "US",
-        "maxItems": 100,
-        "sortType": "MOST_LIKED"
+        "keywords": keywords,
+        "location": location,
+        "maxItems": max_items,
+        "sortType": sort_type
       }
       call_result = await self.actor_client.call(run_input=run_input, logger=self._log)
         

@@ -1,6 +1,5 @@
 import asyncio
 from dataclasses import dataclass
-import json
 import logging
 import os
 from typing import TypedDict
@@ -9,9 +8,8 @@ from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext, ModelSettings
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
-from core.agents.video import Frame, FrameContent, VideoData
+from core.agents.video import Frame, VideoData
 from core.agents.transcribe import AudioData
-from core.apify.tiktok.clockwork import TikTokPost
 from core.utils import var_or_exception
 
 
@@ -36,6 +34,12 @@ class VideoSummary(BaseModel):
   theme: list[str]
   video_type: list[str]
   synopsis: list[str]
+
+
+class PostDetails(TypedDict):
+  post_from: str
+  title: str
+  hashtags: list[str]
 
 
 class UserPromptContext(TypedDict):
@@ -67,7 +71,7 @@ class SummaryAgent:
     )
     
     @agent.tool
-    async def get_frame(ctx: RunContext[SummaryAgentDeps], time_sec: float) -> FrameContent:
+    async def get_frame(ctx: RunContext[SummaryAgentDeps], time_sec: float) -> Frame:
       """
       Retrieves a video frame analysis at a specific time.
 
@@ -84,20 +88,16 @@ class SummaryAgent:
     env = Environment(loader=FileSystemLoader(script_dir))
     self._user_prompt = env.get_template("summary_tmp.jinja")
     
-  async def summary_tiktok(self, post: TikTokPost, video: VideoData, audio: AudioData) -> VideoSummary:
+  async def summary_tiktok(self, post: PostDetails, video: VideoData, audio: AudioData) -> VideoSummary:
     basic_frames, transcription = await asyncio.gather(
       video.get_n_frames(),
       audio.get_transcription()
     )
     
     context: UserPromptContext = {
-      "post_from": "tiktok",
+      "post_from": post.get("post_from", "tiktok"),
       "title": post.get("text", "no title"),
-      "hashtags": [
-        t.get("name", "no name") 
-        for t in post.get("hashtags", []) 
-        if t.get("name") is not None
-      ],
+      "hashtags": post.get("hashtags", []),
       "duration": video.get_duration(),
       "frames": [f.model_dump() for f in basic_frames],
       "transcriptions": [t.model_dump() for t in transcription]

@@ -174,7 +174,7 @@ class ClockworksTiktokScrapper(BaseApifyActor):
   def __init__(self, client: ApifyClientAsync):
     super().__init__(client)
     self.actor_client = client.actor('clockworks/tiktok-scraper')
-    self._log = logging.getLogger("app.apify.tiktok.cw")
+    self._log = logging.getLogger("app.apify.tiktok.clockworks")
   
   async def scrape_hashtags(
     self, 

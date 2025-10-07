@@ -1,6 +1,6 @@
 import logging
 
-from core.agents.summary import SummaryAgent, VideoSummary
+from core.agents.summary import PostDetails, SummaryAgent, VideoSummary
 from core.agents.transcribe import AudioData, LemonfoxClient
 from core.agents.video import ClipTaggerClient, VideoData
 from core.file import AudioFile, UrlVideoSource, VideoFile
@@ -33,7 +33,17 @@ class TikTokVideoProcessor:
     video_data = VideoData(self._ct_client, video)
     audio_data = AudioData(self._lm_client, audio)
     
-    summary = await self._agent.summary_tiktok(post, video_data, audio_data)
+    post_details: PostDetails = {
+      "post_from": "tiktok",
+      "title": post.get("text", "no title"),
+      "hashtags": [
+        t.get("name", "no name") 
+        for t in post.get("hashtags", []) 
+        if t.get("name") is not None
+      ]
+    }
+    
+    summary = await self._agent.summary_tiktok(post_details, video_data, audio_data)
     source.delete()
     
     return summary

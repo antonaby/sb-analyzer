@@ -13,8 +13,8 @@ class ApifyClient:
     key = var_or_exception(APIFY_API_KEY_VAR)
     self.client = ApifyClientAsync(key)
     
-  def cw_tiktok_scrapper(self) -> ClockworksTiktokScrapper:
+  def clockworks_tiktok_scrapper(self) -> ClockworksTiktokScrapper:
     return ClockworksTiktokScrapper(self.client)
 
-  def ad_tiktok_scrapper(self) -> ApidojoTiktokScrapper:
+  def apidojo_tiktok_scrapper(self) -> ApidojoTiktokScrapper:
     return ApidojoTiktokScrapper(self.client)
