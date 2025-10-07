@@ -11,7 +11,7 @@ from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 from core.agents.video import Frame, FrameContent, VideoData
 from core.agents.transcribe import AudioData
-from core.apify.tiktok import TikTokPost
+from core.apify.tiktok.clockwork import TikTokPost
 from core.utils import var_or_exception
 
 

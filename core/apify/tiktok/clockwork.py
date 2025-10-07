@@ -1,8 +1,9 @@
 import logging
-import re
 from typing import Any, TypedDict, cast
 
 from apify_client import ApifyClientAsync
+
+from core.apify.actor import BaseApifyActor
 
 
 class Meta(TypedDict, total=False):
@@ -163,15 +164,17 @@ class TikTokPost(TypedDict, total=False):
   input: str
   searchHashtag: SearchHashtag
 
+
 class TikTokScrapperError(Exception):
   pass
 
-class ClockworksTiktokScrapper:
+
+class ClockworksTiktokScrapper(BaseApifyActor):
   
   def __init__(self, client: ApifyClientAsync):
-    self.client = client
+    super().__init__(client)
     self.actor_client = client.actor('clockworks/tiktok-scraper')
-    self.log = logging.getLogger("app.apify.tiktok")
+    self._log = logging.getLogger("app.apify.tiktok.cw")
   
   async def scrape_hashtags(
     self, 
@@ -195,7 +198,7 @@ class ClockworksTiktokScrapper:
         "shouldDownloadVideos": download
       }
       
-      call_result = await self.actor_client.call(run_input=run_input, logger=self.log)
+      call_result = await self.actor_client.call(run_input=run_input, logger=self._log)
       
       if call_result is None:
         raise TikTokScrapperError("no call result")
@@ -206,9 +209,3 @@ class ClockworksTiktokScrapper:
       return actor_run, dataset
     except Exception as e:
       raise TikTokScrapperError("run failed") from e
-    
-  async def _get_dataset(self, dataset_id: str) -> list[TikTokPost]:
-    dataset_client = self.client.dataset(dataset_id)
-    items = await dataset_client.list_items()
-    
-    return items.items
