@@ -29,15 +29,15 @@ class Song(TypedDict, total=False):
   id: str
   title: str
   artist: str
-  duration: int
+  duration: float
   cover: str
 
 
 class SubtitleInformation(TypedDict, total=False):
   caption_format: str
   caption_length: int
-  cla_subtitle_id: int
-  complaint_id: int
+  cla_subtitle_id: float
+  complaint_id: float
   expire: int
   is_auto_generated: bool
   is_original_caption: bool

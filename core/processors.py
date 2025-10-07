@@ -4,8 +4,9 @@ from core.agents.summary import PostDetails, SummaryAgent, VideoSummary
 from core.agents.transcribe import AudioData, LemonfoxClient
 from core.agents.video import ClipTaggerClient, VideoData
 from core.file import AudioFile, UrlVideoSource, VideoFile
+from core.utils import is_url
 
-from .apify.tiktok.clockworks import TikTokPost
+from .apify.tiktok.apidojo import TikTokPost
 
 
 class TikTokVideoProcessorError(Exception):
@@ -22,8 +23,8 @@ class TikTokVideoProcessor:
     self._tmp_dir = tmp_dir
     
   async def process_video(self, post: TikTokPost) -> VideoSummary:
-    url = post.get("videoMeta", {}).get("downloadAddr")
-    if not url:
+    url = post.get("video", {}).get("url", "")
+    if not is_url(url):
       raise TikTokVideoProcessorError("No video url")
     
     source = await UrlVideoSource.new(url, self._tmp_dir)
@@ -36,11 +37,7 @@ class TikTokVideoProcessor:
     post_details: PostDetails = {
       "post_from": "tiktok",
       "title": post.get("text", "no title"),
-      "hashtags": [
-        t.get("name", "no name") 
-        for t in post.get("hashtags", []) 
-        if t.get("name") is not None
-      ]
+      "hashtags": post.get("hashtags", [])
     }
     
     summary = await self._agent.summary_tiktok(post_details, video_data, audio_data)
