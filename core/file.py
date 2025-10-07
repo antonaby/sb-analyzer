@@ -110,6 +110,8 @@ class UrlVideoSource(VideoSource):
   async def load(self):
     try:
       download_dir = Path(self._download_dir)
+      download_dir.mkdir(parents=True, exist_ok=True)
+      
       parsed_url = urlparse(self._video_url)
       filename = Path(parsed_url.path).name
       file_path = (download_dir / filename).resolve()

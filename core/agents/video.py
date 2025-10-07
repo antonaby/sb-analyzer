@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import traceback
+import copy
 from typing import cast
 from openai import AsyncOpenAI
 from core.utils import var_or_exception
@@ -139,9 +140,16 @@ class VideoData:
     self._video_file = video_file
     self._temperature = temperature
     self._max_tokens = max_tokens
+    self._frame_cache: list[Frame] = []
+    self._cache_lock = asyncio.Lock()
   
   def get_duration(self) -> float:
     return self._video_file.get_duration()
+  
+  async def get_processed_frames(self) -> list[Frame]:
+    async with self._cache_lock:
+      cache_copy = copy.deepcopy(self._frame_cache)
+      return cache_copy
     
   async def get_frame(self, timetamp: float) -> Frame:
     frame = self._video_file.get_frame(timetamp)  
@@ -175,9 +183,15 @@ class VideoData:
 
   async def _frame_content(self, frame: VideoFrame) -> Frame:
     content = await self._ct_client.analyze(frame["base64"], self._temperature, self._max_tokens)
-    return Frame(
+    
+    result = Frame(
       **content.model_dump(), 
       frame_number=frame["frame_number"], 
       time_sec=frame["timestamp"]
     )
+    
+    async with self._cache_lock:
+      self._frame_cache.append(result)
+    
+    return result
   

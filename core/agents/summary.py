@@ -4,9 +4,9 @@ import json
 import logging
 import os
 from typing import TypedDict
-from jinja2 import Template, Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent, RunContext, ModelSettings
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 from core.agents.video import Frame, FrameContent, VideoData
@@ -35,7 +35,7 @@ class VideoSummary(BaseModel):
   main_idea: str
   theme: list[str]
   video_type: list[str]
-  synopsis: str
+  synopsis: list[str]
 
 
 class UserPromptContext(TypedDict):
@@ -106,7 +106,8 @@ class SummaryAgent:
     user_prompt = self._user_prompt.render(context)
     res = await self._agent.run(
       user_prompt,
-      deps=SummaryAgentDeps(video=video, audio=audio)
+      deps=SummaryAgentDeps(video=video, audio=audio),
+      model_settings=ModelSettings(temperature=0.1)
     )
     
     usage = res.usage()

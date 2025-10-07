@@ -86,12 +86,16 @@ class AudioData:
   def __init__(self, lm_client: LemonfoxClient, audio_file: AudioFile):
     self._lm_client = lm_client
     self._audio_file = audio_file
+    self._trans_cache: list[Transcription] = []
+  
+  def get_processed_transcriptions(self) ->  list[Transcription]:
+    return self._trans_cache
     
   async def get_transcription(self) -> list[Transcription]:
     file_path = self._audio_file.get_audio_file_path()
     trans = await self._lm_client.transcribe(file_path)
     
-    return [
+    self._trans_cache = [
       Transcription(
         text=s.get("text", "no text"), 
         start_sec=s.get("start", 0),
@@ -99,3 +103,5 @@ class AudioData:
       ) 
       for s in trans.get("segments", [])
     ]
+    
+    return self._trans_cache
