@@ -1,7 +1,7 @@
 import logging
 
 from .apify.tiktok import ClockworksTiktokScrapper, TikTokPost
-from .videos import split_video
+from .file import split_video
 from .agents.embedding import Embedder
 from .agents.analyzer import VideoAnalyzer
 

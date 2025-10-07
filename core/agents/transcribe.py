@@ -1,38 +1,39 @@
 import asyncio
+from typing import TypedDict
 from pydantic import BaseModel
 from core.utils import var_or_exception
-from core.videos import AudioFile
+from core.file import AudioFile
 import aiohttp
 
 
 LEMONFOX_API_KEY_VAR = "LEMONFOX_API_KEY"
 LEMONFOX_API_URL = "https://api.lemonfox.ai/v1/audio/transcriptions"
 
-class Word(BaseModel):
-  word: str = ""
-  start: float = 0
-  end: float = 0
-  score: float = 0
-  speaker: str | None = ""
+class Word(TypedDict, total=False):
+  word: str
+  start: float
+  end: float
+  score: float
+  speaker: str
 
 
-class Segment(BaseModel):
-  id: int = 0
-  text: str = ""
-  start: float = 0
-  end: float = 0
-  avg_logprob: float = 0
-  language: str = "en"
-  speaker: str | None = ""
-  words: list[Word] = []
+class Segment(TypedDict, total=False):
+  id: int
+  text: str
+  start: float
+  end: float
+  avg_logprob: float
+  language: str
+  speaker: str
+  words: list[Word]
 
 
-class Transcript(BaseModel):
-  task: str = ""
-  language: str = "en"
-  duration: float = 0
-  text: str = ""
-  segments: list[Segment] = []
+class Transcript(TypedDict, total=False):
+  task: str
+  language: str
+  duration: float
+  text: str
+  segments: list[Segment]
 
 
 class LemonfoxClientError(Exception):
@@ -69,18 +70,32 @@ class LemonfoxClient:
 
           async with aiohttp.ClientSession() as session:
             async with session.post(self._url, headers=headers, data=form) as response:
-              result = await response.json()
-              return Transcript.model_validate(result)
+              result: Transcript = await response.json()
+              return result
     except Exception as e:
       raise LemonfoxClientError(f"Cannot transcribe audio file: {file_path}") from e
 
+class Transcription(BaseModel):
+  text: str = ""
+  start_sec: float = 0
+  end_sec: float = 0
 
-class AudioAnalyzer:
+
+class AudioData:
   
   def __init__(self, lm_client: LemonfoxClient, audio_file: AudioFile):
     self._lm_client = lm_client
     self._audio_file = audio_file
     
-  async def get_transcription(self) -> Transcript:
+  async def get_transcription(self) -> list[Transcription]:
     file_path = self._audio_file.get_audio_file_path()
-    return await self._lm_client.transcribe(file_path)
+    trans = await self._lm_client.transcribe(file_path)
+    
+    return [
+      Transcription(
+        text=s.get("text", "no text"), 
+        start_sec=s.get("start", 0),
+        end_sec=s.get("end", 0)
+      ) 
+      for s in trans.get("segments", [])
+    ]

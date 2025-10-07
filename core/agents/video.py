@@ -10,7 +10,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.models.openai import OpenAIChatModel, OpenAIChatModelSettings
 from pydantic_ai.profiles.openai import OpenAIModelProfile
 
-from core.videos import VideoFile, VideoFrame
+from core.file import VideoFile, VideoFrame
 
 
 INFERENCE_API_KEY_VAR = "INFERENCE_API_KEY"
@@ -126,7 +126,12 @@ class ClipTaggerClient:
       raise ClipTaggerError(f"Cannot get frame content") from e
 
 
-class VideoAnalyzer:
+class Frame(FrameContent):
+  frame_number: int
+  time_sec: float
+
+
+class VideoData:
   
   def __init__(self, ct_client: ClipTaggerClient, video_file: VideoFile, temperature: float = 0.1, max_tokens: int = 2000):
     self._log = logging.getLogger("app.videoframeanalyzer")
@@ -134,29 +139,30 @@ class VideoAnalyzer:
     self._video_file = video_file
     self._temperature = temperature
     self._max_tokens = max_tokens
+  
+  def get_duration(self) -> float:
+    return self._video_file.get_duration()
     
-  async def get_frame_content(self, timetamp: float) -> FrameContent:
+  async def get_frame(self, timetamp: float) -> Frame:
     frame = self._video_file.get_frame(timetamp)  
-    return await self._ct_client.analyze(frame["base64"], self._temperature, self._max_tokens)
+    return await self._frame_content(frame)
   
-  async def get_frame_content_with_interval(self, *args, **kwargs) -> list[FrameContent]:
-    frames = self._video_file.get_frames_with_interval(*args, **kwargs)
-    return await self._get_frames_content(frames)
+  async def get_frames(self, interval: float = 10, **kwargs) -> list[Frame]:
+    frames = self._video_file.get_frames_with_interval(interval=interval, **kwargs)
+    return await self._process_frames(frames)
   
-  async def get_n_frames(self, *args, **kwargs) -> list[FrameContent]:
-    frames = self._video_file.get_n_frames(*args, **kwargs)
-    return await self._get_frames_content(frames)
+  async def get_n_frames(self, frame_n: int = 5, **kwargs) -> list[Frame]:
+    frames = self._video_file.get_n_frames(frame_n=frame_n, **kwargs)
+    return await self._process_frames(frames)
   
-  async def _get_frames_content(self, frames: list[VideoFrame]) -> list[FrameContent]:
+  async def _process_frames(self, frames: list[VideoFrame]) -> list[Frame]:
     tasks = [
-      asyncio.create_task(
-        self._ct_client.analyze(f["base64"], self._temperature, self._max_tokens)
-      ) 
+      asyncio.create_task(self._frame_content(f)) 
       for f in frames
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     
-    successes = [cast(FrameContent, r) for r in results if not isinstance(r, Exception)]
+    successes = [cast(Frame, r) for r in results if not isinstance(r, Exception)]
     errors = [
       "".join(traceback.format_exception_only(type(r), r)) 
       for r in results if isinstance(r, Exception)
@@ -166,4 +172,12 @@ class VideoAnalyzer:
       self._log.error(f"There are a few errors: {", ".join(errors)}")
     
     return successes
+
+  async def _frame_content(self, frame: VideoFrame) -> Frame:
+    content = await self._ct_client.analyze(frame["base64"], self._temperature, self._max_tokens)
+    return Frame(
+      **content.model_dump(), 
+      frame_number=frame["frame_number"], 
+      time_sec=frame["timestamp"]
+    )
   

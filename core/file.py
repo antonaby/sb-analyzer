@@ -224,13 +224,13 @@ class VideoFile:
     self,
     frame_n: int = 5, 
     min_interval: float = 3.0, 
-    *args, **kwargs
+    **kwargs
   ) -> list[VideoFrame]:
     interval = round(self._duration / frame_n, 2)
     if interval < min_interval:
       interval = min_interval
     
-    return self.get_frames_with_interval(interval=interval, *args, **kwargs) 
+    return self.get_frames_with_interval(interval=interval, **kwargs) 
     
   def _frame_to_base64(self, frame: np.ndarray) -> str:
     _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
