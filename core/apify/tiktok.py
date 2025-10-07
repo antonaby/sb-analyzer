@@ -212,29 +212,3 @@ class ClockworksTiktokScrapper:
     items = await dataset_client.list_items()
     
     return items.items
-
-  async def download_video(self, post: TikTokPost) -> bytes:
-    url = post.get("videoMeta", {}).get("downloadAddr")
-    if not url:
-      raise TikTokScrapperError("no valid video url")
-    
-    match = re.search(r"/key-value-stores/([^/]+)/records/(.+)$", url)
-    if match:
-      store_id = match.group(1)
-      filename = match.group(2)
-      try:
-        return await self._download_video(store_id, filename)
-      except Exception as e:
-        raise TikTokScrapperError("donwload filed") from e
-
-    raise TikTokScrapperError("no valid video url")
-
-  async def _download_video(self, kv_store_id: str, record: str) -> bytes:
-    kv_store = self.client.key_value_store(kv_store_id)
-    entry = await kv_store.get_record(record)
-    
-    if entry is None:
-      raise TikTokScrapperError(f"cannot get record: {kv_store_id}/{record}")
-    
-    return entry["value"]
-  
