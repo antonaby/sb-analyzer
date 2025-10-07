@@ -67,9 +67,9 @@ class SummaryAgent:
     )
     
     @agent.tool
-    async def get_frame_content(ctx: RunContext[SummaryAgentDeps], time_sec: float) -> FrameContent:
+    async def get_frame(ctx: RunContext[SummaryAgentDeps], time_sec: float) -> FrameContent:
       """
-      Retrieves the content/description of a video frame at a specific time.
+      Retrieves a video frame analysis at a specific time.
 
       Args:
         time_sec (float): The time position in the video (in seconds).

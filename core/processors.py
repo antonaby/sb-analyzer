@@ -33,4 +33,7 @@ class TikTokVideoProcessor:
     video_data = VideoData(self._ct_client, video)
     audio_data = AudioData(self._lm_client, audio)
     
-    return await self._agent.summary_tiktok(post, video_data, audio_data)
+    summary = await self._agent.summary_tiktok(post, video_data, audio_data)
+    source.delete()
+    
+    return summary
