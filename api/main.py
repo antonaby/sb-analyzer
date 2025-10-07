@@ -3,13 +3,13 @@ import os
 from pydantic import BaseModel, Field
 from fastapi import FastAPI
 from celery.result import AsyncResult
-
+from dotenv import load_dotenv
 from core.apify.tiktok.apidojo import DateRange, SortType
-
 from workers.tasks import run_apidojo_scrapper
 from workers.main import app as worker_app
 
 
+load_dotenv()
 app = FastAPI(title="SB VideoAnalyzer API", version="0.0.0")
 
 
@@ -28,7 +28,7 @@ async def health():
 
 @app.post("/tiktok/apidojo/run")
 def run_tiktok_scrapper(run: ApidojoScrapperRun):
-  result = run_apidojo_scrapper.delay( # type: ignore
+  job = run_apidojo_scrapper.delay( # type: ignore
     keywords=run.keywords, 
     date_range=run.date_range, 
     sort_type=run.sort_type, 
@@ -37,15 +37,16 @@ def run_tiktok_scrapper(run: ApidojoScrapperRun):
   ) 
   
   return {
-    "id": result.id,
-    "status": result.status
+    "id": job.id,
+    "status": job.status,
   }
 
 
 @app.get("/tasks/{task_id}")
 def get_task(task_id: str):
-  result = AsyncResult(task_id, app=worker_app) 
+  job = AsyncResult(task_id, app=worker_app) 
   return {
-    "id": result.id,
-    "status": result.status
+    "id": job.id,
+    "status": job.status,
+    "result": job.result
   }
