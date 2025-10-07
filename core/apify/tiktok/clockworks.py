@@ -3,76 +3,8 @@ from typing import Any, TypedDict, cast
 
 from apify_client import ApifyClientAsync
 
-from core.apify.actor import BaseApifyActor
+from core.apify.actor import ActorRun, BaseApifyActor
 
-
-class Meta(TypedDict, total=False):
-  origin: str
-
-class PricingPerEvent(TypedDict, total=False):
-  actorChargeEvents: dict[str, Any]
-
-class PricingInfo(TypedDict, total=False):
-  apifyMarginPercentage: int
-  createdAt: str
-  startedAt: str
-  notifiedAboutFutureChangeAt: str
-  notifiedAboutChangeAt: str
-  reasonForChange: str
-  pricingModel: str
-  pricingPerEvent: PricingPerEvent
-  minimalMaxTotalChargeUsd: float
-
-class Stats(TypedDict, total=False):
-  inputBodyLen: int
-  migrationCount: int
-  restartCount: int
-  resurrectCount: int
-  memAvgBytes: float
-  memMaxBytes: int
-  memCurrentBytes: int
-  cpuAvgUsage: float
-  cpuMaxUsage: float
-  cpuCurrentUsage: int
-  netRxBytes: int
-  netTxBytes: int
-  durationMillis: int
-  runTimeSecs: float
-  metamorph: int
-  computeUnits: float
-
-class Options(TypedDict, total=False):
-  build: str
-  timeoutSecs: int
-  memoryMbytes: int
-  diskMbytes: int
-
-# ---------- Root type of Actor ----------
-class ActorRun(TypedDict, total=False):
-  id: str
-  actId: str
-  userId: str
-  actorTaskId: str
-  startedAt: str
-  finishedAt: str
-  status: str
-  statusMessage: str
-  isStatusMessageTerminal: bool
-  meta: Meta
-  pricingInfo: PricingInfo
-  stats: Stats
-  chargedEventCounts: dict[str, Any]
-  options: Options
-  buildId: str
-  exitCode: int
-  defaultKeyValueStoreId: str
-  defaultDatasetId: str
-  defaultRequestQueueId: str
-  buildNumber: str
-  containerUrl: str
-  isContainerServerReady: bool
-  gitBranchName: str
-  usageTotalUsd: float
 
 class AuthorMeta(TypedDict, total=False):
   id: str
@@ -92,6 +24,7 @@ class AuthorMeta(TypedDict, total=False):
   video: int
   digg: int
 
+
 class MusicMeta(TypedDict, total=False):
   musicName: str
   musicAuthor: str
@@ -102,6 +35,7 @@ class MusicMeta(TypedDict, total=False):
   originalCoverMediumUrl: str
   musicId: str
 
+
 class SubtitleLink(TypedDict, total=False):
   language: str
   downloadLink: str
@@ -109,6 +43,7 @@ class SubtitleLink(TypedDict, total=False):
   source: str
   sourceUnabbreviated: str
   version: str
+
 
 class VideoMeta(TypedDict, total=False):
   height: int
@@ -121,20 +56,25 @@ class VideoMeta(TypedDict, total=False):
   subtitleLinks: list[SubtitleLink]
   downloadAddr: str
 
+
 class Hashtag(TypedDict, total=False):
   name: str
+
 
 class SearchHashtag(TypedDict, total=False):
   views: int
   name: str
 
+
 class StickerStats(TypedDict, total=False):
   useCount: int
+
 
 class EffectSticker(TypedDict, total=False):
   ID: str
   name: str
   stickerStats: StickerStats
+
 
 # ---------- Root type of Dataset ----------
 class TikTokPost(TypedDict, total=False):

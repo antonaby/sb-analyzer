@@ -5,7 +5,7 @@ from core.agents.transcribe import AudioData, LemonfoxClient
 from core.agents.video import ClipTaggerClient, VideoData
 from core.file import AudioFile, UrlVideoSource, VideoFile
 
-from .apify.tiktok.clockwork import TikTokPost
+from .apify.tiktok.clockworks import TikTokPost
 
 
 class TikTokVideoProcessorError(Exception):

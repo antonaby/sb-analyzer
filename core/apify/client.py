@@ -1,7 +1,7 @@
 import os
 
 from apify_client import ApifyClientAsync
-from .tiktok.clockwork import ClockworksTiktokScrapper
+from .tiktok.clockworks import ClockworksTiktokScrapper
 from .tiktok.apidojo import ApidojoTiktokScrapper
 from core.utils import var_or_exception
 

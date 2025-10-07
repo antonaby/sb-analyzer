@@ -1,8 +1,7 @@
 import logging
 from typing import Any, Literal, cast, TypedDict
 from apify_client import ApifyClientAsync
-from core.apify.actor import BaseApifyActor
-from core.apify.tiktok.clockwork import ActorRun
+from core.apify.actor import ActorRun, BaseApifyActor
 
 
 class Channel(TypedDict, total=False):
@@ -106,12 +105,12 @@ class ApidojoTiktokScrapper(BaseApifyActor):
     self._log = logging.getLogger("app.apify.tiktok.apidojo")
   
   async def search(self, 
-                   keywords: list[str], 
-                   date_range: DateRange,
-                   sort_type: SortType,
-                   location: str = "US", 
-                   max_items: int = 1000,
-                  ) -> tuple[ActorRun, list[TikTokPost]]:
+    keywords: list[str], 
+    date_range: DateRange,
+    sort_type: SortType,
+    location: str = "US", 
+    max_items: int = 1000,
+  ) -> tuple[ActorRun, list[TikTokPost]]:
     try:
       run_input = {
         "dateRange": date_range,
