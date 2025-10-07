@@ -1,16 +1,33 @@
 import asyncio
+
+from core.apify.actor import ActorRun
+from core.apify.client import ApifyClient
+from core.apify.tiktok.apidojo import DateRange, SortType
 from .main import app
-from core.apify import create_apify_client, run_tiktok_scrapper, get_tiktok_video_keys
+from dotenv import load_dotenv
 
-# TODO: add retries to all tasks
-
-@app.task
-def scrape_tiktok_videos() -> dict:
-  apify_client = create_apify_client()
-  return asyncio.run(run_tiktok_scrapper(apify_client))
 
 @app.task
-def fetch_videos_and_upload(kv_store_id: str) -> int:
-  apify_client = create_apify_client()
-  asyncio.run(get_tiktok_video_keys(apify_client, kv_store_id))
-  return 0
+def run_apidojo_scrapper(
+  keywords: list[str], 
+  date_range: DateRange,
+  sort_type: SortType,
+  location: str = "US", 
+  max_items: int = 1000
+) -> ActorRun:
+    
+  load_dotenv()
+  apify_client = ApifyClient()
+  apidojo_client = apify_client.apidojo_tiktok_scrapper()  
+  
+  run, posts = asyncio.run(
+    apidojo_client.search(
+      keywords=keywords, 
+      date_range=date_range, 
+      sort_type=sort_type, 
+      location=location, 
+      max_items=max_items
+    )
+  )
+
+  return run

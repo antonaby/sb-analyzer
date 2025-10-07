@@ -1,32 +1,46 @@
 import os
 
+from pydantic import BaseModel, Field
 from fastapi import FastAPI
 from celery.result import AsyncResult
 
-from workers.tasks import scrape_tiktok_videos, fetch_videos_and_upload
+from core.apify.tiktok.apidojo import DateRange, SortType
+
+from workers.tasks import run_apidojo_scrapper
 from workers.main import app as worker_app
 
+
 app = FastAPI(title="SB VideoAnalyzer API", version="0.0.0")
+
+
+class ApidojoScrapperRun(BaseModel):
+  keywords: list[str] = Field(min_length=1, description="At least one keyword")
+  date_range: DateRange
+  sort_type: SortType
+  location: str
+  max_items: int
+
 
 @app.get("/health")
 async def health():
   return {"ok": True}
 
-@app.post("/tiktok/scrapper")
-async def run_tiktok_scrapper():
-  result = scrape_tiktok_videos.delay() # type: ignore
+
+@app.post("/tiktok/apidojo/run")
+def run_tiktok_scrapper(run: ApidojoScrapperRun):
+  result = run_apidojo_scrapper.delay( # type: ignore
+    keywords=run.keywords, 
+    date_range=run.date_range, 
+    sort_type=run.sort_type, 
+    location=run.location,
+    max_items=run.max_items
+  ) 
+  
   return {
     "id": result.id,
     "status": result.status
   }
 
-@app.post("/tiktok/videos")
-async def upload_tiktok_videos(kv_store_id: str):
-  result = fetch_videos_and_upload.delay(kv_store_id) # type: ignore
-  return {
-    "id": result.id,
-    "status": result.status
-  }
 
 @app.get("/tasks/{task_id}")
 def get_task(task_id: str):
