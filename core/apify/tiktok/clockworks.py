@@ -3,7 +3,8 @@ from typing import Any, TypedDict, cast
 
 from apify_client import ApifyClientAsync
 
-from core.apify.actor import ActorRun, BaseApifyActor
+from core.apify.actor import BaseApifyActor
+from core.models.apify import ActorRun
 
 
 class AuthorMeta(TypedDict, total=False):

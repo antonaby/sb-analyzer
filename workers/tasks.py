@@ -1,18 +1,19 @@
 import asyncio
-
 from celery import signals
-from core.apify.actor import ActorRun
-from core.apify.client import ApifyClient
-from core.apify.tiktok.apidojo import DateRange, SortType
+
+from core.models.apidojo import DateRange, SortType
+from core.models.apify import ActorRun
 from .main import app
-from dotenv import load_dotenv
 
 
-apify_client: ApifyClient | None = None
+apify_client = None
 
 
 @signals.worker_process_init.connect
 def init_worker_process(**kwargs):
+  from dotenv import load_dotenv
+  from core.apify.client import ApifyClient
+  
   global apify_client
   load_dotenv()            
   apify_client = ApifyClient()

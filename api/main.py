@@ -1,5 +1,3 @@
-import os
-
 from pydantic import BaseModel, Field
 from fastapi import FastAPI
 from celery.result import AsyncResult
