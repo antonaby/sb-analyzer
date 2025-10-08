@@ -5,9 +5,12 @@ from pydantic import BaseModel
 
 class PostDetails(TypedDict):
   url: str
+  download_url: str
   post_from: str
   title: str
+  author: str
   hashtags: list[str]
+  meta: dict
   
 
 class VideoSummary(BaseModel):

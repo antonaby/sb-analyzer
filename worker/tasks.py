@@ -1,4 +1,5 @@
 import asyncio
+from typing import cast
 from celery import group
 from celery.signals import worker_process_init, worker_shutting_down
 
@@ -10,6 +11,7 @@ from .main import worker_app
 
 loop = None
 apify_client = None
+async_session = None
 video_processor = None
 
 
@@ -21,6 +23,7 @@ def init_worker_process(**kwargs):
   from core.agents.transcribe import LemonfoxClient
   from core.agents.summary import SummaryAgent
   from core.processors import VideoProcessor
+  from db.conf import create_db_engine, get_async_session
   
   load_dotenv()
   
@@ -30,12 +33,16 @@ def init_worker_process(**kwargs):
   global apify_client
   apify_client = ApifyClient()
   
+  global async_session
+  engine = create_db_engine()
+  async_session = get_async_session(engine)
+  
   clip_tagger_client = ClipTaggerClient()
   lemonfox_client = LemonfoxClient()
   summary_agent = SummaryAgent()
   
   global video_processor
-  video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, "./videos")
+  video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_session, "./videos")
   
 
 @worker_shutting_down.connect
@@ -92,11 +99,16 @@ def run_apidojo_scrapper(
   for post in posts:
     url = post.get("video", {}).get("url", "")
     if is_url(url):
+      author = post.get("channel", {}).get("url", "")
+      
       post_details: PostDetails = {
-        "url": url,
+        "url": post.get("postPage", ""),
+        "download_url": url,
         "post_from": "tiktok",
         "title": post.get("text", "no title"),
-        "hashtags": post.get("hashtags", [])
+        "author": author,
+        "hashtags": post.get("hashtags", []),
+        "meta": cast(dict, post)
       }
       tasks.append(process_post.s(post_details)) # type: ignore
       

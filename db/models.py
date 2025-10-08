@@ -47,12 +47,15 @@ class Video(Base):
     UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
   )
   url: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+  download_url: Mapped[str] = mapped_column(String, nullable=False)
   source: Mapped[VideoSource] = mapped_column(
     Enum(VideoSource, name="video_source", native_enum=True), nullable=False
   )
   title: Mapped[str | None] = mapped_column(String(1024))
   author: Mapped[str | None] = mapped_column(String(1024))
   duration_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+  
+  meta: Mapped[dict | None] = mapped_column(JSONB, default=None)
   
   created_at: Mapped[datetime] = mapped_column(
     default=func.now(), nullable=False
