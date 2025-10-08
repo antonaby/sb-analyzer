@@ -3,8 +3,8 @@ from fastapi import FastAPI
 from celery.result import AsyncResult
 from dotenv import load_dotenv
 from core.apify.tiktok.apidojo import DateRange, SortType
-from workers.tasks import run_apidojo_scrapper
-from workers.main import worker_app
+from worker.tasks import run_apidojo_scrapper
+from worker.main import worker_app
 
 
 load_dotenv()

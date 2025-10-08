@@ -10,7 +10,7 @@
       "request": "launch",
       "module": "celery",
       "args": [
-        "-A", "workers.main",
+        "-A", "worker.main",
         "worker",
         "--loglevel=DEBUG",
         "--concurrency=5"

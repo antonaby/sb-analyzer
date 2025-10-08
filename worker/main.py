@@ -10,4 +10,4 @@ worker_app = Celery(
   backend=CELERY_BACKEND_URL
 )
 
-worker_app.conf.imports = ("workers.tasks")
+worker_app.conf.imports = ("worker.tasks")
