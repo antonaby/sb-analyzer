@@ -4,7 +4,7 @@ from typing import Any, TypedDict, cast
 from apify_client import ApifyClientAsync
 
 from core.apify.actor import BaseApifyActor
-from core.models.apify import ActorRun
+from models.apify import ActorRun
 
 
 class AuthorMeta(TypedDict, total=False):

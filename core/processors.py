@@ -1,8 +1,8 @@
-from core.agents.summary import PostDetails, SummaryAgent
+from core.agents.summary import SummaryAgent
 from core.agents.transcribe import AudioData, LemonfoxClient
 from core.agents.video import ClipTaggerClient, VideoData
 from core.file import AudioFile, UrlVideoSource, VideoFile
-from core.models.common import VideoSummary
+from models.common import PostDetails, VideoSummary
 
 
 class VideoProcessor:

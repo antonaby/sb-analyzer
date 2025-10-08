@@ -2,9 +2,9 @@ import asyncio
 from celery import group
 from celery.signals import worker_process_init, worker_shutting_down
 
-from core.models.apidojo import DateRange, SortType
-from core.models.apify import ActorRun
-from core.models.common import PostDetails
+from models.apidojo import DateRange, SortType
+from models.apify import ActorRun
+from models.common import PostDetails
 from core.utils import is_url
 from .main import worker_app
 

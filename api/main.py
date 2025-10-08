@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from fastapi import FastAPI
 from celery.result import AsyncResult
 from dotenv import load_dotenv
-from core.apify.tiktok.apidojo import DateRange, SortType
+from models.apidojo import DateRange, SortType
 from worker.tasks import run_apidojo_scrapper
 from worker.main import worker_app
 

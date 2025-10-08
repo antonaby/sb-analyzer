@@ -10,7 +10,7 @@ from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 from core.agents.video import Frame, VideoData
 from core.agents.transcribe import AudioData
-from core.models.common import PostDetails, VideoSummary
+from models.common import PostDetails, VideoSummary
 from core.utils import var_or_exception
 
 

@@ -2,8 +2,8 @@ import logging
 from typing import Any, Literal, cast, TypedDict
 from apify_client import ApifyClientAsync
 from core.apify.actor import BaseApifyActor
-from core.models.apidojo import DateRange, SortType, TikTokPost
-from core.models.apify import ActorRun
+from models.apidojo import DateRange, SortType, TikTokPost
+from models.apify import ActorRun
 
 
 class TikTokScrapperError(Exception):
