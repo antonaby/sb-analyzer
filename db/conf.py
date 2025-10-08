@@ -1,6 +1,7 @@
 import os
+from typing import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from sqlalchemy import text
 
@@ -19,16 +20,11 @@ def create_db_engine() -> AsyncEngine:
     var_or_exception(DATABASE_URL_VAR), echo=True
   )
 
-async def test_connection(engine: AsyncEngine):
-  async with engine.connect() as conn:  
-    result = await conn.execute(text("SELECT 1")) # type: ignore
-    print(result.scalar())
-
-def create_session_maker(engine: AsyncEngine):
-  return sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False # type: ignore
+def get_async_session(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+  return async_sessionmaker(
+    engine, expire_on_commit=False
   )
 
-async def get_session(async_session): 
+async def get_session(async_session: async_sessionmaker[AsyncSession]) -> AsyncGenerator[AsyncSession]: 
   async with async_session() as session:              
     yield session                                     
