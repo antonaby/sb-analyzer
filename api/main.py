@@ -4,7 +4,7 @@ from celery.result import AsyncResult
 from dotenv import load_dotenv
 from core.apify.tiktok.apidojo import DateRange, SortType
 from workers.tasks import run_apidojo_scrapper
-from workers.main import app as worker_app
+from workers.main import worker_app
 
 
 load_dotenv()

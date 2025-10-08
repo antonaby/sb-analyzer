@@ -33,3 +33,6 @@ migrations = [
 dev = [
     "jupyterlab>=4.4.9",
 ]
+worker = [
+    "flower>=2.0.1",
+]

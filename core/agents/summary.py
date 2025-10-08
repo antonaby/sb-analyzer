@@ -10,6 +10,7 @@ from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 from core.agents.video import Frame, VideoData
 from core.agents.transcribe import AudioData
+from core.models.common import PostDetails, VideoSummary
 from core.utils import var_or_exception
 
 
@@ -28,19 +29,6 @@ class SummaryAgentDeps:
   video: VideoData
   audio: AudioData
   
-
-class VideoSummary(BaseModel):
-  main_idea: str
-  theme: list[str]
-  video_type: list[str]
-  synopsis: list[str]
-
-
-class PostDetails(TypedDict):
-  post_from: str
-  title: str
-  hashtags: list[str]
-
 
 class UserPromptContext(TypedDict):
   post_from: str
@@ -88,7 +76,7 @@ class SummaryAgent:
     env = Environment(loader=FileSystemLoader(script_dir))
     self._user_prompt = env.get_template("summary_tmp.jinja")
     
-  async def summary_tiktok(self, post: PostDetails, video: VideoData, audio: AudioData) -> VideoSummary:
+  async def summary(self, post: PostDetails, video: VideoData, audio: AudioData) -> VideoSummary:
     basic_frames, transcription = await asyncio.gather(
       video.get_n_frames(),
       audio.get_transcription()

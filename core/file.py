@@ -254,6 +254,9 @@ class AudioFile:
     input_file = self._source.get_video_file_path()
     output_file = self._source.new_tmp_file_name("mp3")
     
+    if os.path.exists(output_file):
+      os.remove(output_file)
+    
     command = [
       "ffmpeg",
       "-i", input_file,   # input video
