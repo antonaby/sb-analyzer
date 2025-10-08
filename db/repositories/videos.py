@@ -1,6 +1,7 @@
+from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import Video, VideoSource
+from db.models import AnnotationKind, Video, VideoAnnotation, VideoSource
 
 
 class VideoRepository:
@@ -12,7 +13,8 @@ class VideoRepository:
     self, 
     url: str, download_url: str, source: VideoSource, 
     title: str = "", author: str = "", duration_seconds: int = 0, 
-    meta: dict = {}
+    meta: dict = {},
+    commit: bool = False
   ) -> Video:
     video = Video(
       url=url,
@@ -25,6 +27,30 @@ class VideoRepository:
     )
     
     self._session.add(video)
-    await self._session.commit()
+    
+    if commit:
+      await self._session.commit()
     
     return video
+  
+  async def create_annotation(
+    self, 
+    video_id: UUID,
+    kind: AnnotationKind,
+    value: str,
+    meta: dict = {},
+    commit: bool = False) -> VideoAnnotation:
+    annotation = VideoAnnotation(
+      video_id=video_id,
+      kind=kind,
+      value=value,
+      meta=meta
+    )
+    
+    self._session.add(annotation)
+    
+    if commit:
+      await self._session.commit()
+      
+    return annotation
+  

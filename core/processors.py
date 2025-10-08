@@ -4,7 +4,7 @@ from core.agents.summary import SummaryAgent
 from core.agents.transcribe import AudioData, LemonfoxClient
 from core.agents.video import ClipTaggerClient, VideoData
 from core.file import AudioFile, UrlVideoSource, VideoFile
-from db.models import VideoSource
+from db.models import VideoSource, AnnotationKind
 from db.repositories.videos import VideoRepository
 from models.common import PostDetails, VideoSummary
 
@@ -43,7 +43,7 @@ class VideoProcessor:
       
       source = VideoSource(post['post_from'])
       duration =  int(video.get_duration())
-      await video_repo.create_video(
+      video_model = await video_repo.create_video(
         post['url'],
         post['download_url'],
         source, 
@@ -52,5 +52,15 @@ class VideoProcessor:
         duration,
         post['meta']
       )
+      
+      await session.flush()
+      
+      await video_repo.create_annotation(
+        video_model.id,
+        AnnotationKind.SUMMARY,
+        summary.main_idea,
+      )
+      
+      await session.commit()
     
     return summary
