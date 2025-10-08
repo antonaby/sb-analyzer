@@ -31,7 +31,15 @@ class VideoSource(enum.Enum):
 
 class AnnotationKind(enum.Enum):
   FRAME = "frame"
+  FRAME_OBJECT = "frame_object"
+  FRAME_ACTION = "frame_action"
+  FRAME_ENVIRONMENT = "frame_environment"
+  FRAME_SUMMARY = "frame_summary"
+  FRAME_LOGO = "frame_logo"
   SUMMARY = "summary"
+  SUMMARY_THEME = "summary_theme"
+  SUMMARY_VIDEO_TYPE = "summary_video_type"
+  SUMMARY_SYNOPSIS = "summary_synopsis"
   TRANSCRIPTION = "transcription"
 
 

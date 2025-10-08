@@ -41,26 +41,53 @@ class VideoProcessor:
     async with self._async_session() as session:
       video_repo = VideoRepository(session)
       
-      source = VideoSource(post['post_from'])
-      duration =  int(video.get_duration())
-      video_model = await video_repo.create_video(
-        post['url'],
-        post['download_url'],
-        source, 
-        post['title'], 
-        post['author'], 
-        duration,
-        post['meta']
-      )
-      
-      await session.flush()
-      
-      await video_repo.create_annotation(
-        video_model.id,
-        AnnotationKind.SUMMARY,
-        summary.main_idea,
-      )
-      
+      await self._save_summary(post, video, summary, video_repo, session)
       await session.commit()
     
     return summary
+  
+  async def _save_summary(
+    self, 
+    post: PostDetails, video: VideoFile, summary: VideoSummary, 
+    repo: VideoRepository, session: AsyncSession
+  ):
+    source = VideoSource(post['post_from'])
+    duration =  int(video.get_duration())
+    video_model = await repo.create_video(
+      post['url'],
+      post['download_url'],
+      source, 
+      post['title'], 
+      post['author'], 
+      duration,
+      post['meta']
+    )
+    
+    await session.flush()
+    
+    await repo.create_annotation(
+      video_model.id,
+      AnnotationKind.SUMMARY,
+      summary.main_idea,
+    )
+    
+    for theme in summary.theme:
+      await repo.create_annotation(
+        video_model.id,
+        AnnotationKind.SUMMARY_THEME,
+        theme,
+      )
+      
+    for type in summary.video_type:
+      await repo.create_annotation(
+        video_model.id,
+        AnnotationKind.SUMMARY_VIDEO_TYPE,
+        type,
+      )
+      
+    for synopsis in summary.synopsis:
+      await repo.create_annotation(
+        video_model.id,
+        AnnotationKind.SUMMARY_SYNOPSIS,
+        synopsis,
+      )
