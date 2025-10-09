@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 from core.agents.summary import SummaryAgent
 from core.agents.transcribe import AudioData, LemonfoxClient, Transcription
 from core.agents.video import ClipTaggerClient, VideoData, Frame
-from core.file import AudioFile, UrlVideoSource, VideoFile
-from db.models import Video, VideoAnnotation, VideoSource, AnnotationKind, VideoMeta, MetaSource
+from core.file import AudioFile, UrlVideoSource, VideoFile, VideoSource
+from db.models import Video, VideoAnnotation, VideoSource as ModelVideoSource, AnnotationKind, VideoMeta, MetaSource
 from db.repositories.videos import prepare_video, prepare_scraped_data, prepare_meta, prepare_annotation, VideoRepository
 from models.common import PostDetails, VideoSummary
 
@@ -46,7 +46,6 @@ class VideoProcessor:
     reprocess_video: bool = False, 
     delete_downloaded_files: bool = True
   ) -> ProcessedVideo:
-    
     existing_video_id = await self._find_video(post['url'], reprocess_video)
     if existing_video_id is not None:
       return {
@@ -54,10 +53,35 @@ class VideoProcessor:
         "is_new": False,
         "processed_at_utc": None
       }
+      
+    video_source = await UrlVideoSource.new(post['download_url'], self._tmp_dir)
+    return await self._create_summary(post, video_source, delete_downloaded_files)
+        
+  async def _find_video(self, url: str, reprocess_video: bool) -> UUID | None:
+    async with self._async_session() as session:
+      repo = VideoRepository(session)
+      
+      video = await repo.get_video_by_url(url)
+      
+      if video is None:
+        return None
+      
+      if not reprocess_video:
+        return video.id
+      
+      await repo.delete_video(video)
+      await session.commit()
+      
+      return None
     
-    source = await UrlVideoSource.new(post['download_url'], self._tmp_dir)
-    video_file = VideoFile(source)  
-    audio_file = AudioFile(source)
+  async def _create_summary(
+    self,
+    post: PostDetails,
+    video_source: VideoSource, 
+    delete_downloaded_files: bool = True
+  ) -> ProcessedVideo:
+    video_file = VideoFile(video_source)  
+    audio_file = AudioFile(video_source)
     
     video_data = VideoData(self._ct_client, video_file)
     audio_data = AudioData(self._lm_client, audio_file)
@@ -83,26 +107,9 @@ class VideoProcessor:
       try:
         video_file.close()
         if delete_downloaded_files:
-          source.delete()
+          video_source.delete()
       except Exception as e:
         self._log.exception(e)
-        
-  async def _find_video(self, url: str, reprocess_video: bool) -> UUID | None:
-    async with self._async_session() as session:
-      repo = VideoRepository(session)
-      
-      video = await repo.get_video_by_url(url)
-      
-      if video is None:
-        return None
-      
-      if not reprocess_video:
-        return video.id
-      
-      await repo.delete_video(video)
-      await session.commit()
-      
-      return None
       
 
 def _create_video(
@@ -122,7 +129,7 @@ def _create_video(
     video_meta.extend(_create_frame_video_meta(frame))
         
   video_meta.extend(_create_post_meta(post))
-  source = VideoSource(post['post_from'])
+  source = ModelVideoSource(post['post_from'])
   scraped_data = prepare_scraped_data(cast(dict, post))
   
   video_model = prepare_video(
