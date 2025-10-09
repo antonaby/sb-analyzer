@@ -40,7 +40,7 @@ def upgrade() -> None:
     op.create_table('video_annotations',
     sa.Column('id', sa.UUID(), server_default=sa.text('uuid_generate_v1mc()'), nullable=False),
     sa.Column('video_id', sa.UUID(), nullable=False),
-    sa.Column('kind', sa.Enum('FRAME', 'FRAME_OBJECT', 'FRAME_ACTION', 'FRAME_ENVIRONMENT', 'FRAME_SUMMARY', 'FRAME_LOGO', 'SUMMARY', 'SUMMARY_THEME', 'SUMMARY_VIDEO_TYPE', 'SUMMARY_SYNOPSIS', 'TRANSCRIPTION', name='annotation_kind'), nullable=False),
+    sa.Column('kind', sa.Enum('FRAME', 'FRAME_OBJECT', 'FRAME_ACTION', 'FRAME_ENVIRONMENT', 'FRAME_SUMMARY', 'FRAME_LOGO', 'SUMMARY', 'SUMMARY_SYNOPSIS', 'TRANSCRIPTION', name='annotation_kind'), nullable=False),
     sa.Column('value', sa.Text(), nullable=False),
     sa.Column('value_tsv', postgresql.TSVECTOR(), sa.Computed("to_tsvector('english', coalesce(value, ''))", persisted=True), nullable=False),
     sa.Column('meta', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
