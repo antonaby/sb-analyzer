@@ -3,7 +3,7 @@ from typing import TypedDict, cast
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.agents.summary import SummaryAgent
-from core.agents.transcribe import AudioData, LemonfoxClient
+from core.agents.transcribe import AudioData, LemonfoxClient, Transcription
 from core.agents.video import ClipTaggerClient, VideoData, Frame
 from core.file import AudioFile, UrlVideoSource, VideoFile
 from db.models import Video, VideoAnnotation, VideoSource, AnnotationKind, VideoMeta, MetaSource
@@ -43,7 +43,7 @@ class VideoProcessor:
     try:
       summary = await self._agent.summary(post, video_data, audio_data)
       processed_frames = await video_data.get_processed_frames()
-      video_model = self._create_video(post, video_data, audio_data, summary, processed_frames)
+      video_model = _create_video(post, video_data, audio_data, summary, processed_frames)
       
       async with self._async_session() as session:
         session.add(video_model)
@@ -61,150 +61,162 @@ class VideoProcessor:
           source.delete()
       except Exception as e:
         self._log.exception(e)
+
+
+def _create_video(
+  post: PostDetails, 
+  video_data: VideoData, audio_data: AudioData, 
+  summary: VideoSummary, frames: list[Frame]
+) -> Video:
+  annotations: list[VideoAnnotation] = _create_summary_annotations(summary)
+  video_meta: list[VideoMeta] = _create_summary_meta(summary)
   
-  def _create_video(
-    self, 
-    post: PostDetails, 
-    video_data: VideoData, audio_data: AudioData, 
-    summary: VideoSummary, 
-    frames: list[Frame]
-  ) -> Video:
-    annotations: list[VideoAnnotation] = []
-    video_meta: list[VideoMeta] = []
-    
+  annotations.extend(
+    _create_transcribe_annotations(audio_data.get_processed_transcriptions())
+  )
+  
+  for frame in frames:
+    annotations.extend(_create_frame_annotations(frame))
+    video_meta.extend(_create_frame_video_meta(frame))
+        
+  video_meta.extend(_create_post_meta(post))
+  source = VideoSource(post['post_from'])
+  scraped_data = prepare_scraped_data(cast(dict, post))
+  
+  video_model = prepare_video(
+    url=post["url"],
+    source=source,
+    scraped_data=scraped_data,
+    extra_data={
+      "duration": video_data.get_duration(),
+      "frames": video_data.get_total_frames()
+    },
+    annotations=annotations,
+    video_meta=video_meta
+  )
+  
+  return video_model
+
+
+def _create_summary_annotations(summary: VideoSummary) -> list[VideoAnnotation]:
+  annotations: list[VideoAnnotation] = []
+  
+  annotations.append(
+    prepare_annotation(
+      kind=AnnotationKind.SUMMARY,
+      value=summary.main_idea
+    )
+  )
+      
+  for synopsis in summary.synopsis:
     annotations.append(
       prepare_annotation(
-        kind=AnnotationKind.SUMMARY,
-        value=summary.main_idea
+        kind=AnnotationKind.SUMMARY_SYNOPSIS,
+        value=synopsis
       )
     )
-      
-    for synopsis in summary.synopsis:
-      annotations.append(
-        prepare_annotation(
-          kind=AnnotationKind.SUMMARY_SYNOPSIS,
-          value=synopsis
-        )
-      )
-      
-    for segment in audio_data.get_processed_transcriptions():
-      annotations.append(
-        prepare_annotation(
-          kind=AnnotationKind.TRANSCRIPTION,
-          value=segment.text,
-          meta={
-            "start_sec": segment.start_sec,
-            "end_sec": segment.end_sec
-          }
-        )
-      )
-      
-    for frame in frames:
-      annotations.append(
-        prepare_annotation(
-          kind=AnnotationKind.FRAME,
-          value=frame.description,
-          meta={
-            "frame_number": frame.frame_number,
-            "time_sec": frame.time_sec
-          }
-        )
-      )
-      annotations.append(
-        prepare_annotation(
-          kind=AnnotationKind.FRAME_ENVIRONMENT,
-          value=frame.environment,
-          meta={
-            "frame_number": frame.frame_number,
-            "time_sec": frame.time_sec
-          }
-        )
-      )
-      annotations.append(
-        prepare_annotation(
-          kind=AnnotationKind.FRAME_SUMMARY,
-          value=frame.summary,
-          meta={
-            "frame_number": frame.frame_number,
-            "time_sec": frame.time_sec
-          }
-        )
-      )
-      for object in frame.objects:
-        annotations.append(
-          prepare_annotation(
-            kind=AnnotationKind.FRAME_OBJECT,
-            value=object,
-            meta={
-              "frame_number": frame.frame_number,
-              "time_sec": frame.time_sec
-            }
-          )
-        )
-      for action in frame.actions:
-        annotations.append(
-          prepare_annotation(
-            kind=AnnotationKind.FRAME_ACTION,
-            value=action,
-            meta={
-              "frame_number": frame.frame_number,
-              "time_sec": frame.time_sec
-            }
-          )
-        )
-      for logo in frame.logos:
-        annotations.append(
-          prepare_annotation(
-            kind=AnnotationKind.FRAME_LOGO,
-            value=logo,
-            meta={
-              "frame_number": frame.frame_number,
-              "time_sec": frame.time_sec
-            }
-          )
-        )
-      video_meta.append(
-        prepare_meta(MetaSource.FRAME_CONTENT_TYPE, frame.content_type)
-      )
-      video_meta.append(
-        prepare_meta(MetaSource.FRAME_STYLE, frame.specific_style)
-      )
-      video_meta.append(
-        prepare_meta(MetaSource.FRAME_QUALITY, frame.production_quality)
-      )
-    
+  
+  return annotations
+
+
+def _create_summary_meta(summary: VideoSummary) -> list[VideoMeta]:
+  video_meta: list[VideoMeta] = []
+  
+  for theme in summary.theme:
     video_meta.append(
-      prepare_meta(MetaSource.POST_AUTHOR, post.get("author", "no author"))
-    )
+      prepare_meta(MetaSource.SUMMARY, theme)
+    )  
+  
+  for video_type in summary.video_type:
     video_meta.append(
-      prepare_meta(MetaSource.POST, post.get("title", "no title"))
+      prepare_meta(MetaSource.SUMMARY_VIDEO_TYPE, video_type)
+    ) 
+  
+  return video_meta
+
+
+def _create_transcribe_annotations(transcriptions: list[Transcription]) -> list[VideoAnnotation]:
+  annotations: list[VideoAnnotation] = []
+  
+  for segment in transcriptions:
+    annotations.append(
+      prepare_annotation(
+        kind=AnnotationKind.TRANSCRIPTION,
+        value=segment.text,
+        meta={
+          "start_sec": segment.start_sec,
+          "end_sec": segment.end_sec
+        }
+      )
     )
-    for hash_tag in post.get("hashtags", []):
-      video_meta.append(
-        prepare_meta(MetaSource.HASHTAG, hash_tag)
-      )  
-    for theme in summary.theme:
-      video_meta.append(
-        prepare_meta(MetaSource.SUMMARY, theme)
-      )  
-    for video_type in summary.video_type:
-      video_meta.append(
-        prepare_meta(MetaSource.SUMMARY_VIDEO_TYPE, video_type)
-      ) 
-    
-    source = VideoSource(post['post_from'])
-    scraped_data = prepare_scraped_data(cast(dict, post))
-    
-    video_model = prepare_video(
-      url=post["url"],
-      source=source,
-      scraped_data=scraped_data,
-      extra_data={
-        "duration": video_data.get_duration(),
-        "frames": video_data.get_total_frames()
-      },
-      annotations=annotations,
-      video_meta=video_meta
+  
+  return annotations
+
+
+def _create_post_meta(post: PostDetails) -> list[VideoMeta]:
+  video_meta: list[VideoMeta] = []
+  
+  video_meta.append(
+    prepare_meta(MetaSource.POST_AUTHOR, post.get("author", "no author"))
+  )
+  video_meta.append(
+    prepare_meta(MetaSource.POST, post.get("title", "no title"))
+  )
+  
+  for hash_tag in post.get("hashtags", []):
+    video_meta.append(
+      prepare_meta(MetaSource.HASHTAG, hash_tag)
     )
-    
-    return video_model
+  
+  return video_meta
+
+
+def _create_frame_video_meta(frame: Frame) -> list[VideoMeta]:
+  video_meta: list[VideoMeta] = []
+  
+  video_meta.append(
+    prepare_meta(MetaSource.FRAME_CONTENT_TYPE, frame.content_type)
+  )
+  video_meta.append(
+    prepare_meta(MetaSource.FRAME_STYLE, frame.specific_style)
+  )
+  video_meta.append(
+    prepare_meta(MetaSource.FRAME_QUALITY, frame.production_quality)
+  )
+  
+  return video_meta
+  
+
+def _create_frame_annotations(frame: Frame) -> list[VideoAnnotation]:
+  annotations: list[VideoAnnotation] = []
+  
+  _append_frame(annotations, AnnotationKind.FRAME, frame.description, frame)
+  _append_frame(annotations, AnnotationKind.FRAME_ENVIRONMENT, frame.environment, frame)
+  _append_frame(annotations, AnnotationKind.FRAME_SUMMARY, frame.summary, frame)
+  _append_frame(annotations, AnnotationKind.FRAME, frame.description, frame)
+  
+  for object in frame.objects:
+    _append_frame(annotations, AnnotationKind.FRAME_OBJECT, object, frame)
+
+  for action in frame.actions:
+    _append_frame(annotations, AnnotationKind.FRAME_ACTION, action, frame)
+
+  for logo in frame.logos:
+    _append_frame(annotations, AnnotationKind.FRAME_LOGO, logo, frame)
+  
+  return annotations
+
+
+def _append_frame(annotations: list[VideoAnnotation], kind: AnnotationKind, value: str, frame: Frame):
+  annotations.append(prepare_annotation(
+    kind=kind,
+    value=value,
+    meta=_get_frame_meta(frame)
+  ))
+
+
+def _get_frame_meta(frame: Frame) -> dict:
+  return {
+    "frame_number": frame.frame_number,
+    "time_sec": frame.time_sec
+  }
