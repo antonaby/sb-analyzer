@@ -54,7 +54,11 @@ def clear_resources(sig, how, exitcode, **kwargs):
 
 
 @worker_app.task
-def process_post(post: PostDetails) -> dict:
+def process_post(
+  post: PostDetails, 
+  reprocess_video: bool = False, 
+  delete_downloaded_files: bool = True
+) -> dict:
   global loop
   if loop is None:
     raise RuntimeError("Asyncio loop not initialized")
@@ -63,8 +67,10 @@ def process_post(post: PostDetails) -> dict:
   if video_processor is None:
     raise RuntimeError("Video processor not initialized")
   
-  result = loop.run_until_complete(video_processor.run(post))
-  return result
+  result = loop.run_until_complete(
+    video_processor.run(post, reprocess_video, delete_downloaded_files)
+  )
+  return cast(dict, result)
   
 
 @worker_app.task

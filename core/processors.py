@@ -1,18 +1,26 @@
 import logging
 from typing import TypedDict, cast
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from uuid import UUID
+from datetime import datetime, timezone
 
 from core.agents.summary import SummaryAgent
 from core.agents.transcribe import AudioData, LemonfoxClient, Transcription
 from core.agents.video import ClipTaggerClient, VideoData, Frame
 from core.file import AudioFile, UrlVideoSource, VideoFile
 from db.models import Video, VideoAnnotation, VideoSource, AnnotationKind, VideoMeta, MetaSource
-from db.repositories.videos import prepare_video, prepare_scraped_data, prepare_meta, prepare_annotation
+from db.repositories.videos import prepare_video, prepare_scraped_data, prepare_meta, prepare_annotation, VideoRepository
 from models.common import PostDetails, VideoSummary
 
 
 class VideoProcessorError(Exception):
   pass
+
+
+class ProcessedVideo(TypedDict):
+  video_id: UUID
+  is_new: bool
+  processed_at_utc: datetime | None
 
 
 class VideoProcessor:
@@ -32,7 +40,21 @@ class VideoProcessor:
     self._async_session = async_session
     self._tmp_dir = tmp_dir
     
-  async def run(self, post: PostDetails, delete_video: bool = True) -> dict:
+  async def run(
+    self, 
+    post: PostDetails, 
+    reprocess_video: bool = False, 
+    delete_downloaded_files: bool = True
+  ) -> ProcessedVideo:
+    
+    existing_video_id = await self._find_video(post['url'], reprocess_video)
+    if existing_video_id is not None:
+      return {
+        "video_id": existing_video_id,
+        "is_new": False,
+        "processed_at_utc": None
+      }
+    
     source = await UrlVideoSource.new(post['download_url'], self._tmp_dir)
     video_file = VideoFile(source)  
     audio_file = AudioFile(source)
@@ -50,18 +72,38 @@ class VideoProcessor:
         await session.commit()
       
       return {
-        "video_id": video_model.id
+        "video_id": video_model.id,
+        "is_new": True,
+        "processed_at_utc": datetime.now(timezone.utc)
       }
+    
     except Exception as e:
       raise VideoProcessorError("cannot create summary for a video") from e
     finally:
       try:
         video_file.close()
-        if delete_video:
+        if delete_downloaded_files:
           source.delete()
       except Exception as e:
         self._log.exception(e)
-
+        
+  async def _find_video(self, url: str, reprocess_video: bool) -> UUID | None:
+    async with self._async_session() as session:
+      repo = VideoRepository(session)
+      
+      video = await repo.get_video_by_url(url)
+      
+      if video is None:
+        return None
+      
+      if not reprocess_video:
+        return video.id
+      
+      await repo.delete_video(video)
+      await session.commit()
+      
+      return None
+      
 
 def _create_video(
   post: PostDetails, 

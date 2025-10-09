@@ -1,5 +1,6 @@
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from db.models import AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource
 
@@ -59,3 +60,11 @@ class VideoRepository:
   def __init__(self, session: AsyncSession):
     self._session = session
   
+  async def get_video_by_url(self, url: str) -> Video | None:
+    stmt = select(Video).where(Video.url == url)
+    result = await self._session.execute(stmt)
+    
+    return result.scalar_one_or_none()
+  
+  async def delete_video(self, video: Video):
+    await self._session.delete(video)

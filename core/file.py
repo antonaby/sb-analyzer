@@ -116,6 +116,9 @@ class UrlVideoSource(VideoSource):
       filename = Path(parsed_url.path).name
       file_path = (download_dir / filename).resolve()
       
+      if file_path.exists():
+        file_path.unlink(missing_ok=True)
+      
       async with aiohttp.ClientSession() as session:
         async with session.get(self._video_url) as resp:
           with open(file_path, 'wb') as f:
