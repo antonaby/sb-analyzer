@@ -146,6 +146,9 @@ class VideoData:
   def get_duration(self) -> float:
     return self._video_file.get_duration()
   
+  def get_total_frames(self) -> int:
+    return self._video_file.get_total_frames()
+  
   async def get_processed_frames(self) -> list[Frame]:
     async with self._cache_lock:
       cache_copy = copy.deepcopy(self._frame_cache)

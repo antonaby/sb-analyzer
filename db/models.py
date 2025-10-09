@@ -29,6 +29,17 @@ class VideoSource(enum.Enum):
   OTHER = "other"
 
 
+class MetaSource(enum.Enum):
+  POST = "post"
+  POST_AUTHOR = "post_author"
+  HASHTAG = "hashtag"
+  FRAME_CONTENT_TYPE = "frame_content_type"
+  FRAME_STYLE = "frame_style"
+  FRAME_QUALITY = "frame_quality"
+  SUMMARY = "summary"
+  SUMMARY_VIDEO_TYPE = "summary_video_type"
+
+
 class AnnotationKind(enum.Enum):
   FRAME = "frame"
   FRAME_OBJECT = "frame_object"
@@ -53,15 +64,11 @@ class Video(Base):
     UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
   )
   url: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-  download_url: Mapped[str] = mapped_column(String, nullable=False)
   source: Mapped[VideoSource] = mapped_column(
     Enum(VideoSource, name="video_source", native_enum=True), nullable=False
   )
-  title: Mapped[str | None] = mapped_column(String(1024))
-  author: Mapped[str | None] = mapped_column(String(1024))
-  duration_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
   
-  meta: Mapped[dict | None] = mapped_column(JSONB, default=None)
+  extra_data: Mapped[dict | None] = mapped_column(JSONB, default=None)
   
   created_at: Mapped[datetime] = mapped_column(
     default=func.now(), nullable=False
@@ -75,13 +82,71 @@ class Video(Base):
     cascade="all, delete-orphan",
     passive_deletes=True,
   )
+  
+  video_meta: Mapped[list["VideoMeta"]] = relationship(
+    back_populates="video",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+  
+  scraped_data: Mapped["ScrapedData"] = relationship(
+    back_populates="video",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+
+
+class VideoMeta(Base):
+  __tablename__ = "video_meta"
+
+  id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
+  )
+  video_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("videos.id", ondelete="CASCADE"),
+    nullable=False,
+    index=True,
+  )
+  source: Mapped[MetaSource] = mapped_column(
+    Enum(MetaSource, name="meta_source", native_enum=True),
+    nullable=False,
+  )
+  value: Mapped[str] = mapped_column(Text, nullable=False)
+
+  # Full-text search vector (auto-generated from value)
+  value_tsv: Mapped[str] = mapped_column(
+    TSVECTOR,
+    Computed("to_tsvector('english', coalesce(value, ''))", persisted=True),
+    nullable=False,
+  )
+  
+  created_at: Mapped[datetime] = mapped_column(
+    default=func.now(), nullable=False
+  )
+
+  video: Mapped["Video"] = relationship(back_populates="video_meta")
 
   __table_args__ = (
-    CheckConstraint(
-      "duration_seconds >= 0",
-      name="ck_video_duration_nonnegative",
-    ),
+    Index("ix_video_meta_value_tsv", "value_tsv", postgresql_using="gin"),
   )
+
+
+class ScrapedData(Base):
+  __tablename__ = "scraped_data"
+  
+  id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
+  )
+  video_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("videos.id", ondelete="CASCADE"),
+    nullable=False,
+    index=True,
+  )
+  data: Mapped[dict | None] = mapped_column(JSONB, default=None)
+  
+  video: Mapped["Video"] = relationship(back_populates="scraped_data")
 
 
 class VideoAnnotation(Base):

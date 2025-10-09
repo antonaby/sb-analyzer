@@ -1,27 +1,44 @@
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import AnnotationKind, Video, VideoAnnotation, VideoSource
+from db.models import AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource
 
 
 def prepare_video(
-  url: str, download_url: str, source: VideoSource, 
-  title: str = "", author: str = "", duration_seconds: int = 0, 
-  meta: dict = {},
-  annotations: list[VideoAnnotation] = []
+  url: str, 
+  source: VideoSource, 
+  scraped_data: ScrapedData,
+  extra_data: dict = {},
+  annotations: list[VideoAnnotation] = [],
+  video_meta: list[VideoMeta] = [],
 ) -> Video:
   video = Video(
     url=url,
-    download_url=download_url,
     source=source,
-    title=title,
-    author=author,
-    duration_seconds=duration_seconds,
-    meta=meta,
-    annotations=annotations
+    scraped_data=scraped_data,
+    extra_data=extra_data,
+    annotations=annotations,
+    video_meta=video_meta
   )
   
   return video
+
+
+def prepare_meta(
+  source: MetaSource,
+  value: str,
+) -> VideoMeta:
+  meta = VideoMeta(
+    source=source,
+    value=value
+  )
+  
+  return meta
+
+
+def prepare_scraped_data(data: dict = {}) -> ScrapedData:
+  return ScrapedData(data=data)
+
 
 def prepare_annotation(
   kind: AnnotationKind,
