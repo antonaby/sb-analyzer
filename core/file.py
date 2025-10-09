@@ -192,7 +192,7 @@ class VideoFile:
     ret, frame = self._cap.read()
 
     if not ret:
-      raise VideoFileError(f"Cannot get frame at: {timestamp}")
+      raise VideoFileError(f"Cannot get frame at: {round(timestamp, 2)}")
     
     self._log.debug(f"Extracted frame at {timestamp:.1f}s")
     return {

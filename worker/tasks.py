@@ -81,13 +81,17 @@ def run_apidojo_scrapper(
   location: str = "US", 
   max_items: int = 1000
 ) -> ActorRun:
+  global loop
+  if loop is None:
+    raise RuntimeError("Asyncio loop not initialized")
+  
   global apify_client
   if apify_client is None:
     raise RuntimeError("Apify client not initialized")
   
   apidojo_client = apify_client.apidojo_tiktok_scrapper()
   
-  run, posts = asyncio.run(
+  run, posts = loop.run_until_complete(
     apidojo_client.search(
       keywords=keywords, 
       date_range=date_range, 
