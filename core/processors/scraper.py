@@ -19,7 +19,7 @@ class ScraperProcessor:
   def __init__(self, session_maker: async_sessionmaker[AsyncSession]):
     self._db = session_maker
     
-  async def save_video(self, author: AuthorDetails, post: PostDetails) -> Result:
+  async def run(self, author: AuthorDetails, post: PostDetails) -> Result:
     async with self._db() as session:
       repo = VideoRepository(session)
       

@@ -1,5 +1,6 @@
 import asyncio
 from typing import cast
+from uuid import UUID
 from celery import group
 from celery.signals import worker_process_init, worker_shutting_down
 
@@ -59,9 +60,8 @@ def clear_resources(sig, how, exitcode, **kwargs):
 
 
 @worker_app.task
-def process_post(
-  post: PostDetails, 
-  reprocess_video: bool = False, 
+def process_video(
+  video_id: UUID,
   delete_downloaded_files: bool = True
 ) -> dict:
   global loop
@@ -73,13 +73,13 @@ def process_post(
     raise RuntimeError("Video processor not initialized")
   
   result = loop.run_until_complete(
-    video_processor.run(post, reprocess_video, delete_downloaded_files)
+    video_processor.run(video_id, delete_downloaded_files)
   )
   return cast(dict, result)
 
 
 @worker_app.task
-def save_video(author: AuthorDetails, post: PostDetails) -> dict:
+def save_video(author: AuthorDetails, post: PostDetails, process_new: bool = True) -> dict:
   global loop
   if loop is None:
     raise RuntimeError("Asyncio loop not initialized")
@@ -89,8 +89,12 @@ def save_video(author: AuthorDetails, post: PostDetails) -> dict:
     raise RuntimeError("Scraper processor not initialized")
   
   result = loop.run_until_complete(
-    scraper_processor.save_video(author, post)
+    scraper_processor.run(author, post)
   )
+  
+  if process_new and result.get("new_video", False):
+    process_video.delay(result["video_id"]) # type: ignore
+  
   return cast(dict, result)
 
 
