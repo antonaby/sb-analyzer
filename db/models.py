@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+  Boolean,
   Enum,
   ForeignKey,
   Integer,
@@ -110,6 +111,7 @@ class Video(Base):
     default=func.now(), onupdate=func.now(), nullable=False
   )
   processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+  processing_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
   
   author: Mapped["Author"] = relationship(back_populates="videos")
 

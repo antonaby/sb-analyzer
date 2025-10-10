@@ -83,6 +83,7 @@ class VideoProcessor:
       summary = await self._agent.summary(post_data, video_data, audio_data)
       return await self._save_video_details(video_model, post_data, video_data, audio_data, summary)
     except Exception as e:
+      await self._set_error(video_model)
       raise VideoProcessorError("cannot create summary for a video") from e
     finally:
       try:
@@ -114,6 +115,7 @@ class VideoProcessor:
         "duration": video_data.get_duration(),
         "frames": video_data.get_total_frames()
       }
+      video_model.processing_error = False
       video_model.processed_at = datetime.now(timezone.utc)
       
       for annotation in annotations:
@@ -129,6 +131,14 @@ class VideoProcessor:
       await session.commit()
       
       return video_model
+    
+  async def _set_error(self, video_model: Video):
+    async with self._db() as session:
+      video_model = await session.merge(video_model, load=False)
+      video_model.processing_error = True     
+      video_model.processed_at = datetime.now(timezone.utc)
+      
+      await session.commit()
       
 
 def _create_video_data(

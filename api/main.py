@@ -1,10 +1,11 @@
 from typing import Optional
+from uuid import UUID
 from fastapi import Depends, FastAPI, Query
 from celery.result import AsyncResult
 from dotenv import load_dotenv
 from api.models import ApidojoScrapperRun
 from sqlalchemy.ext.asyncio import AsyncSession
-from worker.tasks import run_apidojo_scrapper
+from worker.tasks import run_apidojo_scrapper, process_video
 from worker.main import worker_app
 from db.conf import create_db_engine, get_async_session
 from db.repositories.videos import VideoRepository
@@ -41,6 +42,15 @@ def run_tiktok_scrapper(run: ApidojoScrapperRun):
     "status": job.status,
   }
 
+
+@app.post("/tasks/process-video/{video_id}")
+def run_process_video_task(video_id: UUID):
+  job = process_video.delay(video_id) # type: ignore
+
+  return {
+    "id": job.id,
+    "status": job.status,
+  }
 
 @app.get("/tasks/{task_id}")
 def get_task(task_id: str):
