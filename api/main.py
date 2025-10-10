@@ -1,22 +1,24 @@
-from pydantic import BaseModel, Field
-from fastapi import FastAPI
+from typing import Optional
+from fastapi import Depends, FastAPI, Query
 from celery.result import AsyncResult
 from dotenv import load_dotenv
-from models.apidojo import DateRange, SortType
+from api.models import ApidojoScrapperRun
+from sqlalchemy.ext.asyncio import AsyncSession
 from worker.tasks import run_apidojo_scrapper
 from worker.main import worker_app
-
+from db.conf import create_db_engine, get_async_session
+from db.repositories.videos import VideoRepository
 
 load_dotenv()
+
 app = FastAPI(title="SB VideoAnalyzer API", version="0.0.0")
 
+db_engine = create_db_engine()
+AsyncSessionLocal = get_async_session(db_engine)
 
-class ApidojoScrapperRun(BaseModel):
-  keywords: list[str] = Field(min_length=1, description="At least one keyword")
-  date_range: DateRange
-  sort_type: SortType
-  location: str
-  max_items: int
+async def get_async_db():
+  async with AsyncSessionLocal() as session:
+    yield session
 
 
 @app.get("/health")
@@ -47,4 +49,15 @@ def get_task(task_id: str):
     "id": job.id,
     "status": job.status,
     "result": job.result
+  }
+
+
+@app.get("/search")
+async def search_videos(q: str = Query(default=None, min_length=1), db: AsyncSession = Depends(get_async_db)):
+  repo = VideoRepository(db)
+  
+  videos = await repo.find_videos(q)
+  
+  return {
+    "videos": videos
   }

@@ -24,7 +24,3 @@ def get_async_session(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
   return async_sessionmaker(
     engine, expire_on_commit=False
   )
-
-async def get_session(async_session: async_sessionmaker[AsyncSession]) -> AsyncGenerator[AsyncSession]: 
-  async with async_session() as session:              
-    yield session                                     

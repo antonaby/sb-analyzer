@@ -1,6 +1,6 @@
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import Sequence, select, func
 
 from db.models import AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource
 
@@ -68,3 +68,17 @@ class VideoRepository:
   
   async def delete_video(self, video: Video):
     await self._session.delete(video)
+
+  async def find_videos(self, q: str):
+    ts_query = func.plainto_tsquery("english", q)
+    
+    stmt = (
+      select(Video)
+      .join(Video.annotations)  # join VideoAnnotation
+      .where(VideoAnnotation.value_tsv.op("@@")(ts_query))
+      .distinct()  # avoid duplicates if multiple annotations match
+    )
+
+    videos = await self._session.scalars(stmt)
+    return videos.all()
+ 

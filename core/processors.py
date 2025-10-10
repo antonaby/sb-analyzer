@@ -152,7 +152,7 @@ def _create_summary_annotations(summary: VideoSummary) -> list[VideoAnnotation]:
   
   annotations.append(
     prepare_annotation(
-      kind=AnnotationKind.SUMMARY,
+      kind=AnnotationKind.summary,
       value=summary.main_idea
     )
   )
@@ -160,7 +160,7 @@ def _create_summary_annotations(summary: VideoSummary) -> list[VideoAnnotation]:
   for synopsis in summary.synopsis:
     annotations.append(
       prepare_annotation(
-        kind=AnnotationKind.SUMMARY_SYNOPSIS,
+        kind=AnnotationKind.summary_synopsis,
         value=synopsis
       )
     )
@@ -173,12 +173,12 @@ def _create_summary_meta(summary: VideoSummary) -> list[VideoMeta]:
   
   for theme in summary.theme:
     video_meta.append(
-      prepare_meta(MetaSource.SUMMARY, theme)
+      prepare_meta(MetaSource.summary, theme)
     )  
   
   for video_type in summary.video_type:
     video_meta.append(
-      prepare_meta(MetaSource.SUMMARY_VIDEO_TYPE, video_type)
+      prepare_meta(MetaSource.summary_video_type, video_type)
     ) 
   
   return video_meta
@@ -190,7 +190,7 @@ def _create_transcribe_annotations(transcriptions: list[Transcription]) -> list[
   for segment in transcriptions:
     annotations.append(
       prepare_annotation(
-        kind=AnnotationKind.TRANSCRIPTION,
+        kind=AnnotationKind.transcription,
         value=segment.text,
         meta={
           "start_sec": segment.start_sec,
@@ -206,15 +206,12 @@ def _create_post_meta(post: PostDetails) -> list[VideoMeta]:
   video_meta: list[VideoMeta] = []
   
   video_meta.append(
-    prepare_meta(MetaSource.POST_AUTHOR, post.get("author", "no author"))
-  )
-  video_meta.append(
-    prepare_meta(MetaSource.POST, post.get("title", "no title"))
+    prepare_meta(MetaSource.title, post.get("title", "no title"))
   )
   
   for hash_tag in post.get("hashtags", []):
     video_meta.append(
-      prepare_meta(MetaSource.HASHTAG, hash_tag)
+      prepare_meta(MetaSource.hashtag, hash_tag)
     )
   
   return video_meta
@@ -224,13 +221,13 @@ def _create_frame_video_meta(frame: Frame) -> list[VideoMeta]:
   video_meta: list[VideoMeta] = []
   
   video_meta.append(
-    prepare_meta(MetaSource.FRAME_CONTENT_TYPE, frame.content_type)
+    prepare_meta(MetaSource.frame_content_type, frame.content_type)
   )
   video_meta.append(
-    prepare_meta(MetaSource.FRAME_STYLE, frame.specific_style)
+    prepare_meta(MetaSource.frame_style, frame.specific_style)
   )
   video_meta.append(
-    prepare_meta(MetaSource.FRAME_QUALITY, frame.production_quality)
+    prepare_meta(MetaSource.frame_quality, frame.production_quality)
   )
   
   return video_meta
@@ -239,19 +236,18 @@ def _create_frame_video_meta(frame: Frame) -> list[VideoMeta]:
 def _create_frame_annotations(frame: Frame) -> list[VideoAnnotation]:
   annotations: list[VideoAnnotation] = []
   
-  _append_frame(annotations, AnnotationKind.FRAME, frame.description, frame)
-  _append_frame(annotations, AnnotationKind.FRAME_ENVIRONMENT, frame.environment, frame)
-  _append_frame(annotations, AnnotationKind.FRAME_SUMMARY, frame.summary, frame)
-  _append_frame(annotations, AnnotationKind.FRAME, frame.description, frame)
+  _append_frame(annotations, AnnotationKind.frame, frame.description, frame)
+  _append_frame(annotations, AnnotationKind.frame_environment, frame.environment, frame)
+  _append_frame(annotations, AnnotationKind.frame_summary, frame.summary, frame)
   
   for object in frame.objects:
-    _append_frame(annotations, AnnotationKind.FRAME_OBJECT, object, frame)
+    _append_frame(annotations, AnnotationKind.frame_object, object, frame)
 
   for action in frame.actions:
-    _append_frame(annotations, AnnotationKind.FRAME_ACTION, action, frame)
+    _append_frame(annotations, AnnotationKind.frame_action, action, frame)
 
   for logo in frame.logos:
-    _append_frame(annotations, AnnotationKind.FRAME_LOGO, logo, frame)
+    _append_frame(annotations, AnnotationKind.frame_logo, logo, frame)
   
   return annotations
 

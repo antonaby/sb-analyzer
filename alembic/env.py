@@ -1,6 +1,8 @@
 import asyncio
 from logging.config import fileConfig
 
+from dotenv import load_dotenv, find_dotenv
+
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
@@ -8,9 +10,11 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 from db.models import *
-from db.conf import Base, DATABASE_URL_VAR
+from db.conf import Base
 
 from core.utils import var_or_exception
+
+load_dotenv(find_dotenv())
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -33,7 +37,7 @@ target_metadata = Base.metadata
 # ... etc.
 
 # update database URL
-db_url = var_or_exception(DATABASE_URL_VAR)
+db_url = var_or_exception('DATABASE_URL')
 config.set_main_option("sqlalchemy.url", db_url)
 
 

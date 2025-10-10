@@ -3,14 +3,13 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-  CheckConstraint,
   Enum,
   ForeignKey,
   String,
   Text,
   Index,
-  Integer,
   Computed,
+  DateTime,
   func,
   text
 )
@@ -23,36 +22,61 @@ from db.conf import Base
 # --- Enums -------------------------------------------------------------
 
 class VideoSource(enum.Enum):
-  TIKTOK = "tiktok"
-  YOUTUBE_SHORTS = "youtube_shorts"
-  INSTAGRAM_REELS = "instagram_reels"
-  OTHER = "other"
+  tiktok = "tiktok"
+  youtube_shorts = "youtube_shorts"
+  instagram_reels = "instagram_reels"
+  other = "other"
 
 
 class MetaSource(enum.Enum):
-  POST = "post"
-  POST_AUTHOR = "post_author"
-  HASHTAG = "hashtag"
-  FRAME_CONTENT_TYPE = "frame_content_type"
-  FRAME_STYLE = "frame_style"
-  FRAME_QUALITY = "frame_quality"
-  SUMMARY = "summary"
-  SUMMARY_VIDEO_TYPE = "summary_video_type"
+  title = "title"
+  description = "description"
+  hashtag = "hashtag"
+  frame_content_type = "frame_content_type"
+  frame_style = "frame_style"
+  frame_quality = "frame_quality"
+  summary = "summary"
+  summary_video_type = "summary_video_type"
 
 
 class AnnotationKind(enum.Enum):
-  FRAME = "frame"
-  FRAME_OBJECT = "frame_object"
-  FRAME_ACTION = "frame_action"
-  FRAME_ENVIRONMENT = "frame_environment"
-  FRAME_SUMMARY = "frame_summary"
-  FRAME_LOGO = "frame_logo"
-  SUMMARY = "summary"
-  SUMMARY_SYNOPSIS = "summary_synopsis"
-  TRANSCRIPTION = "transcription"
+  frame = "frame"
+  frame_object = "frame_object"
+  frame_action = "frame_action"
+  frame_environment = "frame_environment"
+  frame_summary = "frame_summary"
+  frame_logo = "frame_logo"
+  summary = "summary"
+  summary_synopsis = "summary_synopsis"
+  transcription = "transcription"
 
 
 # --- Models ------------------------------------------------------------
+class Author(Base):
+  __tablename__ = "authors"
+  
+  id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
+  )
+  url: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+  source: Mapped[VideoSource] = mapped_column(
+    Enum(VideoSource, name="video_source", native_enum=True), nullable=False
+  )
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
+  updated_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), onupdate=func.now(), nullable=False
+  )
+  
+  videos: Mapped[list["Video"]] = relationship(
+    back_populates="author",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+  
 
 class Video(Base):
   """
@@ -67,15 +91,25 @@ class Video(Base):
   source: Mapped[VideoSource] = mapped_column(
     Enum(VideoSource, name="video_source", native_enum=True), nullable=False
   )
-  
+  author_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("authors.id", ondelete="CASCADE"),
+    nullable=False,
+    index=True,
+  )
   extra_data: Mapped[dict | None] = mapped_column(JSONB, default=None)
   
   created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
     default=func.now(), nullable=False
   )
   updated_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
     default=func.now(), onupdate=func.now(), nullable=False
   )
+  processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+  
+  author: Mapped["Author"] = relationship(back_populates="videos")
 
   annotations: Mapped[list["VideoAnnotation"]] = relationship(
     back_populates="video",
@@ -121,10 +155,9 @@ class VideoMeta(Base):
     nullable=False,
   )
   
-  created_at: Mapped[datetime] = mapped_column(
-    default=func.now(), nullable=False
-  )
-
+  # Optional structured metadata (frame numbers, time ranges, etc.)
+  meta: Mapped[dict | None] = mapped_column(JSONB, default=None)
+  
   video: Mapped["Video"] = relationship(back_populates="video_meta")
 
   __table_args__ = (
@@ -181,10 +214,6 @@ class VideoAnnotation(Base):
 
   # Optional structured metadata (frame numbers, time ranges, etc.)
   meta: Mapped[dict | None] = mapped_column(JSONB, default=None)
-
-  created_at: Mapped[datetime] = mapped_column(
-    default=func.now(), nullable=False
-  )
 
   video: Mapped["Video"] = relationship(back_populates="annotations")
 
