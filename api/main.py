@@ -3,9 +3,9 @@ from uuid import UUID
 from fastapi import Depends, FastAPI, Query
 from celery.result import AsyncResult
 from dotenv import load_dotenv
-from api.models import ApidojoScrapperRun
+from api.models import ApidojoScrapperRun, ApidojoCollectUrls
 from sqlalchemy.ext.asyncio import AsyncSession
-from worker.tasks import run_apidojo_scrapper, process_video
+from worker.tasks import run_apidojo_search, run_apidojo_collect_urls, process_video
 from worker.main import worker_app
 from db.conf import create_db_engine, get_async_session
 from db.repositories.videos import VideoRepository
@@ -29,13 +29,26 @@ async def health():
 
 @app.post("/tiktok/apidojo/run")
 def run_tiktok_scrapper(run: ApidojoScrapperRun):
-  job = run_apidojo_scrapper.delay( # type: ignore
+  job = run_apidojo_search.delay( # type: ignore
     keywords=run.keywords, 
     date_range=run.date_range, 
     sort_type=run.sort_type, 
     location=run.location,
     max_items=run.max_items
   ) 
+  
+  return {
+    "id": job.id,
+    "status": job.status,
+  }
+
+
+@app.post("/tiktok/apidojo/collect")
+def collect_author_videos(run: ApidojoCollectUrls):
+  job = run_apidojo_collect_urls.delay( # type: ignore
+    urls=run.urls,
+    max_items=run.max_items
+  )
   
   return {
     "id": job.id,

@@ -24,15 +24,27 @@ class ApidojoTiktokScrapper(BaseApifyActor):
     location: str = "US", 
     max_items: int = 1000,
   ) -> tuple[ActorRun, list[TikTokPost]]:
+    run_input = {
+      "dateRange": date_range,
+      "includeSearchKeywords": True,
+      "keywords": keywords,
+      "location": location,
+      "maxItems": max_items,
+      "sortType": sort_type
+    }
+    
+    return await self._run(run_input)
+  
+  async def collect_videos_by_urls(self, urls: list[str], max_items: int = 1000):
+    run_input = {
+      "startUrls": urls,
+      "maxItems": max_items
+    }
+    
+    return await self._run(run_input)
+    
+  async def _run(self, run_input: dict) -> tuple[ActorRun, list[TikTokPost]]:
     try:
-      run_input = {
-        "dateRange": date_range,
-        "includeSearchKeywords": True,
-        "keywords": keywords,
-        "location": location,
-        "maxItems": max_items,
-        "sortType": sort_type
-      }
       call_result = await self.actor_client.call(run_input=run_input, logger=self._log)
         
       if call_result is None:

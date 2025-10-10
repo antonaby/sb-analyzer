@@ -9,3 +9,8 @@ class ApidojoScrapperRun(BaseModel):
   sort_type: SortType
   location: str
   max_items: int
+
+
+class ApidojoCollectUrls(BaseModel):
+  urls: list[str] = Field(min_length=1, description="At least one url")
+  max_items: int

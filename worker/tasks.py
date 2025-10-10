@@ -99,13 +99,29 @@ def save_video(author: AuthorDetails, post: PostDetails, process_new: bool = Tru
 
 
 @worker_app.task
-def run_apidojo_scrapper(
+def run_apidojo_search(
   keywords: list[str], 
   date_range: DateRange,
   sort_type: SortType,
   location: str = "US", 
   max_items: int = 1000
 ) -> ActorRun:
+  return _run_apidojo_scrapper(
+    "search",
+    keywords=keywords, 
+    date_range=date_range, 
+    sort_type=sort_type, 
+    location=location, 
+    max_items=max_items
+  )
+
+
+@worker_app.task
+def run_apidojo_collect_urls(urls: list[str], max_items: int = 1000) -> ActorRun:
+  return _run_apidojo_scrapper("collect_videos_by_urls", urls=urls, max_items=max_items)
+
+
+def _run_apidojo_scrapper(func_name: str, **kwargs):
   global loop
   if loop is None:
     raise RuntimeError("Asyncio loop not initialized")
@@ -116,14 +132,9 @@ def run_apidojo_scrapper(
   
   apidojo_client = apify_client.apidojo_tiktok_scrapper()
   
+  func = getattr(apidojo_client, func_name)
   run, posts = loop.run_until_complete(
-    apidojo_client.search(
-      keywords=keywords, 
-      date_range=date_range, 
-      sort_type=sort_type, 
-      location=location, 
-      max_items=max_items
-    )
+    func(**kwargs)
   )
   
   if len(posts) == 0:
