@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy import (
   Enum,
   ForeignKey,
+  Integer,
   String,
   Text,
   Index,
@@ -97,6 +98,7 @@ class Video(Base):
     nullable=False,
     index=True,
   )
+  revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
   extra_data: Mapped[dict | None] = mapped_column(JSONB, default=None)
   
   created_at: Mapped[datetime] = mapped_column(
@@ -146,6 +148,7 @@ class VideoMeta(Base):
     Enum(MetaSource, name="meta_source", native_enum=True),
     nullable=False,
   )
+  revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
   value: Mapped[str] = mapped_column(Text, nullable=False)
 
   # Full-text search vector (auto-generated from value)
@@ -157,6 +160,11 @@ class VideoMeta(Base):
   
   # Optional structured metadata (frame numbers, time ranges, etc.)
   meta: Mapped[dict | None] = mapped_column(JSONB, default=None)
+  
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
   
   video: Mapped["Video"] = relationship(back_populates="video_meta")
 
@@ -203,6 +211,7 @@ class VideoAnnotation(Base):
     Enum(AnnotationKind, name="annotation_kind", native_enum=True),
     nullable=False,
   )
+  revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
   value: Mapped[str] = mapped_column(Text, nullable=False)
 
   # Full-text search vector (auto-generated from value)
@@ -214,6 +223,11 @@ class VideoAnnotation(Base):
 
   # Optional structured metadata (frame numbers, time ranges, etc.)
   meta: Mapped[dict | None] = mapped_column(JSONB, default=None)
+
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
 
   video: Mapped["Video"] = relationship(back_populates="annotations")
 

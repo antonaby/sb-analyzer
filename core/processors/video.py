@@ -107,24 +107,27 @@ class VideoProcessor:
     
     async with self._db() as session:
       video_model = await session.merge(video_model, load=False)
+      revision = video_model.revision + 1
       
-      for annotation in annotations:
-        annotation.video_id = video_model.id
-      
-      session.add_all(annotations)
-        
-      for meta in video_meta:
-        meta.video_id = video_model.id
-      
-      session.add_all(video_meta)
-
+      video_model.revision = revision
       video_model.extra_data = {
         "duration": video_data.get_duration(),
         "frames": video_data.get_total_frames()
       }
       video_model.processed_at = datetime.now(timezone.utc)
       
+      for annotation in annotations:
+        annotation.video_id = video_model.id
+        annotation.revision = revision
+      session.add_all(annotations)
+        
+      for meta in video_meta:
+        meta.video_id = video_model.id
+        meta.revision = revision
+      session.add_all(video_meta)
+
       await session.commit()
+      
       return video_model
       
 
