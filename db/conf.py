@@ -1,9 +1,6 @@
-import os
-from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
-from sqlalchemy import text
+from sqlalchemy.orm import DeclarativeBase
 
 from core.utils import var_or_exception
 

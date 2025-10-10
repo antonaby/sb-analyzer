@@ -5,13 +5,14 @@ from celery.signals import worker_process_init, worker_shutting_down
 
 from models.apidojo import DateRange, SortType
 from models.apify import ActorRun
-from models.common import PostDetails
+from models.common import AuthorDetails, PostDetails
 from core.utils import is_url
 from .main import worker_app
 
 loop = None
 apify_client = None
 async_session = None
+scraper_processor = None
 video_processor = None
 
 
@@ -22,7 +23,8 @@ def init_worker_process(**kwargs):
   from core.agents.video import ClipTaggerClient
   from core.agents.transcribe import LemonfoxClient
   from core.agents.summary import SummaryAgent
-  from core.processors import VideoProcessor
+  from core.processors.scraper import ScraperProcessor
+  from core.processors.video import VideoProcessor
   from db.conf import create_db_engine, get_async_session
   
   load_dotenv()
@@ -36,6 +38,9 @@ def init_worker_process(**kwargs):
   global async_session
   engine = create_db_engine()
   async_session = get_async_session(engine)
+  
+  global scraper_processor
+  scraper_processor = ScraperProcessor(async_session)
   
   clip_tagger_client = ClipTaggerClient()
   lemonfox_client = LemonfoxClient()
@@ -71,7 +76,23 @@ def process_post(
     video_processor.run(post, reprocess_video, delete_downloaded_files)
   )
   return cast(dict, result)
+
+
+@worker_app.task
+def save_video(author: AuthorDetails, post: PostDetails) -> dict:
+  global loop
+  if loop is None:
+    raise RuntimeError("Asyncio loop not initialized")
   
+  global scraper_processor
+  if scraper_processor is None:
+    raise RuntimeError("Scraper processor not initialized")
+  
+  result = loop.run_until_complete(
+    scraper_processor.save_video(author, post)
+  )
+  return cast(dict, result)
+
 
 @worker_app.task
 def run_apidojo_scrapper(
@@ -107,20 +128,27 @@ def run_apidojo_scrapper(
   tasks = []
   
   for post in posts:
-    url = post.get("video", {}).get("url", "")
-    if is_url(url):
-      author = post.get("channel", {}).get("url", "")
-      
+    author_url = post.get("channel", {}).get("url", "")
+    video_url = post.get("postPage", "")
+    download_url = post.get("video", {}).get("url", "")
+    
+    if is_url(author_url) and is_url(video_url) and is_url(download_url):
+      author_details: AuthorDetails = {
+        "url": author_url,
+        "author_from": "tiktok"
+      }
       post_details: PostDetails = {
-        "url": post.get("postPage", ""),
-        "download_url": url,
+        "url": video_url,
+        "download_url": download_url,
         "post_from": "tiktok",
         "title": post.get("text", "no title"),
-        "author": author,
+        "description": "",
         "hashtags": post.get("hashtags", []),
-        "meta": cast(dict, post)
+        "scraper": "apidojo",
+        "source": cast(dict, post)
       }
-      tasks.append(process_post.s(post_details)) # type: ignore
+      
+      tasks.append(save_video.s(author_details, post_details)) # type: ignore
       
   job = group(tasks)
   job.apply_async()

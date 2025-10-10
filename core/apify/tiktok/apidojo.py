@@ -6,7 +6,7 @@ from models.apidojo import DateRange, SortType, TikTokPost
 from models.apify import ActorRun
 
 
-class TikTokScrapperError(Exception):
+class ApidojoTikTokScrapperError(Exception):
   pass
 
 
@@ -36,11 +36,11 @@ class ApidojoTiktokScrapper(BaseApifyActor):
       call_result = await self.actor_client.call(run_input=run_input, logger=self._log)
         
       if call_result is None:
-        raise TikTokScrapperError("no call result")
+        raise ApidojoTikTokScrapperError("no call result")
       
       actor_run = cast(ActorRun, call_result)
       dataset = await self._get_dataset(call_result["defaultDatasetId"])
             
       return actor_run, dataset
     except Exception as e:
-      raise TikTokScrapperError("run failed") from e
+      raise ApidojoTikTokScrapperError("run failed") from e
