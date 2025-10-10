@@ -70,16 +70,19 @@ class VideoProcessor:
     video_model: Video,
     delete_downloaded_files: bool
   ) -> Video:
-    post_data = cast(PostDetails, video_model.scraped_data.data)
-    video_source = await UrlVideoSource.new(post_data["download_url"], self._tmp_dir)
-    
-    video_file = VideoFile(video_source)  
-    audio_file = AudioFile(video_source)
-    
-    video_data = VideoData(self._ct_client, video_file)
-    audio_data = AudioData(self._lm_client, audio_file)
+    video_file = None
+    video_source = None
     
     try:
+      post_data = cast(PostDetails, video_model.scraped_data.data)
+      video_source = await UrlVideoSource.new(post_data["download_url"], self._tmp_dir)
+      
+      video_file = VideoFile(video_source)  
+      audio_file = AudioFile(video_source)
+      
+      video_data = VideoData(self._ct_client, video_file)
+      audio_data = AudioData(self._lm_client, audio_file)
+      
       summary = await self._agent.summary(post_data, video_data, audio_data)
       return await self._save_video_details(video_model, post_data, video_data, audio_data, summary)
     except Exception as e:
@@ -87,8 +90,9 @@ class VideoProcessor:
       raise VideoProcessorError("cannot create summary for a video") from e
     finally:
       try:
-        video_file.close()
-        if delete_downloaded_files:
+        if video_file is not None:
+          video_file.close()
+        if delete_downloaded_files and video_source is not None:
           video_source.delete()
       except Exception as e:
         self._log.exception(e)
