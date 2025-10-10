@@ -1,38 +1,23 @@
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, literal_column
+from sqlalchemy.orm import joinedload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 
 from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource
 
 
-def prepare_video(
-  url: str, 
-  source: VideoSource, 
-  scraped_data: ScrapedData,
-  extra_data: dict = {},
-  annotations: list[VideoAnnotation] = [],
-  video_meta: list[VideoMeta] = [],
-) -> Video:
-  video = Video(
-    url=url,
-    source=source,
-    scraped_data=scraped_data,
-    extra_data=extra_data,
-    annotations=annotations,
-    video_meta=video_meta
-  )
-  
-  return video
-
-
 def prepare_meta(
   source: MetaSource,
   value: str,
+  meta_data: dict = {}
 ) -> VideoMeta:
   meta = VideoMeta(
     source=source,
-    value=value
+    value=value,
+    meta=meta_data
   )
   
   return meta
@@ -101,14 +86,13 @@ class VideoRepository:
 
     return video, is_new
     
-  async def get_video_by_url(self, url: str) -> Video | None:
-    stmt = select(Video).where(Video.url == url)
+  async def get_video_by_id(self, video_id: UUID, load_scraped_data: bool = True) -> Video | None:
+    stmt = select(Video).where(Video.id == video_id)
+    if load_scraped_data:
+      stmt = stmt.options(joinedload(Video.scraped_data))
+      
     result = await self._session.execute(stmt)
-    
     return result.scalar_one_or_none()
-  
-  async def delete_video(self, video: Video):
-    await self._session.delete(video)
 
   async def find_videos(self, q: str):
     ts_query = func.plainto_tsquery("english", q)

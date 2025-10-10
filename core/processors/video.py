@@ -7,9 +7,9 @@ from datetime import datetime, timezone
 from core.agents.summary import SummaryAgent
 from core.agents.transcribe import AudioData, LemonfoxClient, Transcription
 from core.agents.video import ClipTaggerClient, VideoData, Frame
-from core.file import AudioFile, UrlVideoSource, VideoFile, VideoSource
-from db.models import Video, VideoAnnotation, VideoSource as ModelVideoSource, AnnotationKind, VideoMeta, MetaSource
-from db.repositories.videos import prepare_video, prepare_scraped_data, prepare_meta, prepare_annotation, VideoRepository
+from core.file import AudioFile, UrlVideoSource, VideoFile
+from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
+from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
 from models.common import PostDetails, VideoSummary
 
 
@@ -18,8 +18,7 @@ class VideoProcessorError(Exception):
 
 
 class ProcessedVideo(TypedDict):
-  video_id: UUID
-  is_new: bool
+  video_id: UUID | None
   processed_at_utc: datetime | None
 
 
@@ -37,49 +36,43 @@ class VideoProcessor:
     self._ct_client = ct_client
     self._lm_client = lm_client
     self._agent = agent
-    self._async_session = async_session
+    self._db = async_session
     self._tmp_dir = tmp_dir
     
   async def run(
     self, 
-    post: PostDetails, 
-    reprocess_video: bool = False, 
+    video_id: UUID, 
     delete_downloaded_files: bool = True
   ) -> ProcessedVideo:
-    existing_video_id = await self._find_video(post['url'], reprocess_video)
-    if existing_video_id is not None:
+    video_model = await self._find_video(video_id)
+    
+    if video_model is None:
+      self._log.warning(f"Video not found: {video_id}")
       return {
-        "video_id": existing_video_id,
-        "is_new": False,
+        "video_id": None,
         "processed_at_utc": None
       }
-      
-    video_source = await UrlVideoSource.new(post['download_url'], self._tmp_dir)
-    return await self._create_summary(post, video_source, delete_downloaded_files)
+    
+    video_model = await self._create_summary(video_model, delete_downloaded_files)
+    
+    return {
+      "video_id": video_model.id,
+      "processed_at_utc": video_model.processed_at
+    }
         
-  async def _find_video(self, url: str, reprocess_video: bool) -> UUID | None:
-    async with self._async_session() as session:
+  async def _find_video(self, video_id: UUID) -> Video | None:
+    async with self._db() as session:
       repo = VideoRepository(session)
-      
-      video = await repo.get_video_by_url(url)
-      
-      if video is None:
-        return None
-      
-      if not reprocess_video:
-        return video.id
-      
-      await repo.delete_video(video)
-      await session.commit()
-      
-      return None
+      return await repo.get_video_by_id(video_id)
     
   async def _create_summary(
     self,
-    post: PostDetails,
-    video_source: VideoSource, 
-    delete_downloaded_files: bool = True
-  ) -> ProcessedVideo:
+    video_model: Video,
+    delete_downloaded_files: bool
+  ) -> Video:
+    post_data = cast(PostDetails, video_model.scraped_data.data)
+    video_source = await UrlVideoSource.new(post_data["download_url"], self._tmp_dir)
+    
     video_file = VideoFile(video_source)  
     audio_file = AudioFile(video_source)
     
@@ -87,20 +80,8 @@ class VideoProcessor:
     audio_data = AudioData(self._lm_client, audio_file)
     
     try:
-      summary = await self._agent.summary(post, video_data, audio_data)
-      processed_frames = await video_data.get_processed_frames()
-      video_model = _create_video(post, video_data, audio_data, summary, processed_frames)
-      
-      async with self._async_session() as session:
-        session.add(video_model)
-        await session.commit()
-      
-      return {
-        "video_id": video_model.id,
-        "is_new": True,
-        "processed_at_utc": datetime.now(timezone.utc)
-      }
-    
+      summary = await self._agent.summary(post_data, video_data, audio_data)
+      return await self._save_video_details(video_model, post_data, video_data, audio_data, summary)
     except Exception as e:
       raise VideoProcessorError("cannot create summary for a video") from e
     finally:
@@ -110,18 +91,52 @@ class VideoProcessor:
           video_source.delete()
       except Exception as e:
         self._log.exception(e)
+        
+  async def _save_video_details(
+    self, 
+    video_model: Video,
+    post_data: PostDetails, video_data: VideoData, 
+    audio_data: AudioData, summary: VideoSummary
+  ) -> Video:
+    processed_frames = await video_data.get_processed_frames()
+    transcriptions = audio_data.get_processed_transcriptions()
+    
+    annotations, video_meta = _create_video_data(
+      post_data, summary, processed_frames, transcriptions
+    )
+    
+    async with self._db() as session:
+      video_model = await session.merge(video_model, load=False)
+      
+      for annotation in annotations:
+        annotation.video_id = video_model.id
+      
+      session.add_all(annotations)
+        
+      for meta in video_meta:
+        meta.video_id = video_model.id
+      
+      session.add_all(video_meta)
+
+      video_model.extra_data = {
+        "duration": video_data.get_duration(),
+        "frames": video_data.get_total_frames()
+      }
+      video_model.processed_at = datetime.now(timezone.utc)
+      
+      await session.commit()
+      return video_model
       
 
-def _create_video(
-  post: PostDetails, 
-  video_data: VideoData, audio_data: AudioData, 
-  summary: VideoSummary, frames: list[Frame]
-) -> Video:
+def _create_video_data(
+  post: PostDetails, summary: VideoSummary, 
+  frames: list[Frame], transcriptions: list[Transcription]
+) -> tuple[list[VideoAnnotation], list[VideoMeta]]:
   annotations: list[VideoAnnotation] = _create_summary_annotations(summary)
   video_meta: list[VideoMeta] = _create_summary_meta(summary)
   
   annotations.extend(
-    _create_transcribe_annotations(audio_data.get_processed_transcriptions())
+    _create_transcribe_annotations(transcriptions)
   )
   
   for frame in frames:
@@ -129,22 +144,8 @@ def _create_video(
     video_meta.extend(_create_frame_video_meta(frame))
         
   video_meta.extend(_create_post_meta(post))
-  source = ModelVideoSource(post['post_from'])
-  scraped_data = prepare_scraped_data(cast(dict, post))
   
-  video_model = prepare_video(
-    url=post["url"],
-    source=source,
-    scraped_data=scraped_data,
-    extra_data={
-      "duration": video_data.get_duration(),
-      "frames": video_data.get_total_frames()
-    },
-    annotations=annotations,
-    video_meta=video_meta
-  )
-  
-  return video_model
+  return annotations, video_meta
 
 
 def _create_summary_annotations(summary: VideoSummary) -> list[VideoAnnotation]:
@@ -205,9 +206,15 @@ def _create_transcribe_annotations(transcriptions: list[Transcription]) -> list[
 def _create_post_meta(post: PostDetails) -> list[VideoMeta]:
   video_meta: list[VideoMeta] = []
   
-  video_meta.append(
-    prepare_meta(MetaSource.title, post.get("title", "no title"))
-  )
+  if post.get("title"):
+    video_meta.append(
+      prepare_meta(MetaSource.title, post.get("title"))
+    )
+    
+  if post.get("description"):
+    video_meta.append(
+      prepare_meta(MetaSource.title, post.get("description"))
+    )
   
   for hash_tag in post.get("hashtags", []):
     video_meta.append(
@@ -220,14 +227,16 @@ def _create_post_meta(post: PostDetails) -> list[VideoMeta]:
 def _create_frame_video_meta(frame: Frame) -> list[VideoMeta]:
   video_meta: list[VideoMeta] = []
   
+  meta_data = _get_frame_meta(frame)
+  
   video_meta.append(
-    prepare_meta(MetaSource.frame_content_type, frame.content_type)
+    prepare_meta(MetaSource.frame_content_type, frame.content_type, meta_data)
   )
   video_meta.append(
-    prepare_meta(MetaSource.frame_style, frame.specific_style)
+    prepare_meta(MetaSource.frame_style, frame.specific_style, meta_data)
   )
   video_meta.append(
-    prepare_meta(MetaSource.frame_quality, frame.production_quality)
+    prepare_meta(MetaSource.frame_quality, frame.production_quality, meta_data)
   )
   
   return video_meta
@@ -236,23 +245,23 @@ def _create_frame_video_meta(frame: Frame) -> list[VideoMeta]:
 def _create_frame_annotations(frame: Frame) -> list[VideoAnnotation]:
   annotations: list[VideoAnnotation] = []
   
-  _append_frame(annotations, AnnotationKind.frame, frame.description, frame)
-  _append_frame(annotations, AnnotationKind.frame_environment, frame.environment, frame)
-  _append_frame(annotations, AnnotationKind.frame_summary, frame.summary, frame)
+  _append_frame_ann(annotations, AnnotationKind.frame, frame.description, frame)
+  _append_frame_ann(annotations, AnnotationKind.frame_environment, frame.environment, frame)
+  _append_frame_ann(annotations, AnnotationKind.frame_summary, frame.summary, frame)
   
   for object in frame.objects:
-    _append_frame(annotations, AnnotationKind.frame_object, object, frame)
+    _append_frame_ann(annotations, AnnotationKind.frame_object, object, frame)
 
   for action in frame.actions:
-    _append_frame(annotations, AnnotationKind.frame_action, action, frame)
+    _append_frame_ann(annotations, AnnotationKind.frame_action, action, frame)
 
   for logo in frame.logos:
-    _append_frame(annotations, AnnotationKind.frame_logo, logo, frame)
+    _append_frame_ann(annotations, AnnotationKind.frame_logo, logo, frame)
   
   return annotations
 
 
-def _append_frame(annotations: list[VideoAnnotation], kind: AnnotationKind, value: str, frame: Frame):
+def _append_frame_ann(annotations: list[VideoAnnotation], kind: AnnotationKind, value: str, frame: Frame):
   annotations.append(prepare_annotation(
     kind=kind,
     value=value,
