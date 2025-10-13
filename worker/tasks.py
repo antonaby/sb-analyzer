@@ -148,13 +148,19 @@ def _run_apidojo_scrapper(topic_id: UUID, func_name: str, **kwargs):
   func = getattr(apidojo_client, func_name)
   
   posts: list[TikTokPost]
-  run, posts = loop.run_until_complete(
-    func(**kwargs)
-  )
+  try:
+    run, posts = loop.run_until_complete(
+      func(**kwargs)
+    )
+  except Exception as e:
+    loop.run_until_complete(
+      topic_processor.update_search(serach["serach_id"], -1)
+    )
+    raise e
   
   if len(posts) == 0:
     loop.run_until_complete(
-      topic_processor.update_search(serach["serach_id"], len(posts))
+      topic_processor.update_search(serach["serach_id"], 0)
     )
     return run
 
