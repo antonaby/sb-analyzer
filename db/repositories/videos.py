@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from datetime import datetime
@@ -52,14 +53,21 @@ class VideoRepository:
     url: str, source: VideoSource, 
     verified: bool | None, followers: int | None, total_videos: int | None) -> tuple[Author, bool]:
     
+    update_values: dict[str, Any] = { "updated_at": func.now() }
+
+    if verified is not None:
+      update_values["verified"] = verified
+    if followers is not None:
+      update_values["followers"] = followers
+    if total_videos is not None:
+      update_values["total_videos"] = total_videos
+    
     stmt = (
       pg_insert(Author)
       .values(url=url, source=source, verified=verified, followers=followers, total_videos=total_videos)
       .on_conflict_do_update(   # type: ignore
         index_elements=[Author.url],
-        set_={
-          "updated_at": func.now()
-        }
+        set_=update_values
       )
       .returning(Author, literal_column("xmax"))
     ) 
@@ -75,14 +83,21 @@ class VideoRepository:
     self, 
     url: str, source: VideoSource, author: Author, 
     uploaded_at: datetime, likes: int, views: int, comments: int) -> tuple[Video, bool]:
+    
+    update_values: dict[str, Any] = {
+      "updated_at": func.now(),
+      "uploaded_at": uploaded_at,
+      "likes": likes,
+      "views": views,
+      "comments": comments
+    }
+
     stmt = (
       pg_insert(Video)
       .values(url=url, source=source, author_id=author.id, uploaded_at=uploaded_at, likes=likes, views=views, comments=comments)
       .on_conflict_do_update(   # type: ignore
         index_elements=[Author.url],
-        set_={
-          "updated_at": func.now()
-        }
+        set_=update_values
       )
       .returning(Video, literal_column("xmax"))    
     )
