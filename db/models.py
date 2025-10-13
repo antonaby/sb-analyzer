@@ -87,6 +87,7 @@ class TopicSearch(Base):
     nullable=False,
     index=True,
   )
+  scraper: Mapped[str] = mapped_column(String(128), nullable=False)
   kind: Mapped[str] = mapped_column(String(128), nullable=False)
   search_data: Mapped[dict] = mapped_column(JSONB, default={}, nullable=False)
   total_videos: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
@@ -98,6 +99,11 @@ class TopicSearch(Base):
   ran_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
   
   topic: Mapped["Topic"] = relationship(back_populates="seraches")
+  videos: Mapped[list["VideoSearch"]] = relationship(
+    back_populates="search",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )  
   
 
 class Author(Base):
@@ -188,6 +194,38 @@ class Video(Base):
     cascade="all, delete-orphan",
     passive_deletes=True,
   )
+  
+  searches: Mapped[list["VideoSearch"]] = relationship(
+    back_populates="video",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+
+
+class VideoSearch(Base):
+  __tablename__ = "video_searches"
+  
+  search_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("topic_searches.id", ondelete="CASCADE"),
+    nullable=False,
+    primary_key=True,
+  )
+  video_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("videos.id", ondelete="CASCADE"),
+    nullable=False,
+    primary_key=True,
+  )
+  is_new: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+  
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
+  
+  search: Mapped["TopicSearch"] = relationship(back_populates="videos")
+  video: Mapped["Video"] = relationship(back_populates="searches")
 
 
 class VideoMeta(Base):

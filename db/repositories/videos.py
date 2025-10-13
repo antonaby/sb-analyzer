@@ -8,7 +8,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 
-from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource
+from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource, VideoSearch
 from db.repositories.common import BaseAsyncRepo
 
 
@@ -109,6 +109,24 @@ class VideoRepository(BaseAsyncRepo):
     is_new = xmax == 0
 
     return video, is_new
+  
+  async def add_search(self, search_id: UUID, video_id: UUID, is_new: bool) -> VideoSearch:
+    stmt = (
+      pg_insert(VideoSearch).
+      values(search_id=search_id, video_id=video_id, is_new=is_new).
+      on_conflict_do_update(   # type: ignore
+        index_elements=[VideoSearch.search_id, VideoSearch.video_id],
+        set_={
+          "created_at": func.now(),
+          "is_new": is_new
+        }
+      )
+      .returning(VideoSearch)
+    )
+    
+    result = await self._session.execute(stmt)
+    return result.scalar_one()
+  
     
   async def get_video_by_id(self, video_id: UUID, load_scraped_data: bool = True) -> Video | None:
     stmt = select(Video).where(Video.id == video_id)

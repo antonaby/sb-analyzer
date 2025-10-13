@@ -1,6 +1,7 @@
 from typing import TypedDict
 
 from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel
 
 
@@ -13,6 +14,7 @@ class AuthorDetails(TypedDict):
 
 
 class PostDetails(TypedDict):
+  search_id: str
   url: str
   download_url: str
   post_from: str

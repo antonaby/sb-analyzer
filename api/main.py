@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from api.models import ApidojoScrapperRun, ApidojoCollectUrls, CreateTopicRequest
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.repositories.topics import TopicRepository
-from worker.tasks import run_apidojo_search, run_apidojo_collect_urls, process_video
+from worker.tasks import run_apidojo_search, run_apidojo_collect, process_video
 from worker.main import worker_app
 from db.conf import create_db_engine, get_async_session, test_db_conn
 from db.repositories.videos import VideoRepository
@@ -62,8 +62,8 @@ def run_tiktok_scrapper(run: ApidojoScrapperRun):
 
 
 @app.post("/apidojo/collect")
-def collect_author_videos(run: ApidojoCollectUrls):
-  job = run_apidojo_collect_urls.delay( # type: ignore
+def collect_videos(run: ApidojoCollectUrls):
+  job = run_apidojo_collect.delay( # type: ignore
     topic_id=run.topic_id,
     urls=run.urls,
     max_items=run.max_items

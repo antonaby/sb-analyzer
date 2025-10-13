@@ -1,5 +1,5 @@
 from uuid import UUID
-from sqlalchemy import insert
+from sqlalchemy import insert, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import Topic, TopicSearch
@@ -20,10 +20,21 @@ class TopicRepository(BaseAsyncRepo):
   async def get_topic(self, topic_id: UUID) -> Topic | None:
     return await self._session.get(Topic, topic_id)
   
-  async def create_serach(self, topic: Topic, kind: str, search_data: dict) -> TopicSearch:
+  async def create_serach(self, topic: Topic, scraper: str, kind: str, search_data: dict) -> TopicSearch:
     stmt = (
       insert(TopicSearch).
-      values(topic_id=topic.id, kind=kind, search_data=search_data).
+      values(topic_id=topic.id, scraper=scraper, kind=kind, search_data=search_data).
+      returning(TopicSearch)
+    )
+    result = await self._session.execute(stmt)
+    
+    return result.scalar_one()
+  
+  async def update_search(self, serach_id: UUID, total_videos: int) -> TopicSearch:
+    stmt = (
+      update(TopicSearch).
+      where(TopicSearch.id == serach_id).
+      values(total_videos=total_videos, ran_at=func.now()).
       returning(TopicSearch)
     )
     result = await self._session.execute(stmt)

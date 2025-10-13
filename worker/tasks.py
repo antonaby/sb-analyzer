@@ -124,7 +124,7 @@ def run_apidojo_search(
 
 
 @worker_app.task
-def run_apidojo_collect_urls(topic_id: UUID, urls: list[str], max_items: int = 1000) -> ActorRun:
+def run_apidojo_collect(topic_id: UUID, urls: list[str], max_items: int = 1000) -> ActorRun:
   return _run_apidojo_scrapper(topic_id, "collect_videos_by_urls", urls=urls, max_items=max_items)
 
 
@@ -141,7 +141,7 @@ def _run_apidojo_scrapper(topic_id: UUID, func_name: str, **kwargs):
   if topic_processor is None:
     raise RuntimeError("TopicProcessor client not initialized")
   
-  loop.run_until_complete(topic_processor.new_search(topic_id, func_name, kwargs))
+  serach = loop.run_until_complete(topic_processor.new_search(topic_id, "apidojo", func_name, kwargs))
   
   apidojo_client = apify_client.apidojo_tiktok_scrapper()
   
@@ -153,6 +153,9 @@ def _run_apidojo_scrapper(topic_id: UUID, func_name: str, **kwargs):
   )
   
   if len(posts) == 0:
+    loop.run_until_complete(
+      topic_processor.update_search(serach["serach_id"], len(posts))
+    )
     return run
 
   tasks = []
@@ -176,6 +179,7 @@ def _run_apidojo_scrapper(topic_id: UUID, func_name: str, **kwargs):
       }
       
       post_details: PostDetails = {
+        "search_id": str(serach["serach_id"]),
         "url": video_url,
         "download_url": download_url,
         "post_from": "tiktok",
@@ -195,4 +199,7 @@ def _run_apidojo_scrapper(topic_id: UUID, func_name: str, **kwargs):
   job = group(tasks)
   job.apply_async()
   
+  loop.run_until_complete(
+    topic_processor.update_search(serach["serach_id"], len(posts))
+  )
   return run

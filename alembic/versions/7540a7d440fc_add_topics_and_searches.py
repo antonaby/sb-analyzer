@@ -1,8 +1,8 @@
 """Add Topics And Searches
 
-Revision ID: 853383621c47
+Revision ID: 7540a7d440fc
 Revises: 656ee387b2b5
-Create Date: 2025-10-13 11:19:43.766259
+Create Date: 2025-10-13 13:21:17.965251
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '853383621c47'
+revision: str = '7540a7d440fc'
 down_revision: Union[str, Sequence[str], None] = '656ee387b2b5'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -30,6 +30,7 @@ def upgrade() -> None:
     op.create_table('topic_searches',
     sa.Column('id', sa.UUID(), server_default=sa.text('uuid_generate_v1mc()'), nullable=False),
     sa.Column('topic_id', sa.UUID(), nullable=False),
+    sa.Column('scraper', sa.String(length=128), nullable=False),
     sa.Column('kind', sa.String(length=128), nullable=False),
     sa.Column('search_data', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
     sa.Column('total_videos', sa.Integer(), server_default=sa.text('0'), nullable=False),
