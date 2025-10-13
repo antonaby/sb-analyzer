@@ -1,4 +1,5 @@
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
@@ -17,7 +18,13 @@ def create_db_engine() -> AsyncEngine:
     var_or_exception(DATABASE_URL_VAR), echo=True
   )
 
+
 def get_async_session(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
   return async_sessionmaker(
     engine, expire_on_commit=False
   )
+
+
+async def test_db_conn(session: AsyncSession) -> int | None:
+  result = await session.execute(text("SELECT 1"))
+  return result.scalar()

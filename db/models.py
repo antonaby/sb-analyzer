@@ -55,6 +55,50 @@ class AnnotationKind(enum.Enum):
 
 
 # --- Models ------------------------------------------------------------
+class Topic(Base):
+  __tablename__ = "topics"
+  
+  id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
+  )
+  name: Mapped[str] = mapped_column(String(512), nullable=False)  
+  
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
+  
+  seraches: Mapped[list["TopicSearch"]] = relationship(
+    back_populates="topic",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+
+
+class TopicSearch(Base):
+  __tablename__ = "topic_searches"
+  
+  id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
+  )
+  topic_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("topics.id", ondelete="CASCADE"),
+    nullable=False,
+    index=True,
+  )
+  keywords: Mapped[str] = mapped_column(String(512), nullable=False)  
+  total_videos: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+  
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
+  ran_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+  
+  topic: Mapped["Topic"] = relationship(back_populates="seraches")
+  
+
 class Author(Base):
   __tablename__ = "authors"
   

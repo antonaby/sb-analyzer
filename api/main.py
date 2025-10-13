@@ -3,11 +3,12 @@ from uuid import UUID
 from fastapi import Depends, FastAPI, Query
 from celery.result import AsyncResult
 from dotenv import load_dotenv
-from api.models import ApidojoScrapperRun, ApidojoCollectUrls
+from api.models import ApidojoScrapperRun, ApidojoCollectUrls, CreateTopicRequest
 from sqlalchemy.ext.asyncio import AsyncSession
+from db.repositories.topics import TopicRepository
 from worker.tasks import run_apidojo_search, run_apidojo_collect_urls, process_video
 from worker.main import worker_app
-from db.conf import create_db_engine, get_async_session
+from db.conf import create_db_engine, get_async_session, test_db_conn
 from db.repositories.videos import VideoRepository
 
 load_dotenv()
@@ -22,9 +23,25 @@ async def get_async_db():
     yield session
 
 
+def get_topic_repo(session: AsyncSession = Depends(get_async_db)) -> TopicRepository:
+  return TopicRepository(session)
+
+
 @app.get("/health")
-async def health():
-  return {"ok": True}
+async def health(db: AsyncSession = Depends(get_async_db)):
+  result = await test_db_conn(db)
+  db_status = result is not None and result == 1
+  
+  return {
+    "db": db_status
+  }
+
+
+@app.post("/topics")
+async def new_topic(request: CreateTopicRequest, topic_repo: TopicRepository = Depends(get_topic_repo)):
+  topic = await topic_repo.create_topic(request.name)
+  await topic_repo.commit()
+  return topic 
 
 
 @app.post("/tiktok/apidojo/run")
