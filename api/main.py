@@ -44,9 +44,10 @@ async def new_topic(request: CreateTopicRequest, topic_repo: TopicRepository = D
   return topic 
 
 
-@app.post("/tiktok/apidojo/run")
+@app.post("/apidojo/serach")
 def run_tiktok_scrapper(run: ApidojoScrapperRun):
   job = run_apidojo_search.delay( # type: ignore
+    topic_id=run.topic_id,                                 
     keywords=run.keywords, 
     date_range=run.date_range, 
     sort_type=run.sort_type, 
@@ -60,9 +61,10 @@ def run_tiktok_scrapper(run: ApidojoScrapperRun):
   }
 
 
-@app.post("/tiktok/apidojo/collect")
+@app.post("/apidojo/collect")
 def collect_author_videos(run: ApidojoCollectUrls):
   job = run_apidojo_collect_urls.delay( # type: ignore
+    topic_id=run.topic_id,
     urls=run.urls,
     max_items=run.max_items
   )

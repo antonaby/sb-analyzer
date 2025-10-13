@@ -5,8 +5,39 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from models.common import AuthorDetails, PostDetails
 from db.repositories.videos import VideoRepository, prepare_scraped_data
+from db.repositories.topics import TopicRepository
 from db.models import VideoSource
 
+
+class TopicErrorProcessor(Exception):
+  pass
+
+
+class NewSerachResult(TypedDict):
+  serach_id: UUID
+
+
+class TopicProcessor:
+  
+  def __init__(self, session_maker: async_sessionmaker[AsyncSession]):
+    self._db = session_maker
+    
+  async def new_search(self, topic_id: UUID, kind: str, search_data: dict) -> NewSerachResult:
+    async with self._db() as session:
+      topic_repo = TopicRepository(session)  
+      topic = await topic_repo.get_topic(topic_id)
+      if topic is None:
+        raise TopicErrorProcessor(f"Topic not found, id={topic_id}")
+      
+      search = await topic_repo.create_serach(topic, kind, search_data)
+      await session.commit()
+      
+    return {
+      "serach_id": search.id
+    }
+  
+  
+    
 
 class Result(TypedDict):
   author_id: UUID

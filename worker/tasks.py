@@ -13,7 +13,8 @@ from .main import worker_app
 
 loop = None
 apify_client = None
-async_session = None
+async_db = None
+topic_processor = None
 scraper_processor = None
 video_processor = None
 
@@ -25,7 +26,7 @@ def init_worker_process(**kwargs):
   from core.agents.video import ClipTaggerClient
   from core.agents.transcribe import LemonfoxClient
   from core.agents.summary import SummaryAgent
-  from core.processors.scraper import ScraperProcessor
+  from core.processors.scraper import ScraperProcessor, TopicProcessor
   from core.processors.video import VideoProcessor
   from db.conf import create_db_engine, get_async_session
   
@@ -37,19 +38,22 @@ def init_worker_process(**kwargs):
   global apify_client
   apify_client = ApifyClient()
   
-  global async_session
+  global async_db
   engine = create_db_engine()
-  async_session = get_async_session(engine)
+  async_db = get_async_session(engine)
+  
+  global topic_processor
+  topic_processor = TopicProcessor(async_db)
   
   global scraper_processor
-  scraper_processor = ScraperProcessor(async_session)
+  scraper_processor = ScraperProcessor(async_db)
   
   clip_tagger_client = ClipTaggerClient()
   lemonfox_client = LemonfoxClient()
   summary_agent = SummaryAgent()
   
   global video_processor
-  video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_session, "./videos")
+  video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_db, "./videos")
   
 
 @worker_shutting_down.connect
@@ -101,6 +105,7 @@ def save_video(author: AuthorDetails, post: PostDetails, process_new: bool = Tru
 
 @worker_app.task
 def run_apidojo_search(
+  topic_id: UUID,
   keywords: list[str], 
   date_range: DateRange,
   sort_type: SortType,
@@ -108,6 +113,7 @@ def run_apidojo_search(
   max_items: int = 1000
 ) -> ActorRun:
   return _run_apidojo_scrapper(
+    topic_id,
     "search",
     keywords=keywords, 
     date_range=date_range, 
@@ -118,11 +124,11 @@ def run_apidojo_search(
 
 
 @worker_app.task
-def run_apidojo_collect_urls(urls: list[str], max_items: int = 1000) -> ActorRun:
-  return _run_apidojo_scrapper("collect_videos_by_urls", urls=urls, max_items=max_items)
+def run_apidojo_collect_urls(topic_id: UUID, urls: list[str], max_items: int = 1000) -> ActorRun:
+  return _run_apidojo_scrapper(topic_id, "collect_videos_by_urls", urls=urls, max_items=max_items)
 
 
-def _run_apidojo_scrapper(func_name: str, **kwargs):
+def _run_apidojo_scrapper(topic_id: UUID, func_name: str, **kwargs):
   global loop
   if loop is None:
     raise RuntimeError("Asyncio loop not initialized")
@@ -130,6 +136,12 @@ def _run_apidojo_scrapper(func_name: str, **kwargs):
   global apify_client
   if apify_client is None:
     raise RuntimeError("Apify client not initialized")
+  
+  global topic_processor
+  if topic_processor is None:
+    raise RuntimeError("TopicProcessor client not initialized")
+  
+  loop.run_until_complete(topic_processor.new_search(topic_id, func_name, kwargs))
   
   apidojo_client = apify_client.apidojo_tiktok_scrapper()
   

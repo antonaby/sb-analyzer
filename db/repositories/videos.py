@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 
 from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource
+from db.repositories.common import BaseAsyncRepo
 
 
 def prepare_meta(
@@ -43,7 +44,7 @@ def prepare_scraped_data(data: dict = {}) -> ScrapedData:
   return ScrapedData(data=data)
 
 
-class VideoRepository:
+class VideoRepository(BaseAsyncRepo):
   
   def __init__(self, session: AsyncSession):
     self._session = session
@@ -129,4 +130,6 @@ class VideoRepository:
 
     videos = await self._session.scalars(stmt)
     return videos.all()
- 
+  
+  async def commit(self):
+    await self._session.commit()
