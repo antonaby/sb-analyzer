@@ -3,8 +3,8 @@ from uuid import UUID
 
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, literal_column
-from sqlalchemy.orm import joinedload
+from sqlalchemy import select, func, literal_column, desc
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 
@@ -127,11 +127,44 @@ class VideoRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one()
   
+  async def get_video_annotations_by_author(self, author_id: UUID, kinds: list[AnnotationKind], max_videos: int = 100):
+    stmt = (
+      select(
+        Video.id,
+        Video.url,
+        Video.uploaded_at,
+        Video.likes,
+        Video.views,
+        VideoAnnotation.id, 
+        VideoAnnotation.kind,
+        VideoAnnotation.value,
+        VideoAnnotation.created_at
+      ).
+      join(Video).
+      where(
+        (VideoAnnotation.kind.in_(kinds)) & (Video.author_id == author_id)
+      ).
+      order_by(desc(Video.uploaded_at)).
+      limit(max_videos)
+    )
     
-  async def get_video_by_id(self, video_id: UUID, load_scraped_data: bool = True) -> Video | None:
+    result = await self._session.execute(stmt)
+    return result.all()
+    
+  async def get_video_by_id(
+    self, 
+    video_id: UUID, 
+    with_scraped_data: bool = False, 
+    with_annotations: bool = False, 
+    with_meta: bool = False
+  ) -> Video | None:
     stmt = select(Video).where(Video.id == video_id)
-    if load_scraped_data:
+    if with_scraped_data:
       stmt = stmt.options(joinedload(Video.scraped_data))
+    if with_annotations:
+      stmt = stmt.options(selectinload(Video.annotations))
+    if with_meta:
+      stmt = stmt.options(selectinload(Video.video_meta))
       
     result = await self._session.execute(stmt)
     return result.scalar_one_or_none()
