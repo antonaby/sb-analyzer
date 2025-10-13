@@ -7,6 +7,7 @@ from sqlalchemy import (
   Enum,
   ForeignKey,
   Integer,
+  BigInteger,
   String,
   Text,
   Index,
@@ -64,6 +65,10 @@ class Author(Base):
   source: Mapped[VideoSource] = mapped_column(
     Enum(VideoSource, name="video_source", native_enum=True), nullable=False
   )
+  verified: Mapped[bool] = mapped_column(Boolean, nullable=True, server_default=text("false"))
+  followers: Mapped[int] = mapped_column(Integer, nullable=True, server_default=text("0"))
+  total_videos: Mapped[int] = mapped_column(Integer, nullable=True, server_default=text("0"))
+  
   created_at: Mapped[datetime] = mapped_column(
     DateTime(timezone=True),
     default=func.now(), nullable=False
@@ -99,6 +104,12 @@ class Video(Base):
     nullable=False,
     index=True,
   )
+  
+  uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+  likes: Mapped[int] = mapped_column(BigInteger, nullable=True, server_default=text("0"))
+  views: Mapped[int] = mapped_column(BigInteger, nullable=True, server_default=text("0"))
+  comments: Mapped[int] = mapped_column(Integer, nullable=True, server_default=text("0"))
+  
   revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
   extra_data: Mapped[dict | None] = mapped_column(JSONB, default=None)
   

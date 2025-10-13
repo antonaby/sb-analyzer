@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import TypedDict, cast
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -24,10 +25,26 @@ class ScraperProcessor:
       repo = VideoRepository(session)
       
       author_source = VideoSource(author['author_from'])
-      author_model, is_author_new = await repo.upsert_author(author['url'], author_source)
+      author_model, is_author_new = await repo.upsert_author(
+        author['url'], 
+        author_source, 
+        author['verified'], 
+        author['followers'], 
+        author['total_videos']
+      )
       
       video_source = VideoSource(post['post_from'])
-      video_model, is_video_new = await repo.upsert_video(post['url'], video_source, author_model)
+      uploaded_at = datetime.fromisoformat(post["uploaded_at_iso"])
+      
+      video_model, is_video_new = await repo.upsert_video(
+        post['url'], 
+        video_source, 
+        author_model, 
+        uploaded_at, 
+        post["likes"], 
+        post["views"], 
+        post["comments"]
+      )
       video_model.scraped_data = prepare_scraped_data(cast(dict, post))
       
       await session.commit()

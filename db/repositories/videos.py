@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, literal_column
 from sqlalchemy.orm import joinedload
@@ -46,10 +47,14 @@ class VideoRepository:
   def __init__(self, session: AsyncSession):
     self._session = session
     
-  async def upsert_author(self, url: str, source: VideoSource) -> tuple[Author, bool]:
+  async def upsert_author(
+    self, 
+    url: str, source: VideoSource, 
+    verified: bool | None, followers: int | None, total_videos: int | None) -> tuple[Author, bool]:
+    
     stmt = (
       pg_insert(Author)
-      .values(url=url, source=source)
+      .values(url=url, source=source, verified=verified, followers=followers, total_videos=total_videos)
       .on_conflict_do_update(   # type: ignore
         index_elements=[Author.url],
         set_={
@@ -66,10 +71,13 @@ class VideoRepository:
     
     return author, is_new
   
-  async def upsert_video(self, url: str, source: VideoSource, author: Author) -> tuple[Video, bool]:
+  async def upsert_video(
+    self, 
+    url: str, source: VideoSource, author: Author, 
+    uploaded_at: datetime, likes: int, views: int, comments: int) -> tuple[Video, bool]:
     stmt = (
       pg_insert(Video)
-      .values(url=url, source=source, author_id=author.id)
+      .values(url=url, source=source, author_id=author.id, uploaded_at=uploaded_at, likes=likes, views=views, comments=comments)
       .on_conflict_do_update(   # type: ignore
         index_elements=[Author.url],
         set_={

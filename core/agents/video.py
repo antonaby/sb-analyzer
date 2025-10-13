@@ -142,6 +142,7 @@ class VideoData:
     self._max_tokens = max_tokens
     self._frame_cache: list[Frame] = []
     self._cache_lock = asyncio.Lock()
+    self._processing_lock = asyncio.Lock()
   
   def get_duration(self) -> float:
     return self._video_file.get_duration()
@@ -155,7 +156,9 @@ class VideoData:
       return cache_copy
     
   async def get_frame(self, timetamp: float) -> Frame:
-    frame = self._video_file.get_frame(timetamp)  
+    async with self._processing_lock:
+      frame = self._video_file.get_frame(timetamp)  
+    
     return await self._frame_content(frame)
   
   async def get_frames(self, interval: float = 10, **kwargs) -> list[Frame]:

@@ -1,10 +1,11 @@
 import asyncio
+from datetime import datetime
 from typing import cast
 from uuid import UUID
 from celery import group
 from celery.signals import worker_process_init, worker_shutting_down
 
-from models.apidojo import DateRange, SortType
+from models.apidojo import DateRange, SortType, TikTokPost
 from models.apify import ActorRun
 from models.common import AuthorDetails, PostDetails
 from core.utils import is_url
@@ -133,25 +134,35 @@ def _run_apidojo_scrapper(func_name: str, **kwargs):
   apidojo_client = apify_client.apidojo_tiktok_scrapper()
   
   func = getattr(apidojo_client, func_name)
+  
+  posts: list[TikTokPost]
   run, posts = loop.run_until_complete(
     func(**kwargs)
   )
   
   if len(posts) == 0:
     return run
-  
+
   tasks = []
   
   for post in posts:
-    author_url = post.get("channel", {}).get("url", "")
+    channel = post.get("channel", {})
+    author_url = channel.get("url", "")
     video_url = post.get("postPage", "")
     download_url = post.get("video", {}).get("url", "")
     
     if is_url(author_url) and is_url(video_url) and is_url(download_url):
+      uploaded_at_str = post.get("uploadedAtFormatted", "1970-01-01T00:00:00+00:00")
+      uploaded_at = datetime.fromisoformat(uploaded_at_str.replace("Z", "+00:00"))
+      
       author_details: AuthorDetails = {
         "url": author_url,
-        "author_from": "tiktok"
+        "author_from": "tiktok",
+        "verified": channel.get("verified", None),
+        "followers": channel.get("followers", None),
+        "total_videos": channel.get("videos", None),
       }
+      
       post_details: PostDetails = {
         "url": video_url,
         "download_url": download_url,
@@ -159,6 +170,10 @@ def _run_apidojo_scrapper(func_name: str, **kwargs):
         "title": post.get("text", "no title"),
         "description": "",
         "hashtags": post.get("hashtags", []),
+        "uploaded_at_iso": uploaded_at.isoformat(),
+        "likes": post.get("likes", 0),
+        "views": post.get("views", 0),
+        "comments": post.get("comments", 0),
         "scraper": "apidojo",
         "source": cast(dict, post)
       }
