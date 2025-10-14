@@ -23,9 +23,10 @@ video_processor = None
 def init_worker_process(**kwargs):
   from dotenv import load_dotenv
   from core.apify.client import ApifyClient
-  from core.agents.video import ClipTaggerClient
-  from core.agents.transcribe import LemonfoxClient
+  from core.video import ClipTaggerClient
+  from core.transcribe import LemonfoxClient
   from core.agents.summary import SummaryAgent
+  from core.agents.tpl import TemplateManager
   from core.processors.scraper import ScraperProcessor, TopicProcessor
   from core.processors.video import VideoProcessor
   from db.conf import create_db_engine, get_async_session
@@ -50,7 +51,7 @@ def init_worker_process(**kwargs):
   
   clip_tagger_client = ClipTaggerClient()
   lemonfox_client = LemonfoxClient()
-  summary_agent = SummaryAgent()
+  summary_agent = SummaryAgent(TemplateManager())
   
   global video_processor
   video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_db, "./videos")

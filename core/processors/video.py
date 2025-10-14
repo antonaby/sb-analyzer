@@ -5,8 +5,8 @@ from uuid import UUID
 from datetime import datetime, timezone
 
 from core.agents.summary import SummaryAgent
-from core.agents.transcribe import AudioData, LemonfoxClient, Transcription
-from core.agents.video import ClipTaggerClient, VideoData, Frame
+from core.transcribe import AudioData, LemonfoxClient, Transcription
+from core.video import ClipTaggerClient, VideoData, Frame
 from core.file import AudioFile, UrlVideoSource, VideoFile
 from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
@@ -63,7 +63,7 @@ class VideoProcessor:
   async def _find_video(self, video_id: UUID) -> Video | None:
     async with self._db() as session:
       repo = VideoRepository(session)
-      return await repo.get_video_by_id(video_id)
+      return await repo.get_video_by_id(video_id, with_scraped_data=True)
     
   async def _create_summary(
     self,

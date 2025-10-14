@@ -1,15 +1,13 @@
 import asyncio
 from dataclasses import dataclass
 import logging
-import os
-from typing import TypedDict
-from jinja2 import Environment, FileSystemLoader
-from pydantic import BaseModel
+from typing import TypedDict, cast
 from pydantic_ai import Agent, RunContext, ModelSettings
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
-from core.agents.video import Frame, VideoData
-from core.agents.transcribe import AudioData
+from core.agents.tpl import TemplateManager
+from core.video import Frame, VideoData
+from core.transcribe import AudioData
 from models.common import PostDetails, VideoSummary
 from core.utils import var_or_exception
 
@@ -83,9 +81,10 @@ class UserPromptContext(TypedDict):
 
 class SummaryAgent:
   
-  def __init__(self, model_name = GOOGLE_DEFAULT_MODEL):
+  def __init__(self, tpl_mgr: TemplateManager, model_name = GOOGLE_DEFAULT_MODEL):
     self._log = logging.getLogger("app.videosummary")
-    self._load_template()
+    self._tpl_mgr = tpl_mgr
+    
     self._create_agent(model_name)
   
   def _create_agent(self, model_name: str):
@@ -112,12 +111,7 @@ class SummaryAgent:
       return await ctx.deps.video.get_frame(time_sec)
     
     self._agent = agent
-  
-  def _load_template(self):
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    env = Environment(loader=FileSystemLoader(script_dir))
-    self._user_prompt = env.get_template("summary_tmp.jinja")
-    
+
   async def summary(self, post: PostDetails, video: VideoData, audio: AudioData) -> VideoSummary:
     basic_frames, transcription = await asyncio.gather(
       video.get_n_frames(),
@@ -133,7 +127,7 @@ class SummaryAgent:
       "transcriptions": [t.model_dump() for t in transcription]
     }
     
-    user_prompt = self._user_prompt.render(context)
+    user_prompt = self._tpl_mgr.render("author", cast(dict, context))
     res = await self._agent.run(
       user_prompt,
       deps=SummaryAgentDeps(video=video, audio=audio),

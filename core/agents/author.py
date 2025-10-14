@@ -1,14 +1,13 @@
 import logging
-import os
-from typing import List, Literal, Optional, TypedDict
+from typing import List, Literal, Optional, TypedDict, cast
 from uuid import UUID
 
-from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ModelSettings
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 
+from core.agents.tpl import TemplateManager
 from core.utils import var_or_exception
 from db.repositories.videos import VideoDataLoader, VideoData
 from db.repositories.topics import TopicLoader, TopicData
@@ -96,8 +95,9 @@ class UserPromptContext(TypedDict):
 
 class AuthorAnalyzer:
 
-  def __init__(self, model_name = GOOGLE_DEFAULT_MODEL):
+  def __init__(self, tpl_mgr: TemplateManager, model_name = GOOGLE_DEFAULT_MODEL):
     self._log = logging.getLogger("app.authoranalyzer")
+    self._tpl_mgr = tpl_mgr
     
     key = var_or_exception(GOOGLE_API_KEY_VAR)
     
@@ -110,13 +110,6 @@ class AuthorAnalyzer:
     )
     self._agent = agent
     
-    self._load_template()
-    
-  def _load_template(self):
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    env = Environment(loader=FileSystemLoader(script_dir))
-    self._user_prompt = env.get_template("author_tmp.jinja")
-    
   async def analyze(self, video_loader: VideoDataLoader, topic_loader: TopicLoader) -> TopicsResponse:
     video_data = await video_loader.load_video_data(max_videos=20)
     topics = await topic_loader.load_topics()
@@ -126,7 +119,7 @@ class AuthorAnalyzer:
       "topics": topics
     }
     
-    user_prompt = self._user_prompt.render(context)
+    user_prompt = self._tpl_mgr.render("author", cast(dict, context))
     run = await self._agent.run(
       user_prompt,
       model_settings=ModelSettings(temperature=0.1)
