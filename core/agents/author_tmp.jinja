@@ -1,10 +1,16 @@
-You are given a list of video summaries with details of an author. Analyze them and identify topics that recure the most.
-  
-List of summaries:
+Here are the inputs.
 
+Topics catalog:
+{% for topic in topics %}
+Topic ID: {{ topic.id }}
+Name: {{ topic.name }}
+{{ "-" * 80 }}
+{% endfor %}
+
+List of videos:
 {% for video in videos %}
 Video ID: {{ video.video_id }}
-Source: {{ video.source.value }}
+Source: {{ video.source }}
 Title: {{ video.title }}
 Description: {{ video.description }}
 Uploaded At: {{ video.uploaded_at_iso.isoformat() }}

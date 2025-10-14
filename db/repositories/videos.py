@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource, VideoSearch
 from db.repositories.common import BaseAsyncRepo
+from models.common import VideoData
 
 
 def prepare_meta(
@@ -198,23 +199,6 @@ class VideoRepository(BaseAsyncRepo):
     await self._session.commit()
 
 
-class VideoData(TypedDict):
-  video_id: UUID
-  source: VideoSource
-  title: str
-  description: str
-  uploaded_at_iso: datetime
-  likes: int
-  views: int
-  comments: int
-  hashtags: list[str]
-  meta_summary: list[str]
-  meta_summary_video_type: list[str]
-  summary: str
-  summary_synopsis: list[str]
-  transcription: list[str]
-
-
 class VideoDataLoader:
   
   def __init__(self, author_id: UUID, video_repo: VideoRepository):
@@ -248,7 +232,7 @@ class VideoDataLoader:
       
       video_data: VideoData = {
         "video_id": video.id,
-        "source": video.source,
+        "source": video.source.value,
         "uploaded_at_iso": video.uploaded_at,
         "title": title,
         "description": description,

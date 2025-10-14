@@ -27,14 +27,32 @@ class PostDetails(TypedDict):
   comments: int
   scraper: str
   source: dict
-  
+
+
+class TopicData(TypedDict):
+  id: UUID
+  name: str
+
+
+class VideoData(TypedDict):
+  video_id: UUID
+  source: str
+  title: str
+  description: str
+  uploaded_at_iso: datetime
+  likes: int
+  views: int
+  comments: int
+  hashtags: list[str]
+  meta_summary: list[str]
+  meta_summary_video_type: list[str]
+  summary: str
+  summary_synopsis: list[str]
+  transcription: list[str]
+
 
 class VideoSummary(BaseModel):
   main_idea: str
   theme: list[str]
   video_type: list[str]
   synopsis: list[str]
-  
-
-class AuthorSummary(BaseModel):
-  topics: list[str]
