@@ -1,6 +1,7 @@
 import logging
 import os
 from typing import List, Literal, Optional, TypedDict
+from uuid import UUID
 
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel, Field
@@ -36,6 +37,10 @@ Similarity & thresholds:
 - Strong match (map to existing): same core concept, even if phrased differently.
 - Weak match (create new): only partial overlap or different core concept.
 - If unsure, choose new and set confidence lower (e.g., 0.55-0.7).
+- Semantic relevance first. A topic from the catalog must describe the same central concept as the cluster. For example:
+  a) "Dog training" ≠ "Cat behavior (different species → different topic)
+  b) "Cat videos" ≈ "Cat behavior" (same domain, minor variance acceptable)
+  c) "Dog care" ≠ "Animal welfare" (only match if the description explicitly generalizes animals, not a specific one)
 
 Process (what you must do before output):
 - Normalize descriptions (lowercase, strip boilerplate, ignore links/hashtags/usernames) and extract key phrases (n-grams, named entities, technical terms).
@@ -43,30 +48,45 @@ Process (what you must do before output):
 - Match each discovered topic against the catalog topic names using semantic similarity (consider synonyms, hyponyms, acronyms).
 - Decide: If a clear existing match, set decision="existing" and include its topic_id. Otherwise set decision="new" and propose proposed_topic_name.
 
-Assemble JSON strictly matching the schema.
+Assemble JSON strictly matching the schema:
+{
+  "topics": [
+    {
+      "canonical_topic": "string",              // your canonical label for the cluster
+      "decision": "existing" | "new",           // whether the topic is in the canalog or new
+      "topic_id": "UUID | null",                // existing catalog id if decision=existing, else null
+      "proposed_topic_name": "string | null",   // if decision=new, suggest a concise name; else null
+      "supporting_videos": [                    // which descriptions support this topic
+        { "video_id": UUID, "evidence": "very short phrase from description" }
+      ],
+      "alternates_considered": [                // optional: weaker candidates from catalog
+        { "topic_id": "string", "similarity_hint": "why it was weaker" }
+      ],
+      "confidence": 0.0                         // 0-1 confidence in the decision
+    }
+  ]
+}
 """
 
 class SupportingVideo(BaseModel):
-  video_id: int = Field(..., description="Id of the video in the input list")
-  evidence: str = Field(..., description="Short phrase from description supporting the topic")
+  video_id: UUID
+  evidence: str
 
 class AlternateConsidered(BaseModel):
-  topic_id: str = Field(..., description="Topic ID from catalog that was considered but not chosen")
-  similarity_hint: str = Field(..., description="Explanation of why this candidate was weaker")
+  topic_id: UUID
+  similarity_hint: str
 
 class TopicDecision(BaseModel):
-  canonical_topic: str = Field(..., description="Canonical label for the discovered topic cluster")
-  decision: Literal["existing", "new"] = Field(..., description="Whether it maps to an existing topic or is new")
-  topic_id: Optional[str] = Field(None, description="Existing catalog ID if decision=existing, else null")
-  proposed_topic_name: Optional[str] = Field(None, description="Suggested concise name if decision=new, else null")
-  supporting_videos: List[SupportingVideo] = Field(..., description="List of videos supporting this topic")
-  alternates_considered: Optional[List[AlternateConsidered]] = Field(
-      default_factory=list, description="Optional weaker catalog candidates considered"
-  )
-  confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in the mapping decision (0-1)")
+  canonical_topic: str
+  decision: Literal["existing", "new"]
+  topic_id: Optional[UUID]
+  proposed_topic_name: Optional[str]
+  supporting_videos: List[SupportingVideo]
+  alternates_considered: Optional[List[AlternateConsidered]] = Field(default_factory=list)
+  confidence: float
 
 class TopicsResponse(BaseModel):
-  topics: List[TopicDecision] = Field(..., description="List of discovered or matched topics")
+  topics: List[TopicDecision]
 
 
 class UserPromptContext(TypedDict):
@@ -98,7 +118,7 @@ class AuthorAnalyzer:
     self._user_prompt = env.get_template("author_tmp.jinja")
     
   async def analyze(self, video_loader: VideoDataLoader, topic_loader: TopicLoader) -> TopicsResponse:
-    video_data = await video_loader.load_video_data()
+    video_data = await video_loader.load_video_data(max_videos=20)
     topics = await topic_loader.load_topics()
     
     context: UserPromptContext = {

@@ -205,7 +205,7 @@ class VideoDataLoader:
     self._author_id = author_id
     self._video_repo = video_repo
 
-  async def load_video_data(self) -> list[VideoData]:
+  async def load_video_data(self, max_videos: int = 100) -> list[VideoData]:
     videos = await self._video_repo.get_videos_by_author(
       self._author_id, 
       load_annotations=True, 
@@ -221,7 +221,8 @@ class VideoDataLoader:
         MetaSource.title, 
         MetaSource.description, 
         MetaSource.hashtag
-      ]
+      ],
+      max_videos=max_videos
     )
     
     video_data_list: list[VideoData] = []
