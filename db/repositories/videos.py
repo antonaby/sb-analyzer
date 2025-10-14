@@ -1,10 +1,10 @@
-from typing import Any
+from typing import Any, Sequence, TypedDict
 from uuid import UUID
 
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, literal_column, desc
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload, selectinload, with_loader_criteria
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 
@@ -127,29 +127,41 @@ class VideoRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one()
   
-  async def get_video_annotations_by_author(self, author_id: UUID, kinds: list[AnnotationKind], max_videos: int = 100):
+  async def get_videos_by_author(
+    self, 
+    author_id: UUID, 
+    load_annotations: bool = False,
+    annotations_to_load: list[AnnotationKind] = [],
+    load_meta: bool = False,
+    meta_to_load: list[MetaSource] = [],
+    max_videos: int = 100,
+    sort_desc: bool = True
+  ) -> Sequence[Video]:
+    
+    sort_by = desc(Video.uploaded_at) if sort_desc else Video.uploaded_at
     stmt = (
-      select(
-        Video.id,
-        Video.url,
-        Video.uploaded_at,
-        Video.likes,
-        Video.views,
-        VideoAnnotation.id, 
-        VideoAnnotation.kind,
-        VideoAnnotation.value,
-        VideoAnnotation.created_at
-      ).
-      join(Video).
-      where(
-        (VideoAnnotation.kind.in_(kinds)) & (Video.author_id == author_id)
-      ).
-      order_by(desc(Video.uploaded_at)).
+      select(Video).
+      where(Video.author_id == author_id).
+      order_by(sort_by).
       limit(max_videos)
     )
     
+    if load_annotations:
+      stmt = stmt.options(selectinload(Video.annotations))
+      if len(annotations_to_load) > 0:
+        stmt = stmt.options(
+          with_loader_criteria(VideoAnnotation, VideoAnnotation.kind.in_(annotations_to_load))
+        )
+    
+    if load_meta:
+      stmt = stmt.options(selectinload(Video.video_meta))
+      if len(meta_to_load) > 0:
+        stmt = stmt.options(
+          with_loader_criteria(VideoMeta, VideoMeta.source.in_(meta_to_load))
+        )
+    
     result = await self._session.execute(stmt)
-    return result.all()
+    return result.scalars().all()
     
   async def get_video_by_id(
     self, 
@@ -184,3 +196,117 @@ class VideoRepository(BaseAsyncRepo):
   
   async def commit(self):
     await self._session.commit()
+
+
+class VideoData(TypedDict):
+  video_id: UUID
+  source: VideoSource
+  title: str
+  description: str
+  uploaded_at_iso: datetime
+  likes: int
+  views: int
+  comments: int
+  hashtags: list[str]
+  meta_summary: list[str]
+  meta_summary_video_type: list[str]
+  summary: str
+  summary_synopsis: list[str]
+  transcription: list[str]
+
+
+class VideoDataLoader:
+  
+  def __init__(self, author_id: UUID, video_repo: VideoRepository):
+    self._author_id = author_id
+    self._video_repo = video_repo
+
+  async def load_video_data(self) -> list[VideoData]:
+    videos = await self._video_repo.get_videos_by_author(
+      self._author_id, 
+      load_annotations=True, 
+      annotations_to_load=[
+        AnnotationKind.summary, 
+        AnnotationKind.summary_synopsis, 
+        AnnotationKind.transcription
+      ],
+      load_meta=True, 
+      meta_to_load=[
+        MetaSource.summary, 
+        MetaSource.summary_video_type,
+        MetaSource.title, 
+        MetaSource.description, 
+        MetaSource.hashtag
+      ]
+    )
+    
+    video_data_list: list[VideoData] = []
+    for video in videos:
+      title, description, hashtags = self._get_post_meta(video)
+      meta_summary, meta_summary_video_type = self._get_video_meta(video)
+      summary, summary_synopsis, transcription = self._get_video_summary(video)
+      
+      video_data: VideoData = {
+        "video_id": video.id,
+        "source": video.source,
+        "uploaded_at_iso": video.uploaded_at,
+        "title": title,
+        "description": description,
+        "likes": video.likes,
+        "views": video.views,
+        "comments": video.comments,
+        "hashtags": hashtags, 
+        "meta_summary": meta_summary,
+        "meta_summary_video_type": meta_summary_video_type, 
+        "summary": summary,
+        "summary_synopsis": summary_synopsis,
+        "transcription": transcription
+      }
+    
+      video_data_list.append(video_data)
+    
+    return video_data_list
+
+  def _get_post_meta(self, video: Video) -> tuple[str, str, list[str]]:
+    title: str = "no title"
+    description: str = "no description"
+    hashtags: list[str] = []
+    
+    for m in video.video_meta:
+      if m.source == MetaSource.title:
+        title = m.value
+      if m.source == MetaSource.description:
+        description = m.value
+      if m.source == MetaSource.hashtag:
+        hashtags.append(m.value)
+        
+    return title, description, hashtags
+  
+  def _get_video_meta(self, video: Video) -> tuple[list[str], list[str]]:
+    summary: list[str] = []
+    summary_video_type: list[str] = []
+    
+    for m in video.video_meta:
+      if m.source == MetaSource.summary:
+        summary.append(m.value)
+      if m.source == MetaSource.summary_video_type:
+        summary_video_type.append(m.value)
+    
+    return summary, summary_video_type
+
+  def _get_video_summary(self, video: Video) -> tuple[str, list[str], list[str]]:
+    summary: str = "no summary"
+    summary_synopsis: list[str] = []
+    transcription: list[str] = []
+    
+    for a in video.annotations:
+      if a.kind == AnnotationKind.summary:
+        summary = a.value
+      if a.kind == AnnotationKind.summary_synopsis:
+        summary_synopsis.append(a.value)
+      if a.kind == AnnotationKind.transcription:
+        transcription.append(a.value)
+        
+    return summary, summary_synopsis, transcription
+    
+    

@@ -1,0 +1,42 @@
+You are given a list of video summaries with details of an author. Analyze them and identify topics that recure the most.
+  
+List of summaries:
+
+{% for video in videos %}
+Video ID: {{ video.video_id }}
+Source: {{ video.source.value }}
+Title: {{ video.title }}
+Description: {{ video.description }}
+Uploaded At: {{ video.uploaded_at_iso.isoformat() }}
+Number of Likes: {{ video.likes }}
+Number of Views: {{ video.views }}
+Number of Comments: {{ video.comments }}
+
+Hashtags:
+{% for tag in video.hashtags %}
+  - {{ tag }}
+{% endfor %}
+
+Theme:
+{% for item in video.meta_summary %}
+  - {{ item }}
+{% endfor %}
+Video Type:
+{% for item in video.meta_summary_video_type %}
+  - {{ item }}
+{% endfor %}
+
+Summary: {{ video.summary }}
+
+Summary Synopsis:
+{% for s in video.summary_synopsis %}
+  - {{ s }}
+{% endfor %}
+
+Transcription:
+{% for line in video.transcription %}
+  - {{ line }}
+{% endfor %}
+
+{{ "-" * 80 }}
+{% endfor %}

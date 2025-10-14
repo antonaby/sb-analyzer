@@ -34,3 +34,7 @@ class VideoSummary(BaseModel):
   theme: list[str]
   video_type: list[str]
   synopsis: list[str]
+  
+
+class AuthorSummary(BaseModel):
+  topics: list[str]
