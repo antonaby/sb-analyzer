@@ -1,35 +1,44 @@
-import logging
-from typing import List, Literal, Optional, TypedDict, cast
-from uuid import UUID
-
-from pydantic import BaseModel, Field
-from pydantic_ai import Agent, ModelSettings
-from pydantic_ai.models.google import GoogleModel
-from pydantic_ai.providers.google import GoogleProvider
-
-from core.agents.tpl import TemplateManager
-from core.utils import var_or_exception
-from db.repositories.videos import VideoDataLoader, VideoData
-from db.repositories.topics import TopicLoader, TopicData
-
-
-GOOGLE_API_KEY_VAR = "GOOGLE_API_KEY"
-GOOGLE_DEFAULT_MODEL = "gemini-2.5-flash-lite-preview-09-2025"
-
-
-SYSTEM_PROMPT = """
 You are a data labeling and ontology-mapping assistant. Your job:
-- Identify recurring topics across a set of video descriptions from one author.
+- Identify recurring topics across a set of video descriptions.
 - Map those topics to an existing topics catalog (id, name).
 - For each discovered topic, either return the existing topic id and name or propose a new, concise topic name if no catalog topic is sufficiently similar.
 
+Input Format:
+{
+  "videos": [
+    {
+      "video_id": "00000000-0000-0000-0000-000000000000",
+      "source": "...",
+      "title": "...",
+      "description": "...",
+      "uploaded_at_iso": "2025-10-15T10:23:45Z",
+      "likes": 0,
+      "views": 0,
+      "comments": 0,
+      "hashtags": ["...", "..."],
+      "topics": ["topic 1", "topic 2"],
+      "label": "...",
+      "synopsis": "...",
+      "actions": ["...", "..."],
+      "transcription": ["...", "..."]
+    }
+  ],
+  "topics": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "..."
+    }
+  ]
+}
+
 Rules:
+- Prioritize synopsis evidence. Use topics provided in videos only to add a small bonus; ignore them if contradicted.
 - Treat the provided catalog as authoritative. Prefer mapping to an existing topic when meaning clearly overlaps.
 - Consider semantic equivalence, synonyms, plural/singular, abbreviations, and common variants (e.g., “LLMs”, “large language models”, “foundation models”).
 - Be conservative about creating new topics. Only propose a new one when no existing catalog topic covers the same concept.
 - If multiple catalog topics could fit, pick the best single match (highest semantic overlap) and note alternates with lower confidence.
 - Use short, specific names for proposed new topics (≤ 5 words when possible).
-- Focus on recurring themes: do not create a “topic” that appears only once unless it's clearly central to the author's content.
+- Focus on recurring themes: do not create a "topic" that appears only once unless it's clearly central to the author's content.
 - Keep reasoning internal; output must be valid JSON conforming to the schema below. Do not include extra text.
 
 Similarity & thresholds:
@@ -65,68 +74,3 @@ Assemble JSON strictly matching the schema:
     }
   ]
 }
-"""
-
-class SupportingVideo(BaseModel):
-  video_id: UUID
-  evidence: str
-
-class AlternateConsidered(BaseModel):
-  topic_id: UUID
-  similarity_hint: str
-
-class TopicDecision(BaseModel):
-  canonical_topic: str
-  decision: Literal["existing", "new"]
-  topic_id: Optional[UUID]
-  proposed_topic_name: Optional[str]
-  supporting_videos: List[SupportingVideo]
-  alternates_considered: Optional[List[AlternateConsidered]] = Field(default_factory=list)
-  confidence: float
-
-class TopicsResponse(BaseModel):
-  topics: List[TopicDecision]
-
-
-class UserPromptContext(TypedDict):
-  videos: list[VideoData]
-  topics: list[TopicData]
-
-
-class AuthorAnalyzer:
-
-  def __init__(self, tpl_mgr: TemplateManager, model_name = GOOGLE_DEFAULT_MODEL):
-    self._log = logging.getLogger("app.authoranalyzer")
-    self._tpl_mgr = tpl_mgr
-    
-    key = var_or_exception(GOOGLE_API_KEY_VAR)
-    
-    provider = GoogleProvider(api_key=key)
-    model = GoogleModel(model_name, provider=provider)
-    agent = Agent(
-      model,
-      instructions=SYSTEM_PROMPT,
-      output_type=TopicsResponse
-    )
-    self._agent = agent
-    
-  async def analyze(self, video_loader: VideoDataLoader, topic_loader: TopicLoader) -> TopicsResponse:
-    video_data = await video_loader.load_video_data(max_videos=20)
-    topics = await topic_loader.load_topics()
-    
-    context: UserPromptContext = {
-      "videos": video_data,
-      "topics": topics
-    }
-    
-    user_prompt = self._tpl_mgr.render("author", cast(dict, context))
-    run = await self._agent.run(
-      user_prompt,
-      model_settings=ModelSettings(temperature=0.1)
-    )
-    
-    usage = run.usage()
-    self._log.debug(f"Finish: summary request, input_tokens={usage.input_tokens}, output_tokens={usage.output_tokens}")
-    
-    return run.output
-  

@@ -63,7 +63,7 @@ class TopicLoader:
     
     return [
       {
-        "id": t.id,
+        "id": str(t.id),
         "name": t.name
       } 
       for t in topics

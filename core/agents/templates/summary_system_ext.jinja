@@ -16,9 +16,15 @@ Once you have enough information, produce the final structured JSON output.
 Input Format:
 {
   "metadata": {
+    "post_from": "e.g. TikTok",
     "title": "...",
+    "description": "...",
     "hashtags": ["..."],
-    "description": "..."
+    "duration": 5.6, // float number, seconds 
+    "uploaded_at_iso": "date in iso format",
+    "likes": 100,
+    "views": 100,
+    "comments": 100
   },
   "frames": [
     {
@@ -59,7 +65,7 @@ Once confident in understanding, output only the following JSON structure:
 Frame Retrieval Behavior:
 - If you need to inspect a missing or uncertain part of the video, do not guess. Instead, call the tool "get_frame".
 - Use it proactively to confirm key visuals, not only when ambiguities arise.
-- Check video duration, request frames only within the interval: start=0.1, end=%video durarion%-0.1
+- Pick video duration from the metadata, request frames only within the interval: start=0.1, end=%duration%-0.1.
 - After receiving the new frame analysis, continue reasoning and eventually produce the summary.
 
 When to Request Frames (strong cues):

@@ -3,7 +3,7 @@ from uuid import UUID
 
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, literal_column, desc
+from sqlalchemy import or_, select, func, literal_column, desc
 from sqlalchemy.orm import joinedload, selectinload, with_loader_criteria
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -136,13 +136,17 @@ class VideoRepository(BaseAsyncRepo):
     load_meta: bool = False,
     meta_to_load: list[MetaSource] = [],
     max_videos: int = 100,
-    sort_desc: bool = True
+    sort_desc: bool = True,
+    include_processing_errors: bool = False
   ) -> Sequence[Video]:
-    
     sort_by = desc(Video.uploaded_at) if sort_desc else Video.uploaded_at
+    conditions = [Video.author_id == author_id]
+    if not include_processing_errors:
+      conditions.append(or_(Video.processing_error.is_(False), Video.processing_error.is_(None)))
+      
     stmt = (
       select(Video).
-      where(Video.author_id == author_id).
+      where(*conditions).
       order_by(sort_by).
       limit(max_videos)
     )
@@ -210,14 +214,13 @@ class VideoDataLoader:
       self._author_id, 
       load_annotations=True, 
       annotations_to_load=[
-        AnnotationKind.summary, 
-        AnnotationKind.summary_synopsis, 
+        AnnotationKind.label, 
+        AnnotationKind.synopsis, 
         AnnotationKind.transcription
       ],
       load_meta=True, 
       meta_to_load=[
-        MetaSource.summary, 
-        MetaSource.summary_video_type,
+        MetaSource.topic, 
         MetaSource.title, 
         MetaSource.description, 
         MetaSource.hashtag
@@ -228,23 +231,23 @@ class VideoDataLoader:
     video_data_list: list[VideoData] = []
     for video in videos:
       title, description, hashtags = self._get_post_meta(video)
-      meta_summary, meta_summary_video_type = self._get_video_meta(video)
-      summary, summary_synopsis, transcription = self._get_video_summary(video)
+      topics = self._get_video_meta(video)
+      label, synopsis, actions, transcription = self._get_video_summary(video)
       
       video_data: VideoData = {
-        "video_id": video.id,
+        "video_id": str(video.id),
         "source": video.source.value,
-        "uploaded_at_iso": video.uploaded_at,
+        "uploaded_at_iso": video.uploaded_at.isoformat(),
         "title": title,
         "description": description,
         "likes": video.likes,
         "views": video.views,
         "comments": video.comments,
         "hashtags": hashtags, 
-        "meta_summary": meta_summary,
-        "meta_summary_video_type": meta_summary_video_type, 
-        "summary": summary,
-        "summary_synopsis": summary_synopsis,
+        "topics": topics,
+        "label": label,
+        "synopsis": synopsis,
+        "actions": actions,
         "transcription": transcription
       }
     
@@ -267,31 +270,31 @@ class VideoDataLoader:
         
     return title, description, hashtags
   
-  def _get_video_meta(self, video: Video) -> tuple[list[str], list[str]]:
-    summary: list[str] = []
-    summary_video_type: list[str] = []
+  def _get_video_meta(self, video: Video) -> list[str]:
+    topics: list[str] = []
     
     for m in video.video_meta:
-      if m.source == MetaSource.summary:
-        summary.append(m.value)
-      if m.source == MetaSource.summary_video_type:
-        summary_video_type.append(m.value)
+      if m.source == MetaSource.topic:
+        topics.append(m.value)
     
-    return summary, summary_video_type
+    return topics
 
-  def _get_video_summary(self, video: Video) -> tuple[str, list[str], list[str]]:
-    summary: str = "no summary"
-    summary_synopsis: list[str] = []
+  def _get_video_summary(self, video: Video) -> tuple[str, str, list[str], list[str]]:
+    label: str = "no label"
+    synopsis: str = "no synopsis"
+    actions: list[str] = []
     transcription: list[str] = []
     
     for a in video.annotations:
-      if a.kind == AnnotationKind.summary:
-        summary = a.value
-      if a.kind == AnnotationKind.summary_synopsis:
-        summary_synopsis.append(a.value)
+      if a.kind == AnnotationKind.label:
+        label = a.value
+      if a.kind == AnnotationKind.synopsis:
+        synopsis = a.value
+      if a.kind == AnnotationKind.action:
+        actions.append(a.value)
       if a.kind == AnnotationKind.transcription:
         transcription.append(a.value)
         
-    return summary, summary_synopsis, transcription
+    return label, synopsis, actions, transcription
     
     

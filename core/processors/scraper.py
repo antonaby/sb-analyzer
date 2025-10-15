@@ -61,6 +61,7 @@ class Result(TypedDict):
   new_author: bool
   video_id: UUID
   new_video: bool
+  processing_error: bool
 
 
 class ScraperProcessor:
@@ -103,5 +104,6 @@ class ScraperProcessor:
         "author_id": author_model.id,
         "new_author": is_author_new,
         "video_id": video_model.id,
-        "new_video": is_video_new
+        "new_video": is_video_new,
+        "processing_error": video_model.processing_error or False
       }

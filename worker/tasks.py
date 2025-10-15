@@ -98,7 +98,10 @@ def save_video(author: AuthorDetails, post: PostDetails, process_new: bool = Tru
     scraper_processor.run(author, post)
   )
   
-  if process_new and result.get("new_video", False):
+  if (
+    result.get("processing_error", False) 
+    or (process_new and result.get("new_video", False))
+  ):
     process_video.delay(result["video_id"]) # type: ignore
   
   return cast(dict, result)

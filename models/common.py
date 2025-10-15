@@ -30,22 +30,22 @@ class PostDetails(TypedDict):
 
 
 class TopicData(TypedDict):
-  id: UUID
+  id: str
   name: str
 
 
 class VideoData(TypedDict):
-  video_id: UUID
+  video_id: str
   source: str
   title: str
   description: str
-  uploaded_at_iso: datetime
+  uploaded_at_iso: str
   likes: int
   views: int
   comments: int
   hashtags: list[str]
-  meta_summary: list[str]
-  meta_summary_video_type: list[str]
-  summary: str
-  summary_synopsis: list[str]
+  topics: list[str]
+  label: str
+  synopsis: str
+  actions: list[str]
   transcription: list[str]
