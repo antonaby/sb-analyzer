@@ -49,10 +49,3 @@ class VideoData(TypedDict):
   summary: str
   summary_synopsis: list[str]
   transcription: list[str]
-
-
-class VideoSummary(BaseModel):
-  main_idea: str
-  theme: list[str]
-  video_type: list[str]
-  synopsis: list[str]

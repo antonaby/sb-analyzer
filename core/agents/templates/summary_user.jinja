@@ -1,17 +1,3 @@
-Here are the inputs.
+Here are the inputs:
 
-Video Metadata:
-- From: {{ post_from }}
-- Title: {{ title }}
-- Hashtags: {{ hashtags | join(", ") }}
-- Durations: {{ duration }}
-
-Frames Analyses:
-{% for frame in frames %}
-  {{ frame | tojson }}
-{% endfor %}
-
-Transcription:
-{% for trans in transcriptions %}
-  {{ trans | tojson }}
-{% endfor %}
+{{ input | tojson }}

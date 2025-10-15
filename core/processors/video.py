@@ -4,13 +4,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid import UUID
 from datetime import datetime, timezone
 
-from core.agents.summary import SummaryAgent
+from core.agents.summary import SummaryAgent, VideoSummary
 from core.transcribe import AudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, VideoData, Frame
 from core.file import AudioFile, UrlVideoSource, VideoFile
 from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
-from models.common import PostDetails, VideoSummary
+from models.common import PostDetails
 
 
 class VideoProcessorError(Exception):

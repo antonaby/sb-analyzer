@@ -2,13 +2,14 @@ import asyncio
 from dataclasses import dataclass
 import logging
 from typing import TypedDict, cast
+from openai import BaseModel
 from pydantic_ai import Agent, RunContext, ModelSettings
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 from core.agents.tpl import TemplateManager
 from core.video import Frame, VideoData
 from core.transcribe import AudioData
-from models.common import PostDetails, VideoSummary
+from models.common import PostDetails
 from core.utils import var_or_exception
 
 
@@ -20,13 +21,32 @@ GOOGLE_DEFAULT_MODEL = "gemini-2.5-flash-lite-preview-09-2025"
 class SummaryAgentDeps:
   video: VideoData
   audio: AudioData
-  
 
-class UserPromptContext(TypedDict):
+
+class VideoSummary(BaseModel):
+  label: str
+  synopsis: str
+  actions: list[str]
+  topics: list[str]
+  
+  class Config: # type: ignore
+    extra = "forbid"
+
+
+class VideoMetadata(TypedDict):
   post_from: str
   title: str
+  description: str
   hashtags: list[str]
   duration: float
+  uploaded_at_iso: str
+  likes: int
+  views: int
+  comments: int
+
+
+class UserPromptInput(TypedDict):
+  metadata: VideoMetadata
   frames: list[dict]
   transcriptions: list[dict]
 
@@ -46,7 +66,7 @@ class SummaryAgent:
     model = GoogleModel(model_name, provider=provider)
     agent = Agent(
       model,
-      instructions=self._tpl_mgr.render("summary_system", {}),
+      instructions=self._tpl_mgr.render("summary_system_ext", {}),
       deps_type=SummaryAgentDeps,
       output_type=VideoSummary
     )
@@ -70,16 +90,23 @@ class SummaryAgent:
       audio.get_transcription()
     )
     
-    context: UserPromptContext = {
-      "post_from": post.get("post_from", "tiktok"),
-      "title": post.get("text", "no title"),
-      "hashtags": post.get("hashtags", []),
-      "duration": video.get_duration(),
+    input: UserPromptInput = {
+      "metadata": {
+        "post_from": post.get("post_from", "tiktok"),
+        "title": post.get("text", "no title"),
+        "description": post.get("description", "no description"),
+        "hashtags": post.get("hashtags", []),
+        "duration": video.get_duration(),
+        "uploaded_at_iso": post.get("uploaded_at_iso", "unknown"),
+        "likes": post.get("likes", 0),
+        "views": post.get("views", 0),
+        "comments": post.get("comments", 0)
+      },
       "frames": [f.model_dump() for f in basic_frames],
       "transcriptions": [t.model_dump() for t in transcription]
     }
     
-    user_prompt = self._tpl_mgr.render("summary_user", cast(dict, context))
+    user_prompt = self._tpl_mgr.render("summary_user", {"input": input})
     res = await self._agent.run(
       user_prompt,
       deps=SummaryAgentDeps(video=video, audio=audio),
