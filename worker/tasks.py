@@ -19,7 +19,7 @@ scraper_processor = None
 video_processor = None
 video_series_processor = None
 
-
+# TODO: recreate agents every time as the my preserve state (it's better to pass agents to "run" func)
 @worker_process_init.connect
 def init_worker_process(**kwargs):
   from dotenv import load_dotenv

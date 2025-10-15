@@ -9,7 +9,7 @@ from core.agents.summary import SummaryAgent, VideoSummary
 from core.transcribe import AudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, VideoData, Frame
 from core.file import AudioFile, UrlVideoSource, VideoFile
-from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
+from db.models import Topic, Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository, VideoDataLoader
 from db.repositories.topics import TopicLoader, TopicRepository
 from models.common import PostDetails
@@ -316,10 +316,27 @@ class VideoSeriesProcessor:
       video_data = await video_loader.load(video_repo)
       topics = await topic_loader.load(topic_repo)
     
-    topic_desitions = await self._agent.run(video_data, topics)
+    topic_decisions = await self._agent.run(video_data, topics)
+    
+    async with self._db() as session:
+      topic_repo = TopicRepository(session)
+      
+      new_topics: list[Topic] = []
+      existing_topics: list[Topic] = []
+      
+      for t in topic_decisions.topics:
+        if t.decision == "new":
+          new_topic = await topic_repo.create_topic(t.proposed_topic_name or t.canonical_topic)
+          new_topics.append(new_topic)  
+        elif t.decision == "existing" and t.topic_id:
+          existing_topic = await topic_repo.get_topic(t.topic_id)
+          if existing_topic is not None:
+            existing_topics.append(existing_topic)
+          
+      await session.commit()
     
     return {
-      "existing_topics": [t.canonical_topic for t in topic_desitions.topics if t.decision == 'existing'],
-      "new_topics": [t.canonical_topic for t in topic_desitions.topics if t.decision == 'new']
+      "existing_topics": [t.canonical_topic for t in topic_decisions.topics if t.decision == 'existing'],
+      "new_topics": [t.canonical_topic for t in topic_decisions.topics if t.decision == 'new']
     }  
       
