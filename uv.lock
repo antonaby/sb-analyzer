@@ -2308,7 +2308,7 @@ ai = [
     { name = "openai", specifier = ">=1.109.1" },
     { name = "opencv-contrib-python", specifier = ">=4.12.0.88" },
     { name = "opencv-python-headless", specifier = ">=4.12.0.88" },
-    { name = "pydantic-ai-slim", extras = ["google", "openai"], specifier = ">=1.0.15" },
+    { name = "pydantic-ai-slim", extras = ["openai", "google"], specifier = ">=1.0.15" },
     { name = "yt-dlp", specifier = ">=2025.9.23" },
 ]
 api = [
