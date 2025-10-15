@@ -4,12 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from uuid import UUID
 from datetime import datetime, timezone
 
+from core.agents.series import VideoSeriesAgent
 from core.agents.summary import SummaryAgent, VideoSummary
 from core.transcribe import AudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, VideoData, Frame
 from core.file import AudioFile, UrlVideoSource, VideoFile
 from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
-from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
+from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository, VideoDataLoader
+from db.repositories.topics import TopicLoader, TopicRepository
 from models.common import PostDetails
 
 
@@ -83,7 +85,7 @@ class VideoProcessor:
       video_data = VideoData(self._ct_client, video_file)
       audio_data = AudioData(self._lm_client, audio_file)
       
-      summary = await self._agent.summary(post_data, video_data, audio_data)
+      summary = await self._agent.run(post_data, video_data, audio_data)
       return await self._save_video_details(video_model, post_data, video_data, audio_data, summary)
     except Exception as e:
       await self._set_error(video_model)
@@ -293,3 +295,31 @@ def _get_frame_meta(frame: Frame) -> dict:
     "frame_number": frame.frame_number,
     "time_sec": frame.time_sec
   }
+
+
+class VideoSeriesResult(TypedDict):
+  new_topics: list[str]
+  existing_topics: list[str]
+
+
+class VideoSeriesProcessor:
+  
+  def __init__(self, agent: VideoSeriesAgent, session_maker: async_sessionmaker[AsyncSession]):
+    self._agent = agent
+    self._db = session_maker
+    
+  async def run(self, video_loader: VideoDataLoader, topic_loader: TopicLoader) -> VideoSeriesResult:
+    async with self._db() as session:
+      video_repo = VideoRepository(session)
+      topic_repo = TopicRepository(session)
+      
+      video_data = await video_loader.load(video_repo)
+      topics = await topic_loader.load(topic_repo)
+    
+    topic_desitions = await self._agent.run(video_data, topics)
+    
+    return {
+      "existing_topics": [t.canonical_topic for t in topic_desitions.topics if t.decision == 'existing'],
+      "new_topics": [t.canonical_topic for t in topic_desitions.topics if t.decision == 'new']
+    }  
+      

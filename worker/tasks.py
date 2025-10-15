@@ -17,6 +17,7 @@ async_db = None
 topic_processor = None
 scraper_processor = None
 video_processor = None
+video_series_processor = None
 
 
 @worker_process_init.connect
@@ -26,12 +27,14 @@ def init_worker_process(**kwargs):
   from core.video import ClipTaggerClient
   from core.transcribe import LemonfoxClient
   from core.agents.summary import SummaryAgent
+  from core.agents.series import VideoSeriesAgent
   from core.agents.tpl import TemplateManager
   from core.processors.scraper import ScraperProcessor, TopicProcessor
-  from core.processors.video import VideoProcessor
+  from core.processors.video import VideoProcessor, VideoSeriesProcessor
   from db.conf import create_db_engine, get_async_session
   
   load_dotenv()
+  tpl_mgr = TemplateManager()
   
   global loop
   loop = asyncio.new_event_loop()
@@ -51,10 +54,14 @@ def init_worker_process(**kwargs):
   
   clip_tagger_client = ClipTaggerClient()
   lemonfox_client = LemonfoxClient()
-  summary_agent = SummaryAgent(TemplateManager())
+  summary_agent = SummaryAgent(tpl_mgr)
   
   global video_processor
   video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_db, "./videos")
+  
+  global video_series_processor
+  video_series_agent = VideoSeriesAgent(tpl_mgr)
+  video_series_processor = VideoSeriesProcessor(video_series_agent, async_db)
   
 
 @worker_shutting_down.connect
@@ -64,6 +71,29 @@ def clear_resources(sig, how, exitcode, **kwargs):
     loop.run_until_complete(loop.shutdown_asyncgens())
     loop.close()
 
+
+@worker_app.task
+def process_author_videos(author_id: UUID, max_videos: int) -> dict:
+  global loop
+  if loop is None:
+    raise RuntimeError("Asyncio loop not initialized")
+  
+  global video_series_processor
+  if video_series_processor is None:
+    raise RuntimeError("video Series processor not initialized")
+  
+  from db.repositories.videos import AuthorVideoLoader
+  from db.repositories.topics import AllTopicsLoader
+  
+  video_loader = AuthorVideoLoader(author_id, max_videos) 
+  topic_loader = AllTopicsLoader()
+  
+  result = loop.run_until_complete(
+    video_series_processor.run(video_loader, topic_loader)
+  )
+  
+  return cast(dict, result)
+  
 
 @worker_app.task
 def process_video(

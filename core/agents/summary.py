@@ -84,7 +84,7 @@ class SummaryAgent:
     
     self._agent = agent
 
-  async def summary(self, post: PostDetails, video: VideoData, audio: AudioData) -> VideoSummary:
+  async def run(self, post: PostDetails, video: VideoData, audio: AudioData) -> VideoSummary:
     basic_frames, transcription = await asyncio.gather(
       video.get_n_frames(),
       audio.get_transcription()

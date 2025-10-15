@@ -1,4 +1,5 @@
-from typing import Sequence, TypedDict
+from typing import Sequence
+from abc import ABC, abstractmethod
 from uuid import UUID
 from sqlalchemy import desc, insert, select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,15 +52,22 @@ class TopicRepository(BaseAsyncRepo):
   
   async def commit(self):
     await self._session.commit()
-    
 
-class TopicLoader:
+
+class TopicLoader(ABC):
   
-  def __init__(self, topic_repo: TopicRepository):
-    self._topic_repo = topic_repo
+  @abstractmethod
+  async def load(self, topic_repo: TopicRepository) -> list[TopicData]:
+    pass
+
+
+class AllTopicsLoader(TopicLoader):
   
-  async def load_topics(self) -> list[TopicData]:
-    topics = await self._topic_repo.fetch_all_topics()
+  def __init__(self):
+    pass
+  
+  async def load(self, topic_repo: TopicRepository) -> list[TopicData]:
+    topics = await topic_repo.fetch_all_topics()
     
     return [
       {

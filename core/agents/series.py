@@ -43,7 +43,7 @@ class UserPromptInput(TypedDict):
   topics: list[TopicData]
 
 
-class VideoSeriesAnalyzer:
+class VideoSeriesAgent:
 
   def __init__(self, tpl_mgr: TemplateManager, model_name = GOOGLE_DEFAULT_MODEL):
     self._log = logging.getLogger("app.authoranalyzer")
@@ -60,7 +60,7 @@ class VideoSeriesAnalyzer:
     )
     self._agent = agent
     
-  async def analyze(self, video_data: list[VideoData], topics: list[TopicData]) -> TopicsResponse:
+  async def run(self, video_data: list[VideoData], topics: list[TopicData]) -> TopicsResponse:
     input: UserPromptInput = {
       "videos": video_data,
       "topics": topics

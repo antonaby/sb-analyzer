@@ -3,10 +3,10 @@ from uuid import UUID
 from fastapi import Depends, FastAPI, Query
 from celery.result import AsyncResult
 from dotenv import load_dotenv
-from api.models import ApidojoScrapperRun, ApidojoCollectUrls, CreateTopicRequest
+from api.models import *
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.repositories.topics import TopicRepository
-from worker.tasks import run_apidojo_search, run_apidojo_collect, process_video
+from worker.tasks import run_apidojo_search, run_apidojo_collect, process_video, process_author_videos
 from worker.main import worker_app
 from db.conf import create_db_engine, get_async_session, test_db_conn
 from db.repositories.videos import VideoRepository
@@ -87,6 +87,17 @@ def run_process_video_task(video_id: UUID):
     "id": job.id,
     "status": job.status,
   }
+
+
+@app.post("/tasks/process-author-videos")
+def run_process_author_videos(task: TaskProcessAuthorVideos):
+  job = process_author_videos.delay(task.author_id, task.max_videos) # type: ignore
+  
+  return {
+    "id": job.id,
+    "status": job.status,
+  }
+
 
 @app.get("/tasks/{task_id}")
 def get_task(task_id: str):

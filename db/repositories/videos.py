@@ -1,5 +1,6 @@
 from typing import Any, Sequence, TypedDict
 from uuid import UUID
+from abc import ABC, abstractmethod
 
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -203,14 +204,21 @@ class VideoRepository(BaseAsyncRepo):
     await self._session.commit()
 
 
-class VideoDataLoader:
+class VideoDataLoader(ABC):
   
-  def __init__(self, author_id: UUID, video_repo: VideoRepository):
-    self._author_id = author_id
-    self._video_repo = video_repo
+  @abstractmethod
+  async def load(self, video_repo: VideoRepository) -> list[VideoData]:
+    pass
 
-  async def load_video_data(self, max_videos: int = 100) -> list[VideoData]:
-    videos = await self._video_repo.get_videos_by_author(
+
+class AuthorVideoLoader(VideoDataLoader):
+  
+  def __init__(self, author_id: UUID, max_videos: int = 100):
+    self._author_id = author_id
+    self._max_videos = max_videos
+
+  async def load(self, video_repo: VideoRepository) -> list[VideoData]:
+    videos = await video_repo.get_videos_by_author(
       self._author_id, 
       load_annotations=True, 
       annotations_to_load=[
@@ -225,7 +233,7 @@ class VideoDataLoader:
         MetaSource.description, 
         MetaSource.hashtag
       ],
-      max_videos=max_videos
+      max_videos=self._max_videos
     )
     
     video_data_list: list[VideoData] = []

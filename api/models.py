@@ -21,3 +21,8 @@ class ApidojoCollectUrls(BaseModel):
   topic_id: UUID
   urls: list[str] = Field(min_length=1, description="At least one url")
   max_items: int
+
+
+class TaskProcessAuthorVideos(BaseModel):
+  author_id: UUID
+  max_videos: int = Field(ge=1, le=100, description="Max videos ordered by uploaded_at desc")
