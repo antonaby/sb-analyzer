@@ -38,8 +38,7 @@ class MetaSource(enum.Enum):
   frame_content_type = "frame_content_type"
   frame_style = "frame_style"
   frame_quality = "frame_quality"
-  summary = "summary"
-  summary_video_type = "summary_video_type"
+  topic = "topic"
 
 
 class AnnotationKind(enum.Enum):
@@ -49,8 +48,9 @@ class AnnotationKind(enum.Enum):
   frame_environment = "frame_environment"
   frame_summary = "frame_summary"
   frame_logo = "frame_logo"
-  summary = "summary"
-  summary_synopsis = "summary_synopsis"
+  label = "label"
+  synopsis = "synopsis"
+  action = "action"
   transcription = "transcription"
 
 

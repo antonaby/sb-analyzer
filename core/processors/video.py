@@ -170,16 +170,23 @@ def _create_summary_annotations(summary: VideoSummary) -> list[VideoAnnotation]:
   
   annotations.append(
     prepare_annotation(
-      kind=AnnotationKind.summary,
-      value=summary.main_idea
+      kind=AnnotationKind.label,
+      value=summary.label
+    )
+  )
+  
+  annotations.append(
+    prepare_annotation(
+      kind=AnnotationKind.synopsis,
+      value=summary.synopsis
     )
   )
       
-  for synopsis in summary.synopsis:
+  for action in summary.actions:
     annotations.append(
       prepare_annotation(
-        kind=AnnotationKind.summary_synopsis,
-        value=synopsis
+        kind=AnnotationKind.action,
+        value=action
       )
     )
   
@@ -189,15 +196,10 @@ def _create_summary_annotations(summary: VideoSummary) -> list[VideoAnnotation]:
 def _create_summary_meta(summary: VideoSummary) -> list[VideoMeta]:
   video_meta: list[VideoMeta] = []
   
-  for theme in summary.theme:
+  for topic in summary.topics:
     video_meta.append(
-      prepare_meta(MetaSource.summary, theme)
+      prepare_meta(MetaSource.topic, topic)
     )  
-  
-  for video_type in summary.video_type:
-    video_meta.append(
-      prepare_meta(MetaSource.summary_video_type, video_type)
-    ) 
   
   return video_meta
 
