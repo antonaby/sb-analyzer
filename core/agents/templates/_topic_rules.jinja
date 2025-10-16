@@ -29,6 +29,12 @@ Required Procedure:
   - Scope match (15%): granularity alignment (penalize too broad/narrow).
   - Temporal/context match (10%): versions, eras, modality (e.g., "tutorial", "case study").
   - If search_topics returns duplicates/aliases, prefer the most precise and widely scoped match.
+  - Semantic relevance first. A topic returned by search_topics must describe the same central concept as the cluster. For example:
+    a) "Dog training" ≠ "Cat behavior (different species → different topic)
+    b) "Cat videos" ≈ "Cat behavior" (same domain, minor variance acceptable)
+    c) "Dog care" ≠ "Animal welfare" (only match if the description explicitly generalizes animals, not a specific one)
+  - Strong match: same core concept, even if phrased differently.
+  - Weak match: only partial overlap or different core concept.
   Final score = weighted sum, clipped to [0, 1].
 4) Decision:
   - Single-topic case: If the top score ≥ 0.70 and is at least 0.10 higher than the next best score, select that topic.
@@ -45,26 +51,3 @@ Required Procedure:
   - Return topics: [ { topic_id, name, confidence }, ... ] (max 3 items).
   - Selecting existing topic(s): topic_id = matching topic's id, name = that topic's name.
   - Proposing new topic(s): topic_id = null, name = your proposed topic name.
-
-Recommended Topic Taxonomy:
-  You can think of these as "clusters" of content domains. Each category can include specific subtypes when applicable.
-  Animals & Pets ->	Cat Behaviour, Dog Training, Birds, Reptiles, Farm Animals, Wildlife
-  Cooking & Food ->	Recipe Tutorial, Food Review, Street Food, Baking, Drinks / Coffee
-  Travel & Lifestyle ->	City Vlog, Beach Trip, Camping, Van Life, Hotel Review
-  Romance & Relationships -> Romantic Story, Relationship Advice, Breakups, Dating Tips
-  Fitness & Health ->	Workout Routine, Yoga, Nutrition Tips, Mental Health
-  Education & Tutorials -> Study Tips, Language Learning, Coding Tutorial, DIY Crafts
-  Technology & Gadgets ->	Product Review, Tech Setup, Programming Demo
-  Beauty & Fashion ->	Makeup Tutorial, Skincare Routine, Outfit Ideas, Fashion Review
-  Comedy & Entertainment ->	Sketch, Parody, Reaction Video, Meme Compilation
-  Music & Art -> Performance, Cover Song, Drawing Tutorial, Dance Video
-  Finance & Business ->	Investing Tips, Side Hustle, Marketing Advice
-  News & Commentary	-> Current Events, Opinion Piece, Social Commentary
-  Gaming ->	Gameplay, Walkthrough, eSports Highlight, Game Review
-  Other / Niche -> ASMR, Satisfying Visuals, Experimental, Timelapse, Montage
-Examples:
-  Person showing how to teach a cat to high-five ->	"Animals - Cat Behaviour"
-  Couple giving relationship advice ->	"Romantic - Relationship Advice"
-  Someone showing their workout routine ->	"Fitness - Workout Routine"
-  A vlog of a trip to Kyoto ->	"Travel - City Vlog"
-  Person reviewing the latest iPhone ->	"Technology - Product Review"
