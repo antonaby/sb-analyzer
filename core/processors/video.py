@@ -11,7 +11,7 @@ from core.video import ClipTaggerClient, VideoData, Frame
 from core.file import AudioFile, UrlVideoSource, VideoFile
 from db.models import Topic, Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository, VideoDataLoader
-from db.repositories.topics import TopicLoader, TopicRepository
+from db.repositories.topics import TopicRepository
 from models.common import PostDetails
 
 
@@ -19,9 +19,17 @@ class VideoProcessorError(Exception):
   pass
 
 
+class AssignedTopic(TypedDict):
+  topic_id: UUID
+  is_new: bool
+  name: str
+  confidence: float
+
+
 class ProcessedVideo(TypedDict):
   video_id: UUID | None
   processed_at_utc: datetime | None
+  assigned_topics: list[AssignedTopic]
 
 
 class VideoProcessor:
@@ -52,14 +60,16 @@ class VideoProcessor:
       self._log.warning(f"Video not found: {video_id}")
       return {
         "video_id": None,
-        "processed_at_utc": None
+        "processed_at_utc": None,
+        "assigned_topics": []
       }
     
-    video_model = await self._create_summary(video_model, delete_downloaded_files)
+    video_model, topics = await self._create_summary(video_model, delete_downloaded_files)
     
     return {
       "video_id": video_model.id,
-      "processed_at_utc": video_model.processed_at
+      "processed_at_utc": video_model.processed_at,
+      "assigned_topics": topics
     }
         
   async def _find_video(self, video_id: UUID) -> Video | None:
@@ -71,7 +81,7 @@ class VideoProcessor:
     self,
     video_model: Video,
     delete_downloaded_files: bool
-  ) -> Video:
+  ) -> tuple[Video, list[AssignedTopic]]:
     video_file = None
     video_source = None
     
@@ -104,7 +114,7 @@ class VideoProcessor:
     video_model: Video,
     post_data: PostDetails, video_data: VideoData, 
     audio_data: AudioData, summary: VideoSummary
-  ) -> Video:
+  ) -> tuple[Video, list[AssignedTopic]]:
     processed_frames = await video_data.get_processed_frames()
     transcriptions = audio_data.get_processed_transcriptions()
     
@@ -124,6 +134,8 @@ class VideoProcessor:
       video_model.processing_error = False
       video_model.processed_at = datetime.now(timezone.utc)
       
+      topics = await _assign_topics(session, summary, video_model)
+      
       for annotation in annotations:
         annotation.video_id = video_model.id
         annotation.revision = revision
@@ -136,7 +148,7 @@ class VideoProcessor:
 
       await session.commit()
       
-      return video_model
+      return video_model, topics
     
   async def _set_error(self, video_model: Video):
     async with self._db() as session:
@@ -146,6 +158,28 @@ class VideoProcessor:
       
       await session.commit()
       
+
+async def _assign_topics(session: AsyncSession, summary: VideoSummary, video: Video) -> list[AssignedTopic]:
+  topic_repo = TopicRepository(session)
+  await topic_repo.topic_lock()
+  
+  topics: list[AssignedTopic] = []
+  
+  for t in summary.topics:
+    topic = await topic_repo.get_topic(t.id) if t.id else None
+    if not topic:
+      topic = await topic_repo.create_topic(t.name)
+    
+    await topic_repo.assign_topic(topic.id, video.id, t.confidence)
+    topics.append({
+      "topic_id": topic.id,
+      "is_new": not t.id,
+      "name": t.name,
+      "confidence": t.confidence
+    })
+    
+  return topics
+
 
 def _create_video_data(
   post: PostDetails, summary: VideoSummary, 
@@ -200,7 +234,7 @@ def _create_summary_meta(summary: VideoSummary) -> list[VideoMeta]:
   
   for topic in summary.topics:
     video_meta.append(
-      prepare_meta(MetaSource.topic, topic)
+      prepare_meta(MetaSource.topic, topic.name)
     )  
   
   return video_meta
@@ -308,35 +342,35 @@ class VideoSeriesProcessor:
     self._agent = agent
     self._db = session_maker
     
-  async def run(self, video_loader: VideoDataLoader, topic_loader: TopicLoader) -> VideoSeriesResult:
-    async with self._db() as session:
-      video_repo = VideoRepository(session)
-      topic_repo = TopicRepository(session)
+  # async def run(self, video_loader: VideoDataLoader, topic_loader: TopicLoader) -> VideoSeriesResult:
+  #   async with self._db() as session:
+  #     video_repo = VideoRepository(session)
+  #     topic_repo = TopicRepository(session)
       
-      video_data = await video_loader.load(video_repo)
-      topics = await topic_loader.load(topic_repo)
+  #     video_data = await video_loader.load(video_repo)
+  #     topics = await topic_loader.load(topic_repo)
     
-    topic_decisions = await self._agent.run(video_data, topics)
+  #   topic_decisions = await self._agent.run(video_data, topics)
     
-    async with self._db() as session:
-      topic_repo = TopicRepository(session)
+  #   async with self._db() as session:
+  #     topic_repo = TopicRepository(session)
       
-      new_topics: list[Topic] = []
-      existing_topics: list[Topic] = []
+  #     new_topics: list[Topic] = []
+  #     existing_topics: list[Topic] = []
       
-      for t in topic_decisions.topics:
-        if t.decision == "new":
-          new_topic = await topic_repo.create_topic(t.proposed_topic_name or t.canonical_topic)
-          new_topics.append(new_topic)  
-        elif t.decision == "existing" and t.topic_id:
-          existing_topic = await topic_repo.get_topic(t.topic_id)
-          if existing_topic is not None:
-            existing_topics.append(existing_topic)
+  #     for t in topic_decisions.topics:
+  #       if t.decision == "new":
+  #         new_topic = await topic_repo.create_topic(t.proposed_topic_name or t.canonical_topic)
+  #         new_topics.append(new_topic)  
+  #       elif t.decision == "existing" and t.topic_id:
+  #         existing_topic = await topic_repo.get_topic(t.topic_id)
+  #         if existing_topic is not None:
+  #           existing_topics.append(existing_topic)
           
-      await session.commit()
+  #     await session.commit()
     
-    return {
-      "existing_topics": [t.canonical_topic for t in topic_decisions.topics if t.decision == 'existing'],
-      "new_topics": [t.canonical_topic for t in topic_decisions.topics if t.decision == 'new']
-    }  
+  #   return {
+  #     "existing_topics": [t.canonical_topic for t in topic_decisions.topics if t.decision == 'existing'],
+  #     "new_topics": [t.canonical_topic for t in topic_decisions.topics if t.decision == 'new']
+  #   }  
       

@@ -10,7 +10,6 @@ from pydantic_ai.providers.google import GoogleProvider
 from core.agents.tpl import TemplateManager
 from core.utils import var_or_exception
 from models.common import VideoData
-from models.common import TopicData
 
 
 GOOGLE_API_KEY_VAR = "GOOGLE_API_KEY"
@@ -40,7 +39,6 @@ class TopicsResponse(BaseModel):
 
 class UserPromptInput(TypedDict):
   videos: list[VideoData]
-  topics: list[TopicData]
 
 
 class VideoSeriesAgent:
@@ -60,10 +58,9 @@ class VideoSeriesAgent:
     )
     self._agent = agent
     
-  async def run(self, video_data: list[VideoData], topics: list[TopicData]) -> TopicsResponse:
+  async def run(self, video_data: list[VideoData]) -> TopicsResponse:
     input: UserPromptInput = {
-      "videos": video_data,
-      "topics": topics
+      "videos": video_data
     }
     
     user_prompt = self._tpl_mgr.render("series_user", {"input": input})

@@ -88,11 +88,13 @@ def process_author_videos(author_id: UUID, max_videos: int) -> dict:
   
   video_loader = AuthorVideoLoader(author_id, max_videos) 
   
-  result = loop.run_until_complete(
-    video_series_processor.run(video_loader, topic_loader)
-  )
+  # result = loop.run_until_complete(
+  #   video_series_processor.run(video_loader, topic_loader)
+  # )
   
-  return cast(dict, result)
+  # return cast(dict, result)
+  
+  return {"ok": True}
   
 
 @worker_app.task

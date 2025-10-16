@@ -1,16 +1,23 @@
 from typing import Sequence
 from uuid import UUID
-from sqlalchemy import desc, insert, select, update, func
+from sqlalchemy import desc, insert, select, text, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import Topic, TopicSearch
+from db.models import Topic, TopicSearch, VideoTopic
 from db.repositories.common import BaseAsyncRepo
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+
+TOPIC_LOCK_KEY: int = 1
 
 
 class TopicRepository(BaseAsyncRepo):
   
   def __init__(self, session: AsyncSession):
     self._session = session
+  
+  async def topic_lock(self):
+    await self._session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": TOPIC_LOCK_KEY})
     
   async def create_topic(self, name: str) -> Topic:
     stmt = insert(Topic).values(name=name).returning(Topic)
@@ -43,6 +50,23 @@ class TopicRepository(BaseAsyncRepo):
       where(TopicSearch.id == serach_id).
       values(total_videos=total_videos, ran_at=func.now()).
       returning(TopicSearch)
+    )
+    result = await self._session.execute(stmt)
+    
+    return result.scalar_one()
+  
+  async def assign_topic(self, topic_id: UUID, video_id: UUID, confidence: float) -> VideoTopic:
+    stmt = (
+      pg_insert(VideoTopic).
+      values(topic_id=topic_id, video_id=video_id, confidence=confidence).
+      on_conflict_do_update(   # type: ignore
+        index_elements=[VideoTopic.topic_id, VideoTopic.video_id],
+        set_={
+          "created_at": func.now(),
+          "confidence": confidence
+        }
+      ).
+      returning(VideoTopic)
     )
     result = await self._session.execute(stmt)
     

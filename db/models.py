@@ -8,6 +8,7 @@ from sqlalchemy import (
   ForeignKey,
   Integer,
   BigInteger,
+  Float,
   String,
   Text,
   Index,
@@ -81,6 +82,18 @@ class Topic(Base):
     passive_deletes=True,
   )
   
+  video_topics: Mapped[list["VideoTopic"]] = relationship(
+    back_populates="topic",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+  
+  videos: Mapped[list["Video"]] = relationship(
+    secondary="video_topics",
+    back_populates="topics",
+    viewonly=True,
+  )
+  
   def __repr__(self):
     return f"<Topic(id={self.id}, name={self.name!r})>"
 
@@ -109,11 +122,16 @@ class TopicSearch(Base):
   ran_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
   
   topic: Mapped["Topic"] = relationship(back_populates="seraches")
-  videos: Mapped[list["VideoSearch"]] = relationship(
+  video_searches: Mapped[list["VideoSearch"]] = relationship(
     back_populates="search",
     cascade="all, delete-orphan",
     passive_deletes=True,
-  )  
+  )
+  videos: Mapped[list["Video"]] = relationship(
+    secondary="video_searches",
+    back_populates="seraches",
+    viewonly=True,
+  )
   
 
 class Author(Base):
@@ -192,24 +210,62 @@ class Video(Base):
     cascade="all, delete-orphan",
     passive_deletes=True,
   )
-  
   video_meta: Mapped[list["VideoMeta"]] = relationship(
     back_populates="video",
     cascade="all, delete-orphan",
     passive_deletes=True,
   )
-  
   scraped_data: Mapped["ScrapedData"] = relationship(
     back_populates="video",
     cascade="all, delete-orphan",
     passive_deletes=True,
   )
-  
-  searches: Mapped[list["VideoSearch"]] = relationship(
+  video_searches: Mapped[list["VideoSearch"]] = relationship(
     back_populates="video",
     cascade="all, delete-orphan",
     passive_deletes=True,
   )
+  seraches: Mapped[list["TopicSearch"]] = relationship(
+    secondary="video_searches",
+    back_populates="videos",
+    viewonly=True,
+  )
+  video_topics: Mapped[list["VideoTopic"]] = relationship(
+    back_populates="video",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+  topics: Mapped[list["Topic"]] = relationship(
+    secondary="video_topics",
+    back_populates="videos",
+    viewonly=True,
+  )
+  
+
+class VideoTopic(Base):
+  __tablename__ = "video_topics"
+  
+  topic_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("topics.id", ondelete="CASCADE"),
+    nullable=False,
+    primary_key=True,
+  )
+  video_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("videos.id", ondelete="CASCADE"),
+    nullable=False,
+    primary_key=True,
+  )
+  confidence: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0"))
+  
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
+
+  topic: Mapped["Topic"] = relationship(back_populates="video_topics")
+  video: Mapped["Video"] = relationship(back_populates="video_topics")
 
 
 class VideoSearch(Base):
@@ -234,8 +290,8 @@ class VideoSearch(Base):
     default=func.now(), nullable=False
   )
   
-  search: Mapped["TopicSearch"] = relationship(back_populates="videos")
-  video: Mapped["Video"] = relationship(back_populates="searches")
+  search: Mapped["TopicSearch"] = relationship(back_populates="video_searches")
+  video: Mapped["Video"] = relationship(back_populates="video_searches")
 
 
 class VideoMeta(Base):
