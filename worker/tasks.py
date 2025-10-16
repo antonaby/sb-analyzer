@@ -26,6 +26,7 @@ def init_worker_process(**kwargs):
   from core.apify.client import ApifyClient
   from core.video import ClipTaggerClient
   from core.transcribe import LemonfoxClient
+  from core.agents.common import TopicLoader
   from core.agents.summary import SummaryAgent
   from core.agents.series import VideoSeriesAgent
   from core.agents.tpl import TemplateManager
@@ -45,6 +46,7 @@ def init_worker_process(**kwargs):
   global async_db
   engine = create_db_engine()
   async_db = get_async_session(engine)
+  topic_loader = TopicLoader(async_db)
   
   global topic_processor
   topic_processor = TopicProcessor(async_db)
@@ -54,7 +56,7 @@ def init_worker_process(**kwargs):
   
   clip_tagger_client = ClipTaggerClient()
   lemonfox_client = LemonfoxClient()
-  summary_agent = SummaryAgent(tpl_mgr)
+  summary_agent = SummaryAgent(tpl_mgr, topic_loader)
   
   global video_processor
   video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_db, "./videos")
@@ -83,10 +85,8 @@ def process_author_videos(author_id: UUID, max_videos: int) -> dict:
     raise RuntimeError("video Series processor not initialized")
   
   from db.repositories.videos import AuthorVideoLoader
-  from db.repositories.topics import AllTopicsLoader
   
   video_loader = AuthorVideoLoader(author_id, max_videos) 
-  topic_loader = AllTopicsLoader()
   
   result = loop.run_until_complete(
     video_series_processor.run(video_loader, topic_loader)

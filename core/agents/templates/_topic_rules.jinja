@@ -1,0 +1,57 @@
+Topic Identification:
+- Infer a precise topical category that best describes the video's subject matter, theme, and intent.
+- The category should be as specific as the content allows — for example, “Cat Behaviour” rather than “Animal Behaviour”.
+- Use both visuals and transcription to decide the topic.
+- Visuals show what the content is about.
+- Audio/transcription often reveal context or intent (e.g., “Let me show you how to train your dog”).
+- Choose one primary topic and optionally one subtopic separated by “–” (dash).
+- Example: "Animals - Cat Behaviour" or "Romantic - Relationship Advice".
+- Stay factual and content-based — avoid guessing emotional tone or intent unless clearly expressed.
+
+Topic Identification - Required Procedure:
+1) Extract intent: From the frame analysys, determine: primary subject, domain, and key terms (entities, themes, verbs).
+2) Fetch candidates: Call search_topics with a concise query built from the synopsis' primary subject + 3-8 salient keywords.
+  - Use saparate keywords, like search_topics(["cat", "dog", "fitness", "ASMR", "DIY"])
+  - If several keywords have to be in the same topic name, merge them, like search_topics(["cat playing"])
+  - Search for several alternatives, like search_topics(["cat & playing", "kitten"])
+3) Score relevance for each returned topic using this 0-1 rubric (compute each component in your head and combine as weighted average):
+  - Semantic fit (0-1, 50%): how well the topic's name/description matches the synopsis' central idea.
+  - Entity overlap (0-1, 25%): overlap of named entities/technical terms.
+  - Scope match (0-1, 15%): granularity alignment (too broad/narrow penalizes).
+  - Temporal/context match (0-1, 10%): versions, eras, or modalities (e.g., “tutorial”, “case study”).
+  - If search_topics returns duplicates/aliases, prefer the most precise and widely scoped match.
+  Final score = weighted sum, clipped to [0,1].
+4) Decision: 
+  - If the top score ≥ 0.70 and is at least 0.10 higher than the next best score, select that topic.
+  - Otherwise, propose a new topic with a concise, human-friendly name (≤ 70 chars) that best captures the synopsis.
+5) Confidence:
+  - If selecting an existing topic: use the top score as confidence.
+  - If proposing a new topic: confidence = 0.40 by default;
+  - bump to 0.55-0.65 if the synopsis is very coherent and clearly outside existing topics;
+  - drop to 0.25-0.35 if synopsis is vague/ambiguous.
+6) Output:
+  - If selecting: topic_id = matching topic's id, name = that topic's name.
+  - If proposing: topic_id = null, name = your proposed topic name.
+
+Recommended Topic Taxonomy:
+  You can think of these as "clusters" of content domains. Each category can include specific subtypes when applicable.
+  Animals & Pets ->	Cat Behaviour, Dog Training, Birds, Reptiles, Farm Animals, Wildlife
+  Cooking & Food ->	Recipe Tutorial, Food Review, Street Food, Baking, Drinks / Coffee
+  Travel & Lifestyle ->	City Vlog, Beach Trip, Camping, Van Life, Hotel Review
+  Romance & Relationships -> Romantic Story, Relationship Advice, Breakups, Dating Tips
+  Fitness & Health ->	Workout Routine, Yoga, Nutrition Tips, Mental Health
+  Education & Tutorials -> Study Tips, Language Learning, Coding Tutorial, DIY Crafts
+  Technology & Gadgets ->	Product Review, Tech Setup, Programming Demo
+  Beauty & Fashion ->	Makeup Tutorial, Skincare Routine, Outfit Ideas, Fashion Review
+  Comedy & Entertainment ->	Sketch, Parody, Reaction Video, Meme Compilation
+  Music & Art -> Performance, Cover Song, Drawing Tutorial, Dance Video
+  Finance & Business ->	Investing Tips, Side Hustle, Marketing Advice
+  News & Commentary	-> Current Events, Opinion Piece, Social Commentary
+  Gaming ->	Gameplay, Walkthrough, eSports Highlight, Game Review
+  Other / Niche -> ASMR, Satisfying Visuals, Experimental, Timelapse, Montage
+Examples:
+  Person showing how to teach a cat to high-five ->	"Animals - Cat Behaviour"
+  Couple giving relationship advice ->	"Romantic - Relationship Advice"
+  Someone showing their workout routine ->	"Fitness - Workout Routine"
+  A vlog of a trip to Kyoto ->	"Travel - City Vlog"
+  Person reviewing the latest iPhone ->	"Technology - Product Review"

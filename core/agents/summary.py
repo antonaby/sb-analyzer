@@ -1,14 +1,13 @@
 import asyncio
 from dataclasses import dataclass
 import logging
-from typing import Optional, TypedDict
-from uuid import UUID
+from typing import TypedDict
 from openai import BaseModel
 from pydantic_ai import Agent, RunContext, ModelSettings
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 
-from core.agents.common import TopicDetails, TopicLoader
+from core.agents.common import TopicDetails, TopicLoader, TopicProposal
 from core.agents.tpl import TemplateManager
 from core.video import Frame, VideoData
 from core.transcribe import AudioData
@@ -26,15 +25,6 @@ class SummaryAgentDeps:
   audio: AudioData
   topic_loader: TopicLoader
 
-
-class TopicProposal(BaseModel):
-  id: Optional[UUID]
-  name: str
-  confidence: float
-  
-  class Config: # type: ignore
-    extra = "forbid"
-  
 
 class VideoSummary(BaseModel):
   label: str
@@ -106,11 +96,11 @@ class SummaryAgent:
       Args:
         search_keywords (list[str]): A list of keywords used to search for matching topics.
           Each keyword is compared against the topic's name using full-text search.
-          Each element can include multiple words combined with '&' for AND logic.
+          Each element can include multiple words for AND logic.
           Multiple elements are combined with OR logic across the list.
 
           For example:
-            ["One & Two", "Three"]
+            ["One Two", "Three"]
           searches for topics that match:
             ("One" AND "Two") OR ("Three")
 
@@ -123,7 +113,7 @@ class SummaryAgent:
     
     self._agent = agent
 
-  async def run(self, post: PostDetails, video: VideoData, audio: AudioData) -> VideoSummary:
+  async def run(self, post: PostDetails, video: VideoData, audio: AudioData, temperature: float = 0.1) -> VideoSummary:
     basic_frames, transcription = await asyncio.gather(
       video.get_n_frames(),
       audio.get_transcription()
@@ -149,7 +139,7 @@ class SummaryAgent:
     res = await self._agent.run(
       user_prompt,
       deps=SummaryAgentDeps(video=video, audio=audio, topic_loader=self._topic_loader),
-      model_settings=ModelSettings(temperature=0.1)
+      model_settings=ModelSettings(temperature=temperature)
     )
     
     usage = res.usage()

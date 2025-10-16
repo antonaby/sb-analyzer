@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -7,6 +8,15 @@ from db.repositories.topics import TopicRepository
 class TopicDetails(BaseModel):
   id: UUID
   name: str
+
+
+class TopicProposal(BaseModel):
+  id: Optional[UUID]
+  name: str
+  confidence: float
+  
+  class Config: # type: ignore
+    extra = "forbid"
 
 
 class TopicLoader:
