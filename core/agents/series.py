@@ -7,7 +7,7 @@ from pydantic_ai import Agent, ModelSettings
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 
-from core.agents.tpl import TemplateManager
+from core.agents.common import TemplateManager
 from core.utils import var_or_exception
 from models.common import VideoData
 

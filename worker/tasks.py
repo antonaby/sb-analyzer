@@ -26,10 +26,9 @@ def init_worker_process(**kwargs):
   from core.apify.client import ApifyClient
   from core.video import ClipTaggerClient
   from core.transcribe import LemonfoxClient
-  from core.agents.common import TopicLoader
+  from core.agents.common import TopicLoader, TemplateManager
   from core.agents.summary import SummaryAgent
   from core.agents.series import VideoSeriesAgent
-  from core.agents.tpl import TemplateManager
   from core.processors.scraper import ScraperProcessor, TopicProcessor
   from core.processors.video import VideoProcessor, VideoSeriesProcessor
   from db.conf import create_db_engine, get_async_session

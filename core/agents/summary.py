@@ -7,8 +7,7 @@ from pydantic_ai import Agent, RunContext, ModelSettings
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 
-from core.agents.common import TopicDetails, TopicLoader, TopicProposal
-from core.agents.tpl import TemplateManager
+from core.agents.common import TopicDetails, TopicLoader, TopicProposal, TemplateManager
 from core.video import Frame, VideoData
 from core.transcribe import AudioData
 from models.common import PostDetails
