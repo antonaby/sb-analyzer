@@ -1,12 +1,10 @@
 from typing import Sequence
-from abc import ABC, abstractmethod
 from uuid import UUID
 from sqlalchemy import desc, insert, select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import Topic, TopicSearch
 from db.repositories.common import BaseAsyncRepo
-from models.common import TopicData
 
 
 class TopicRepository(BaseAsyncRepo):
@@ -50,29 +48,32 @@ class TopicRepository(BaseAsyncRepo):
     
     return result.scalar_one()
   
+  async def search_topics(self, search_keywords: list[str]) -> Sequence[Topic]:
+    if not search_keywords or len(search_keywords) == 0:
+      return []
+    
+    query_keywords = []
+    for kw in search_keywords:
+      kw = kw.strip()
+      if not kw:
+        continue
+      
+      parts = [p for p in kw.split() if p]
+      query_keywords.append(" & ".join(parts))
+      
+    if len(query_keywords) == 0:
+      return []
+        
+    query_str = " | ".join(query_keywords)
+    
+    stmt = (
+      select(Topic).
+      where(func.to_tsquery('english', query_str).op('@@')(Topic.name_tsv)).
+      order_by(func.ts_rank_cd(Topic.name_tsv, func.to_tsquery('english', query_str)).desc())
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalars().all()
+  
   async def commit(self):
     await self._session.commit()
-
-
-class TopicLoader(ABC):
-  
-  @abstractmethod
-  async def load(self, topic_repo: TopicRepository) -> list[TopicData]:
-    pass
-
-
-class AllTopicsLoader(TopicLoader):
-  
-  def __init__(self):
-    pass
-  
-  async def load(self, topic_repo: TopicRepository) -> list[TopicData]:
-    topics = await topic_repo.fetch_all_topics()
-    
-    return [
-      {
-        "id": str(t.id),
-        "name": t.name
-      } 
-      for t in topics
-    ]

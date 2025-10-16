@@ -29,11 +29,6 @@ class PostDetails(TypedDict):
   source: dict
 
 
-class TopicData(TypedDict):
-  id: str
-  name: str
-
-
 class VideoData(TypedDict):
   video_id: str
   source: str

@@ -6,12 +6,7 @@ You receive:
 - A transcription aligned by time
 
 Your goal is to produce a structured video summary JSON describing what the video is about, what happens in it, and a concise list of main actions.
-If the current data is insufficient to understand the video, you may explicitly request additional frame analysis by calling "get_frame".
-
-Only one timestamp can be requested at a time.
-You may proactively call "get_frame" to verify key visuals and fill likely gaps.
-Use iterative single-timestamp requests within a modest budget, then stop when confident.
-Once you have enough information, produce the final structured JSON output.
+Second goal is to identify relevant topics of the video.
 
 Input Format:
 {
@@ -58,9 +53,19 @@ Once confident in understanding, output only the following JSON structure:
     "List of short, factual action sentences describing visible or narrated events. Use simple subject-verb-object format, optionally with adjectives/adverbs. Example: 'black dog carefully runs across the street'. Each sentence should correspond to a distinct action."
   ],
   "topics": [
-    "Short category labels summarizing what the video is about (e.g. 'Romantic and Relationships', 'Cooking', 'Cat Behaviour', 'Travel Vlog', 'Product Review', 'Fitness and Health')."
+    {
+      "topic_id": "UUID | null",
+      "name": "string",
+      "confidence": 0.0
+    }
   ]
 }
+
+If the current data is insufficient to understand the video, you may explicitly request additional frame analysis by calling "get_frame".
+- Only one timestamp can be requested at a time.
+- You may proactively call "get_frame" to verify key visuals and fill likely gaps.
+- Use iterative single-timestamp requests within a modest budget, then stop when confident.
+- Once you have enough information, produce the final structured JSON output.
 
 Frame Retrieval Behavior:
 - If you need to inspect a missing or uncertain part of the video, do not guess. Instead, call the tool "get_frame".
@@ -87,17 +92,42 @@ Budgets & Stop Criteria:
 - Early stop when: (a) you can write the synopsis confidently; (b) all key actions are verified; (c) additional frames yield redundant info.
 - Backoff: if 2 consecutive requests don't change your understanding, stop requesting and proceed.
 
-Topic Classification:
-1) Goal: Infer a precise topical category that best describes the video's subject matter, theme, and intent.
-   The category should be as specific as the content allows — for example, “Cat Behaviour” rather than “Animal Behaviour”.
-2) Rules:
-  a) Use both visuals and transcription to decide the topic.
-  b) Visuals show what the content is about.
-  c) Audio/transcription often reveal context or intent (e.g., “Let me show you how to train your dog”).
-  d) Choose one primary topic and optionally one subtopic separated by “–” (dash).
-     Example: "Animals - Cat Behaviour" or "Romantic - Relationship Advice".
-  e) Stay factual and content-based — avoid guessing emotional tone or intent unless clearly expressed.
-3) Recommended Topic Taxonomy:
+Topic Identification:
+- Infer a precise topical category that best describes the video's subject matter, theme, and intent.
+- The category should be as specific as the content allows — for example, “Cat Behaviour” rather than “Animal Behaviour”.
+- Use both visuals and transcription to decide the topic.
+- Visuals show what the content is about.
+- Audio/transcription often reveal context or intent (e.g., “Let me show you how to train your dog”).
+- Choose one primary topic and optionally one subtopic separated by “–” (dash).
+- Example: "Animals - Cat Behaviour" or "Romantic - Relationship Advice".
+- Stay factual and content-based — avoid guessing emotional tone or intent unless clearly expressed.
+
+Topic Identification - Required Procedure:
+1) Extract intent: From the frame analysys, determine: primary subject, domain, and key terms (entities, themes, verbs).
+2) Fetch candidates: Call search_topics with a concise query built from the synopsis' primary subject + 3-8 salient keywords.
+  - Use saparate keywords, like search_topics(["cat", "dog", "fitness", "ASMR", "DIY"])
+  - If several keywords have to be in the same topic name, merge them with &, like search_topics(["cat & playing"])
+  - Search for several alternatives, like search_topics(["cat & playing", "kitten"])
+3) Score relevance for each returned topic using this 0-1 rubric (compute each component in your head and combine as weighted average):
+  - Semantic fit (0-1, 50%): how well the topic's name/description matches the synopsis' central idea.
+  - Entity overlap (0-1, 25%): overlap of named entities/technical terms.
+  - Scope match (0-1, 15%): granularity alignment (too broad/narrow penalizes).
+  - Temporal/context match (0-1, 10%): versions, eras, or modalities (e.g., “tutorial”, “case study”).
+  - If search_topics returns duplicates/aliases, prefer the most precise and widely scoped match.
+  Final score = weighted sum, clipped to [0,1].
+4) Decision: 
+  - If the top score ≥ 0.70 and is at least 0.10 higher than the next best score, select that topic.
+  - Otherwise, propose a new topic with a concise, human-friendly name (≤ 70 chars) that best captures the synopsis.
+5) Confidence:
+  - If selecting an existing topic: use the top score as confidence.
+  - If proposing a new topic: confidence = 0.40 by default;
+  - bump to 0.55-0.65 if the synopsis is very coherent and clearly outside existing topics;
+  - drop to 0.25-0.35 if synopsis is vague/ambiguous.
+6) Output:
+  - If selecting: topic_id = matching topic's id, name = that topic's name.
+  - If proposing: topic_id = null, name = your proposed topic name.
+
+Recommended Topic Taxonomy:
   You can think of these as "clusters" of content domains. Each category can include specific subtypes when applicable.
   Animals & Pets ->	Cat Behaviour, Dog Training, Birds, Reptiles, Farm Animals, Wildlife
   Cooking & Food ->	Recipe Tutorial, Food Review, Street Food, Baking, Drinks / Coffee
@@ -113,7 +143,7 @@ Topic Classification:
   News & Commentary	-> Current Events, Opinion Piece, Social Commentary
   Gaming ->	Gameplay, Walkthrough, eSports Highlight, Game Review
   Other / Niche -> ASMR, Satisfying Visuals, Experimental, Timelapse, Montage
-4) Examples:
+Examples:
   Person showing how to teach a cat to high-five ->	"Animals - Cat Behaviour"
   Couple giving relationship advice ->	"Romantic - Relationship Advice"
   Someone showing their workout routine ->	"Fitness - Workout Routine"

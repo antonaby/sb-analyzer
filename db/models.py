@@ -63,6 +63,13 @@ class Topic(Base):
   )
   name: Mapped[str] = mapped_column(String(512), nullable=False)  
   
+  # Full-text search vector (auto-generated from name)
+  name_tsv: Mapped[str] = mapped_column(
+    TSVECTOR,
+    Computed("to_tsvector('english', coalesce(name, ''))", persisted=True),
+    nullable=False,
+  )
+  
   created_at: Mapped[datetime] = mapped_column(
     DateTime(timezone=True),
     default=func.now(), nullable=False
@@ -73,6 +80,9 @@ class Topic(Base):
     cascade="all, delete-orphan",
     passive_deletes=True,
   )
+  
+  def __repr__(self):
+    return f"<Topic(id={self.id}, name={self.name!r})>"
 
 
 class TopicSearch(Base):
