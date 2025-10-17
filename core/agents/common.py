@@ -73,24 +73,31 @@ class TopicManager:
     
   async def search_topics(self, search_keywords: list[str]) -> list[TopicDetails]:
     async with self._db() as session:
-      topic_repo = TopicRepository(session)
-      await topic_repo.topic_lock()
+      repo = TopicRepository(session)
+      await repo.topic_lock()
           
-      found_topics = await topic_repo.search_topics(search_keywords)
-      return [
-        TopicDetails(id=t.id, name=t.name) 
-        for t in found_topics
-      ]
+      return await self._search_topics(repo, search_keywords)
       
   async def create_topic(self, name: str) -> TopicDetails:
     async with self._db() as session:
-      topic_repo = TopicRepository(session)
-      await topic_repo.topic_lock()
+      repo = TopicRepository(session)
+      await repo.topic_lock()
       
-      new_topic = await topic_repo.create_topic(name)
+      existing_topics = await self._search_topics(repo, [name])
+      if len(existing_topics) > 0:
+        return existing_topics[0]
+      
+      new_topic = await repo.create_topic(name)
       await session.commit()
       
     return TopicDetails(id=new_topic.id, name=new_topic.name)
+  
+  async def _search_topics(self, repo: TopicRepository, search_keywords: list[str]) -> list[TopicDetails]:
+    found_topics = await repo.search_topics(search_keywords)
+    return [
+      TopicDetails(id=t.id, name=t.name) 
+      for t in found_topics
+    ]
       
 
 @dataclass
@@ -148,8 +155,8 @@ class TopicAgent:
           The returned topics are ordered by descending relevance - topics whose names
           more closely match the search terms appear first.
       """
-      cleaned = [s.replace("-", "") for s in search_topics]
-      return await ctx.deps.topic_manager.search_topics(cleaned)
+
+      return await ctx.deps.topic_manager.search_topics(search_topics)
     
     @agent.tool
     async def create_topic(ctx: RunContext[TopicAgentDeps], name: str) -> TopicDetails:
@@ -164,7 +171,7 @@ class TopicAgent:
       """
       return await ctx.deps.topic_manager.create_topic(name)
 
-  async def run(self, text: str, temperature: float = 0.1) -> TopicAgentResponse:
+  async def run(self, text: str, temperature: float = 0.01) -> TopicAgentResponse:
     input = {
       "text": text
     }

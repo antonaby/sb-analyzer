@@ -17,7 +17,7 @@ You Job:
     - No trailing punctuation.
   c) Follow "Domain Equivalence Rules" (see below)
 2) Call search_topics once with the unique set of topic names you produced.
-3) For each topic:
+3) For each topic returned by search_topics:
   - Choose the best candidate if it clearly matches semantically and respects the domain equivalence rules (see "Domain Equivalence Rules" part).
   - Compute a confidence in [0.0, 1.0] based on:
     a) lexical similarity (name overlap),
@@ -25,6 +25,7 @@ You Job:
     c) species/domain correctness (apply a/b/c rules),
     d) clarity of Primary/Subtopic match.
   - If search_topics yields no viable match (or confidence would be < 0.60), call create_topic with the most suitable topic name
+  - If you use create_topic always use the topic name from the tool response even if it's not fully matches
 4) Return a flat JSON array for all topics you produced. Each element:
   { "id": "<uuid>", "name": "<string>", "confidence": <float>, "is_new": <boolean> }
   id: from the matched candidate (via search_topics) or from create_topic.

@@ -76,8 +76,9 @@ class TopicRepository(BaseAsyncRepo):
     if not search_keywords or len(search_keywords) == 0:
       return []
     
+    cleaned = [s.replace("-", "") for s in search_keywords]
     query_keywords = []
-    for kw in search_keywords:
+    for kw in cleaned:
       kw = kw.strip()
       if not kw:
         continue
