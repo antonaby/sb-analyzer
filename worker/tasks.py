@@ -46,8 +46,9 @@ def init_worker_process(**kwargs):
   engine = create_db_engine()
   async_db = get_async_session(engine)
   topic_manager = TopicManager(async_db)
+  gemini_2_5_flash_lite_model = gemini_2_5_flash_lite()
   topic_agent = TopicAgent(
-    gemini_2_5_flash_lite(),
+    gemini_2_5_flash_lite_model,
     tpl_mgr,
     topic_manager
   )
@@ -60,7 +61,7 @@ def init_worker_process(**kwargs):
   
   clip_tagger_client = ClipTaggerClient()
   lemonfox_client = LemonfoxClient()
-  summary_agent = SummaryAgent(tpl_mgr, topic_agent)
+  summary_agent = SummaryAgent(gemini_2_5_flash_lite_model, tpl_mgr, topic_agent)
   
   global video_processor
   video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_db, "./videos")

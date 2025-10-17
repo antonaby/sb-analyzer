@@ -187,4 +187,23 @@ class TopicAgent:
     self._log.debug(f"Finish: summary request, input_tokens={usage.input_tokens}, output_tokens={usage.output_tokens}")
     
     return res.output
-  
+
+@dataclass
+class TopicAgentDepsLike:
+  topic_agent: TopicAgent
+
+
+async def search_topics_tool(ctx: RunContext[TopicAgentDepsLike], text: str) -> list[TopicProposal]:
+  """
+  Retrieves a list of topics based on the provided text.
+
+  Args:
+    text (str): A text for topics to extract
+
+  Returns:
+    list[TopicDetails]: A list of topic details (ID and name) matching the text.
+      The returned topics are ordered by descending relevance - topics whose names
+      more closely match the search terms appear first.
+  """
+  response = await ctx.deps.topic_agent.run(text)
+  return response.topics

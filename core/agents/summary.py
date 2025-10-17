@@ -3,26 +3,22 @@ from dataclasses import dataclass
 import logging
 from typing import TypedDict
 from openai import BaseModel
-from pydantic_ai import Agent, RunContext, ModelSettings
+from pydantic_ai.models import Model
+from pydantic_ai import Agent, RunContext, ModelSettings, Tool
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 
-from core.agents.common import TopicAgentResponse, TopicDetails, TopicAgent, TopicProposal, TemplateManager
+from core.agents.common import TopicAgent, TopicAgentDepsLike, TopicProposal, TemplateManager, search_topics_tool
 from core.video import Frame, VideoData
 from core.transcribe import AudioData
 from models.common import PostDetails
 from core.utils import var_or_exception
 
 
-GOOGLE_API_KEY_VAR = "GOOGLE_API_KEY"
-GOOGLE_DEFAULT_MODEL = "gemini-2.5-flash-lite-preview-09-2025"
-
-
 @dataclass
-class SummaryAgentDeps:
+class SummaryAgentDeps(TopicAgentDepsLike):
   video: VideoData
   audio: AudioData
-  topic_agent: TopicAgent
 
 
 class VideoSummary(BaseModel):
@@ -55,24 +51,24 @@ class UserPromptInput(TypedDict):
 
 class SummaryAgent:
   
-  def __init__(self, tpl_mgr: TemplateManager, topic_agent: TopicAgent, model_name = GOOGLE_DEFAULT_MODEL):
+  def __init__(self, model: Model, tpl_mgr: TemplateManager, topic_agent: TopicAgent):
     self._log = logging.getLogger("app.videosummary")
     self._tpl_mgr = tpl_mgr
     self._topic_agent = topic_agent
     
-    self._create_agent(model_name)
+    self._create_agent(model)
   
-  def _create_agent(self, model_name: str):
-    key = var_or_exception(GOOGLE_API_KEY_VAR)
-    
-    provider = GoogleProvider(api_key=key)
-    model = GoogleModel(model_name, provider=provider)
+  def _create_agent(self, model: Model):
     agent = Agent(
       model,
       instructions=self._tpl_mgr.render("summary_system", {}),
       deps_type=SummaryAgentDeps,
-      output_type=VideoSummary
+      output_type=VideoSummary,
+      tools=[
+        Tool(search_topics_tool, takes_ctx=True)
+      ]
     )
+    self._agent = agent
     
     @agent.tool
     async def get_frame(ctx: RunContext[SummaryAgentDeps], time_sec: float) -> Frame:
@@ -86,24 +82,6 @@ class SummaryAgent:
         Frame: a fame analysis at the provided time
       """
       return await ctx.deps.video.get_frame(time_sec)
-    
-    @agent.tool
-    async def search_topics(ctx: RunContext[SummaryAgentDeps], text: str) -> list[TopicProposal]:
-      """
-      Retrieves a list of topics based on the provided text.
-
-      Args:
-        text (str): A text for topics to extract
-
-      Returns:
-        list[TopicDetails]: A list of topic details (ID and name) matching the text.
-          The returned topics are ordered by descending relevance - topics whose names
-          more closely match the search terms appear first.
-      """
-      response = await ctx.deps.topic_agent.run(text)
-      return response.topics
-    
-    self._agent = agent
 
   async def run(self, post: PostDetails, video: VideoData, audio: AudioData, temperature: float = 0.1) -> VideoSummary:
     basic_frames, transcription = await asyncio.gather(

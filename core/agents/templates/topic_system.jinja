@@ -20,11 +20,12 @@ You Job:
 3) For each topic returned by search_topics:
   - Choose the best candidate if it clearly matches semantically and respects the domain equivalence rules (see "Domain Equivalence Rules" part).
   - Compute a confidence in [0.0, 1.0] based on:
-    a) lexical similarity (name overlap),
-    b) semantic closeness,
-    c) species/domain correctness (apply a/b/c rules),
-    d) clarity of Primary/Subtopic match.
-  - If search_topics yields no viable match (or confidence would be < 0.60), call create_topic with the most suitable topic name
+    a) lexical similarity (name overlap)
+    b) semantic closeness
+    c) species/domain correctness
+    d) clarity of Primary/Subtopic match
+  - If search_topics yields no viable match (or confidence would be < 0.50), call create_topic with the most suitable topic name
+  - But create new topics only as an exception, try hard to match to an existing topic
   - If you use create_topic always use the topic name from the tool response even if it's not fully matches
 4) Return a flat JSON array for all topics you produced. Each element:
   { "id": "<uuid>", "name": "<string>", "confidence": <float>, "is_new": <boolean> }
@@ -43,40 +44,40 @@ Domain Equivalence Rules (Generalized Guidance)
     "Machine learning basics" ≈ "Machine Learning - Introduction"
 2. Granularity Rules
   a) Broader-to-narrow transitions are valid only when the original phrase implies generality.
-    "Animal welfare" → "Animals - Welfare" GOOD
-    "Dog care" → "Dogs - Care" GOOD
-    "Dog care" → "Animals - Welfare" BAD (too broad; loses specificity)
+    "Animal welfare" ≈ "Animals - Welfare"
+    "Dog care" ≈ "Dogs - Care"
+    "Dog care" ≠ "Animals - Welfare" (too broad; loses specificity)
   b) Never generalize from a narrow entity to a broad class unless the wording explicitly supports it (e.g., “all,” “general,” “cross-domain”).
 3. Topical Equivalence (Format or Context Variance)
   a) Variations in medium, tone, or format are equivalent if the subject is unchanged.
-    "Cat videos" ≈ "Cats - Behavior" GOOD
-    "Cooking tutorials" ≈ "Cooking - Instruction" GOOD
-    "Podcast on nutrition" ≈ "Nutrition - Education" GOOD
+    "Cat videos" ≈ "Cats - Behavior"
+    "Cooking tutorials" ≈ "Cooking - Instruction"
+    "Podcast on nutrition" ≈ "Nutrition - Education"
 4. Audience or Perspective Shifts
   a) Topics with different audiences or perspectives ≠ same generalization.
     "Parenting tips for teenagers" ≠ "Child psychology"
     "Marketing strategies for startups" ≠ "Marketing research"
-    However, "Beginner guitar lessons" ≈ "Guitar - Learning" GOOD (same domain, consistent perspective)
+    However, "Beginner guitar lessons" ≈ "Guitar - Learning" (same domain, consistent perspective)
 5. Temporal or Regional Variants
   a) Variants in time or place remain equivalent unless the context alters meaning.
-    "Ancient history" ≈ "History - Antiquity" GOOD
-    "Modern art" ≈ "Art - Contemporary" GOOD
-    "Chinese cuisine" ≠ "Asian cuisine" BAD (different specificity)
+    "Ancient history" ≈ "History - Antiquity" 
+    "Modern art" ≈ "Art - Contemporary" 
+    "Chinese cuisine" ≠ "Asian cuisine" (different specificity)
 6. Emotional or Stylistic Variants
   a) Emotional or stylistic modifiers do not change topic identity unless they imply distinct content.
-    "Romantic novels" ≈ "Romance - Literature" GOOD
-    "Horror stories" ≈ "Horror - Fiction" GOOD
-    "Funny cat videos" ≈ "Cats - Behavior" GOOD
-    "Dark romance" ≠ "Romance - Relationship Advice" BAD (different emotional intent and theme)
+    "Romantic novels" ≈ "Romance - Literature"
+    "Horror stories" ≈ "Horror - Fiction"
+    "Funny cat videos" ≈ "Cats - Behavior"
+    "Dark romance" ≠ "Romance - Relationship Advice" (different emotional intent and theme)
 7. Conceptual vs. Applied Topics
   a) Theory and practice are closely related but distinct.
-    "Machine learning algorithms" ≈ "Machine Learning - Methods" GOOD
-    "Applying AI in healthcare" ≠ "AI theory" GOOD
-    "Cooking techniques" ≈ "Cooking - Methods" GOOD
+    "Machine learning algorithms" ≈ "Machine Learning - Methods"
+    "Applying AI in healthcare" ≠ "AI theory"
+    "Cooking techniques" ≈ "Cooking - Methods"
 8. Overlap Rules
   a) If two topics overlap heavily in content but differ in scope, prefer the narrower one as the generalized topic (more precise).
-    "Web design principles" ≈ "Web Design - Basics" GOOD
-    "User experience design" ≠ "Graphic design" BAD
+    "Web design principles" ≈ "Web Design - Basics"
+    "User experience design" ≠ "Graphic design"
 
 Important behaviors:
 - Deduplicate generalized names before calling search_topics. Keep the best-scoring mapping if duplicates arise later.
