@@ -1,14 +1,20 @@
-from typing import Sequence
+from typing import Sequence, TypedDict
 from uuid import UUID
 from sqlalchemy import desc, insert, select, text, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import Topic, TopicSearch, VideoTopic
+from db.models import Topic, TopicSearch, Video, VideoTopic
 from db.repositories.common import BaseAsyncRepo
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 
 TOPIC_LOCK_KEY: int = 1
+
+
+class TopicWithCount(TypedDict):
+  id: UUID
+  name: str
+  total_videos: int
 
 
 class TopicRepository(BaseAsyncRepo):
@@ -99,6 +105,26 @@ class TopicRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalars().all()
+  
+  async def get_total_videos_per_topic(self) -> list[TopicWithCount]:
+    stmt = (
+      select(
+          Topic.id,
+          Topic.name,
+          func.count(Video.id).label("total_videos")
+      ).
+      select_from(Topic).
+      join(VideoTopic, Topic.id == VideoTopic.topic_id, isouter=True).
+      join(Video, Video.id == VideoTopic.video_id, isouter=True).
+      group_by(Topic.id).
+      order_by(func.count(Video.id).desc())
+    )
+    
+    result = await self._session.execute(stmt)
+    return [
+      TopicWithCount(id=row.id, name=row.name, total_videos=row.total_videos)
+      for row in result
+    ]
   
   async def commit(self):
     await self._session.commit()

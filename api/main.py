@@ -140,6 +140,17 @@ async def get_unprocessed_videos(video_repo: VideoRepository = Depends(get_video
   )
 
 
+@app.get("/topics")
+async def get_all_topics(topic_repo: TopicRepository = Depends(get_topic_repo)):
+  topics = await topic_repo.get_total_videos_per_topic()
+  topics_short = [
+    TopicsShort(id=t["id"], name=t["name"], total_videos=t["total_videos"])
+    for t in topics
+  ]
+  
+  return TotalTopics(total_topics=len(topics_short), topics=topics_short)
+
+
 @app.get("/search")
 async def search_videos(q: str = Query(default=None, min_length=1), db: AsyncSession = Depends(get_async_db)):
   repo = VideoRepository(db)

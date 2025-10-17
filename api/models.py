@@ -36,3 +36,14 @@ class VideoShort(BaseModel):
 class UnprocessedVideos(BaseModel):
   total: int
   videos: list[VideoShort]
+  
+
+class TopicsShort(BaseModel):
+  id: UUID
+  name: str
+  total_videos: int
+  
+
+class TotalTopics(BaseModel):
+  total_topics: int
+  topics: list[TopicsShort]
