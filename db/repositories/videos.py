@@ -82,6 +82,11 @@ class VideoRepository(BaseAsyncRepo):
     
     return author, is_new
   
+  async def fetch_unprocessed_videos(self) -> Sequence[Video]:
+    stmt = select(Video).where(Video.processed_at.is_(None))
+    result = await self._session.execute(stmt)
+    return result.scalars().all()
+  
   async def upsert_video(
     self, 
     url: str, source: VideoSource, author: Author, 

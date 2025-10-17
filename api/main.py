@@ -126,6 +126,20 @@ async def get_video(
   return video
 
 
+@app.get("/stat/unprocessed")
+async def get_unprocessed_videos(video_repo: VideoRepository = Depends(get_video_repo)):
+  videos = await video_repo.fetch_unprocessed_videos()
+  videos_short = [
+    VideoShort(id=v.id, url=v.url)
+    for v in videos 
+  ]
+  
+  return UnprocessedVideos(
+    total=len(videos_short), 
+    videos=videos_short
+  )
+
+
 @app.get("/search")
 async def search_videos(q: str = Query(default=None, min_length=1), db: AsyncSession = Depends(get_async_db)):
   repo = VideoRepository(db)

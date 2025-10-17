@@ -26,3 +26,13 @@ class ApidojoCollectUrls(BaseModel):
 class TaskProcessAuthorVideos(BaseModel):
   author_id: UUID
   max_videos: int = Field(ge=1, le=100, description="Max videos ordered by uploaded_at desc")
+
+
+class VideoShort(BaseModel):
+  id: UUID
+  url: str 
+
+  
+class UnprocessedVideos(BaseModel):
+  total: int
+  videos: list[VideoShort]
