@@ -26,7 +26,7 @@ def init_worker_process(**kwargs):
   from core.apify.client import ApifyClient
   from core.video import ClipTaggerClient
   from core.transcribe import LemonfoxClient
-  from core.agents.common import TopicManager, TemplateManager, TopicAgent, gemini_2_5_flash_lite
+  from core.agents.common import TopicManager, TemplateManager, TopicAgent, gemini_2_5_flash_lite, gemini_2_5_flash
   from core.agents.summary import SummaryAgent
   from core.agents.series import VideoSeriesAgent
   from core.processors.scraper import ScraperProcessor, TopicProcessor
@@ -46,9 +46,11 @@ def init_worker_process(**kwargs):
   engine = create_db_engine()
   async_db = get_async_session(engine)
   topic_manager = TopicManager(async_db)
+  gemini_2_5_flash_model = gemini_2_5_flash()
   gemini_2_5_flash_lite_model = gemini_2_5_flash_lite()
+  
   topic_agent = TopicAgent(
-    gemini_2_5_flash_lite_model,
+    gemini_2_5_flash_model,
     tpl_mgr,
     topic_manager
   )
