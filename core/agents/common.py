@@ -75,30 +75,29 @@ class TopicManager:
     async with self._db() as session:
       repo = TopicRepository(session)
       await repo.topic_lock()
-          
-      return await self._search_topics(repo, search_keywords)
+      
+      single_words = [word for phrase in search_keywords for word in phrase.split()]
+      found_topics = await repo.search_topics(single_words)
+      return [
+        TopicDetails(id=t.id, name=t.name) 
+        for t in found_topics
+      ]
       
   async def create_topic(self, name: str) -> TopicDetails:
     async with self._db() as session:
       repo = TopicRepository(session)
       await repo.topic_lock()
       
-      existing_topics = await self._search_topics(repo, [name])
-      if len(existing_topics) > 0:
-        return existing_topics[0]
+      found_topics = await repo.search_topics([name])
+      if len(found_topics) > 0:
+        t = found_topics[0] 
+        return TopicDetails(id=t.id, name=t.name) 
       
       new_topic = await repo.create_topic(name)
       await session.commit()
       
     return TopicDetails(id=new_topic.id, name=new_topic.name)
   
-  async def _search_topics(self, repo: TopicRepository, search_keywords: list[str]) -> list[TopicDetails]:
-    found_topics = await repo.search_topics(search_keywords)
-    return [
-      TopicDetails(id=t.id, name=t.name) 
-      for t in found_topics
-    ]
-      
 
 @dataclass
 class TopicAgentDeps:
