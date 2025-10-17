@@ -161,7 +161,6 @@ class VideoProcessor:
 
 async def _assign_topics(session: AsyncSession, summary: VideoSummary, video: Video) -> list[AssignedTopic]:
   topic_repo = TopicRepository(session)
-  await topic_repo.topic_lock()
   
   topics: list[AssignedTopic] = []
   

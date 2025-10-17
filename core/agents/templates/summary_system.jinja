@@ -52,13 +52,7 @@ Once confident in understanding, output only the following JSON structure:
   "actions": [
     "List of short, factual action sentences describing visible or narrated events. Use simple subject-verb-object format, optionally with adjectives/adverbs. Example: 'black dog carefully runs across the street'. Each sentence should correspond to a distinct action."
   ],
-  "topics": [
-    {
-      "topic_id": "UUID | null",
-      "name": "string",
-      "confidence": 0.0
-    }
-  ]
+  "topics": <output from "search_topics" tool if called otherwise an empty array([])> 
 }
 
 If the current data is insufficient to understand the video, you may explicitly request additional frame analysis by calling "get_frame".

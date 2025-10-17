@@ -7,7 +7,7 @@ from pydantic_ai import Agent, RunContext, ModelSettings
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 
-from core.agents.common import TopicDetails, TopicManager, TopicProposal, TemplateManager
+from core.agents.common import TopicAgentResponse, TopicDetails, TopicAgent, TopicProposal, TemplateManager
 from core.video import Frame, VideoData
 from core.transcribe import AudioData
 from models.common import PostDetails
@@ -22,7 +22,7 @@ GOOGLE_DEFAULT_MODEL = "gemini-2.5-flash-lite-preview-09-2025"
 class SummaryAgentDeps:
   video: VideoData
   audio: AudioData
-  topic_loader: TopicManager
+  topic_agent: TopicAgent
 
 
 class VideoSummary(BaseModel):
@@ -55,10 +55,10 @@ class UserPromptInput(TypedDict):
 
 class SummaryAgent:
   
-  def __init__(self, tpl_mgr: TemplateManager, topic_loader: TopicManager, model_name = GOOGLE_DEFAULT_MODEL):
+  def __init__(self, tpl_mgr: TemplateManager, topic_agent: TopicAgent, model_name = GOOGLE_DEFAULT_MODEL):
     self._log = logging.getLogger("app.videosummary")
     self._tpl_mgr = tpl_mgr
-    self._topic_loader = topic_loader
+    self._topic_agent = topic_agent
     
     self._create_agent(model_name)
   
@@ -69,7 +69,7 @@ class SummaryAgent:
     model = GoogleModel(model_name, provider=provider)
     agent = Agent(
       model,
-      instructions=self._tpl_mgr.render("summary_system_ext", {}),
+      instructions=self._tpl_mgr.render("summary_system", {}),
       deps_type=SummaryAgentDeps,
       output_type=VideoSummary
     )
@@ -88,27 +88,20 @@ class SummaryAgent:
       return await ctx.deps.video.get_frame(time_sec)
     
     @agent.tool
-    async def search_topics(ctx: RunContext[SummaryAgentDeps], search_keywords: list[str]) -> list[TopicDetails]:
+    async def search_topics(ctx: RunContext[SummaryAgentDeps], text: str) -> list[TopicProposal]:
       """
-      Retrieves a list of topics based on the provided search keywords.
+      Retrieves a list of topics based on the provided text.
 
       Args:
-        search_keywords (list[str]): A list of keywords used to search for matching topics.
-          Each keyword is compared against the topic's name using full-text search.
-          Each element can include multiple words for AND logic.
-          Multiple elements are combined with OR logic across the list.
-
-          For example:
-            ["One Two", "Three"]
-          searches for topics that match:
-            ("One" AND "Two") OR ("Three")
+        text (str): A text for topics to extract
 
       Returns:
-        list[TopicDetails]: A list of topic details (ID and name) matching the search query.
+        list[TopicDetails]: A list of topic details (ID and name) matching the text.
           The returned topics are ordered by descending relevance - topics whose names
           more closely match the search terms appear first.
       """
-      return await ctx.deps.topic_loader.search_topics(search_keywords)
+      response = await ctx.deps.topic_agent.run(text)
+      return response.topics
     
     self._agent = agent
 
@@ -134,10 +127,10 @@ class SummaryAgent:
       "transcriptions": [t.model_dump() for t in transcription]
     }
     
-    user_prompt = self._tpl_mgr.render("summary_user", {"input": input})
+    user_prompt = self._tpl_mgr.render("only_input", {"input": input})
     res = await self._agent.run(
       user_prompt,
-      deps=SummaryAgentDeps(video=video, audio=audio, topic_loader=self._topic_loader),
+      deps=SummaryAgentDeps(video=video, audio=audio, topic_agent=self._topic_agent),
       model_settings=ModelSettings(temperature=temperature)
     )
     
