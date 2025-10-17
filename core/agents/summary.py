@@ -7,7 +7,7 @@ from pydantic_ai import Agent, RunContext, ModelSettings
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 
-from core.agents.common import TopicDetails, TopicLoader, TopicProposal, TemplateManager
+from core.agents.common import TopicDetails, TopicManager, TopicProposal, TemplateManager
 from core.video import Frame, VideoData
 from core.transcribe import AudioData
 from models.common import PostDetails
@@ -22,7 +22,7 @@ GOOGLE_DEFAULT_MODEL = "gemini-2.5-flash-lite-preview-09-2025"
 class SummaryAgentDeps:
   video: VideoData
   audio: AudioData
-  topic_loader: TopicLoader
+  topic_loader: TopicManager
 
 
 class VideoSummary(BaseModel):
@@ -55,7 +55,7 @@ class UserPromptInput(TypedDict):
 
 class SummaryAgent:
   
-  def __init__(self, tpl_mgr: TemplateManager, topic_loader: TopicLoader, model_name = GOOGLE_DEFAULT_MODEL):
+  def __init__(self, tpl_mgr: TemplateManager, topic_loader: TopicManager, model_name = GOOGLE_DEFAULT_MODEL):
     self._log = logging.getLogger("app.videosummary")
     self._tpl_mgr = tpl_mgr
     self._topic_loader = topic_loader

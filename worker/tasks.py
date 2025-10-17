@@ -26,7 +26,7 @@ def init_worker_process(**kwargs):
   from core.apify.client import ApifyClient
   from core.video import ClipTaggerClient
   from core.transcribe import LemonfoxClient
-  from core.agents.common import TopicLoader, TemplateManager
+  from core.agents.common import TopicManager, TemplateManager
   from core.agents.summary import SummaryAgent
   from core.agents.series import VideoSeriesAgent
   from core.processors.scraper import ScraperProcessor, TopicProcessor
@@ -45,7 +45,7 @@ def init_worker_process(**kwargs):
   global async_db
   engine = create_db_engine()
   async_db = get_async_session(engine)
-  topic_loader = TopicLoader(async_db)
+  topic_loader = TopicManager(async_db)
   
   global topic_processor
   topic_processor = TopicProcessor(async_db)
