@@ -1,19 +1,20 @@
-from dataclasses import dataclass
 import logging
 import os
+from dataclasses import dataclass
 from typing import Optional
 from uuid import UUID
+
+from jinja2 import Environment, FileSystemLoader, Template
 from pydantic import BaseModel
-from pydantic_ai import Agent, ModelSettings, RunContext
+from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
-from pydantic_ai.settings import ModelSettings
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 from pydantic_ai.providers.google import GoogleProvider
+from pydantic_ai.settings import ModelSettings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from jinja2 import Environment, FileSystemLoader, Template
+
 from core.utils import var_or_exception
 from db.repositories.topics import TopicRepository
-
 
 GOOGLE_API_KEY_VAR = "GOOGLE_API_KEY"
 
@@ -123,10 +124,10 @@ class TopicAgentResponse(BaseModel):
 
 class TopicAgent:
   
-  def __init__(self, model: Model, tpl_mgr: TemplateManager, topic_loader: TopicManager):
-    self._log = logging.getLogger("app.topicagent")
+  def __init__(self, model: Model, tpl_mgr: TemplateManager, topic_manager: TopicManager):
+    self._log = logging.getLogger("app.topic_agent")
     self._tpl_mgr = tpl_mgr
-    self._topic_loader = topic_loader
+    self._topic_manager = topic_manager
     
     self._init_agent(model)
   
@@ -140,12 +141,12 @@ class TopicAgent:
     self._agent = agent
     
     @agent.tool
-    async def search_topics(ctx: RunContext[TopicAgentDeps], search_topics: list[str]) -> list[TopicDetails]:
+    async def search_topics(ctx: RunContext[TopicAgentDeps], topic_names: list[str]) -> list[TopicDetails]:
       """
       Retrieves a list of topics based on the provided search topics.
 
       Args:
-        search_topics (list[str]): A list of topic names to search for matching topics.
+        topic_names (list[str]): A list of topic names to search for matching topics.
           For example:
             ["One - Two", "Three"]
 
@@ -155,7 +156,7 @@ class TopicAgent:
           more closely match the search terms appear first.
       """
 
-      return await ctx.deps.topic_manager.search_topics(search_topics)
+      return await ctx.deps.topic_manager.search_topics(topic_names)
     
     @agent.tool
     async def create_topic(ctx: RunContext[TopicAgentDeps], name: str) -> TopicDetails:
@@ -171,14 +172,14 @@ class TopicAgent:
       return await ctx.deps.topic_manager.create_topic(name)
 
   async def run(self, text: str, temperature: float = 0.01) -> TopicAgentResponse:
-    input = {
+    user_input = {
       "text": text
     }
     
-    user_prompt = self._tpl_mgr.render("only_input", {"input": input})
+    user_prompt = self._tpl_mgr.render("only_input", {"input": user_input})
     res = await self._agent.run(
       user_prompt,
-      deps=TopicAgentDeps(topic_manager=self._topic_loader),
+      deps=TopicAgentDeps(topic_manager=self._topic_manager),
       model_settings=ModelSettings(temperature=temperature)
     )
     
@@ -192,7 +193,7 @@ class TopicAgentDepsLike:
   topic_agent: TopicAgent
 
 
-async def search_topics_tool(ctx: RunContext[TopicAgentDepsLike], text: str) -> list[TopicProposal]:
+async def search_topics(ctx: RunContext[TopicAgentDepsLike], text: str) -> list[TopicProposal]:
   """
   Retrieves a list of topics based on the provided text.
 

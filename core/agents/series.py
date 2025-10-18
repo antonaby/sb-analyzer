@@ -1,41 +1,16 @@
 import logging
-from typing import List, Literal, Optional, TypedDict
-from uuid import UUID
+from typing import List, TypedDict
 
-from pydantic import BaseModel, Field
-from pydantic_ai import Agent, ModelSettings
-from pydantic_ai.models.google import GoogleModel
-from pydantic_ai.providers.google import GoogleProvider
+from pydantic import BaseModel
+from pydantic_ai import Agent, ModelSettings, Tool
+from pydantic_ai.models import Model
 
-from core.agents.common import TemplateManager
-from core.utils import var_or_exception
+from core.agents.common import TemplateManager, search_topics, TopicProposal, TopicAgentDepsLike, TopicAgent
 from models.common import VideoData
 
 
-GOOGLE_API_KEY_VAR = "GOOGLE_API_KEY"
-GOOGLE_DEFAULT_MODEL = "gemini-2.5-flash-lite-preview-09-2025"
-
-
-class SupportingVideo(BaseModel):
-  video_id: UUID
-  evidence: str
-
-class AlternateConsidered(BaseModel):
-  topic_id: UUID
-  similarity_hint: str
-
-class TopicDecision(BaseModel):
-  canonical_topic: str
-  decision: Literal["existing", "new"]
-  topic_id: Optional[UUID]
-  proposed_topic_name: Optional[str]
-  supporting_videos: List[SupportingVideo]
-  alternates_considered: Optional[List[AlternateConsidered]] = Field(default_factory=list)
-  confidence: float
-
 class TopicsResponse(BaseModel):
-  topics: List[TopicDecision]
-
+  topics: List[TopicProposal]
 
 class UserPromptInput(TypedDict):
   videos: list[VideoData]
@@ -43,30 +18,34 @@ class UserPromptInput(TypedDict):
 
 class VideoSeriesAgent:
 
-  def __init__(self, tpl_mgr: TemplateManager, model_name = GOOGLE_DEFAULT_MODEL):
-    self._log = logging.getLogger("app.authoranalyzer")
+  def __init__(self, model: Model, tpl_mgr: TemplateManager, topic_agent: TopicAgent):
+    self._log = logging.getLogger("app.series_analyzer")
     self._tpl_mgr = tpl_mgr
-    
-    key = var_or_exception(GOOGLE_API_KEY_VAR)
-    
-    provider = GoogleProvider(api_key=key)
-    model = GoogleModel(model_name, provider=provider)
+    self._topic_agent = topic_agent
+    self._create_agent(model)
+
+  def _create_agent(self, model: Model):
     agent = Agent(
       model,
       instructions=self._tpl_mgr.render("series_system", {}),
-      output_type=TopicsResponse
+      output_type=TopicsResponse,
+      deps_type=TopicAgentDepsLike,
+      tools=[
+        Tool(search_topics, takes_ctx=True)
+      ]
     )
     self._agent = agent
     
   async def run(self, video_data: list[VideoData]) -> TopicsResponse:
-    input: UserPromptInput = {
+    user_input: UserPromptInput = {
       "videos": video_data
     }
     
-    user_prompt = self._tpl_mgr.render("series_user", {"input": input})
+    user_prompt = self._tpl_mgr.render("only_input", {"input": user_input})
     run = await self._agent.run(
       user_prompt,
-      model_settings=ModelSettings(temperature=0.1)
+      model_settings=ModelSettings(temperature=0.1),
+      deps=TopicAgentDepsLike(topic_agent=self._topic_agent)
     )
     
     usage = run.usage()

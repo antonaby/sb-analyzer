@@ -1,9 +1,5 @@
 from typing import TypedDict
 
-from datetime import datetime
-from uuid import UUID
-from pydantic import BaseModel
-
 
 class AuthorDetails(TypedDict):
   url: str

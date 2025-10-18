@@ -7,7 +7,7 @@ from openai import BaseModel
 from pydantic_ai import Agent, RunContext, Tool, ModelSettings
 from pydantic_ai.models import Model
 
-from core.agents.common import TopicAgent, TopicAgentDepsLike, TopicProposal, TemplateManager, search_topics_tool
+from core.agents.common import TopicAgent, TopicAgentDepsLike, TopicProposal, TemplateManager, search_topics
 from core.transcribe import AudioData
 from core.video import Frame, VideoData
 from models.common import PostDetails
@@ -50,7 +50,7 @@ class UserPromptInput(TypedDict):
 class SummaryAgent:
   
   def __init__(self, model: Model, tpl_mgr: TemplateManager, topic_agent: TopicAgent):
-    self._log = logging.getLogger("app.videosummary")
+    self._log = logging.getLogger("app.video_summary")
     self._tpl_mgr = tpl_mgr
     self._topic_agent = topic_agent
     
@@ -63,7 +63,7 @@ class SummaryAgent:
       deps_type=SummaryAgentDeps,
       output_type=VideoSummary,
       tools=[
-        Tool(search_topics_tool, takes_ctx=True)
+        Tool(search_topics, takes_ctx=True)
       ]
     )
     self._agent = agent
@@ -87,10 +87,10 @@ class SummaryAgent:
       audio.get_transcription()
     )
     
-    input: UserPromptInput = {
+    user_input: UserPromptInput = {
       "metadata": {
         "post_from": post.get("post_from", "tiktok"),
-        "title": post.get("text", "no title"),
+        "title": post.get("title", "no title"),
         "description": post.get("description", "no description"),
         "hashtags": post.get("hashtags", []),
         "duration": video.get_duration(),
@@ -103,7 +103,7 @@ class SummaryAgent:
       "transcriptions": [t.model_dump() for t in transcription]
     }
     
-    user_prompt = self._tpl_mgr.render("only_input", {"input": input})
+    user_prompt = self._tpl_mgr.render("only_input", {"input": user_input})
     res = await self._agent.run(
       user_prompt,
       deps=SummaryAgentDeps(video=video, audio=audio, topic_agent=self._topic_agent),
