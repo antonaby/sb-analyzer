@@ -12,7 +12,7 @@ Inputs: You will receive JSON like:
 You Job:
 1) Extract and generate topics for the text using "Topic Naming Rules" (see below):
   a) The text might belong to several topics
-2) Call search_topics once with the unique set of topic you produced
+2) Call search_topics once with the unique set of topic you produced. Use only "Primary" part of the topic
 3) For each topic returned by search_topics tool:
   - Check if it matches to the text
   - Compute a confidence in [0.0, 1.0] based on:
@@ -20,11 +20,12 @@ You Job:
     b) semantic closeness
     c) domain correctness
     d) clarity of Primary/Subtopic match
+  - Include the topic to the final list only if confidence is greater than or equal to 0.6
 4) Check if the text contains more topics that are not covered by the list of topics returned by search_topics tool. 
   - Use only topics found in step 1 (don't add more)
   - Topics are not covered if:
-    a) There is no topic with the same conceptual meaning at all
-    b) Confidence for an exising topic is less than 0.6
+    - There is no topic with the same conceptual meaning at all. Consider only conceptual not semantical meaning
+    - OR Confidence for an exising topic is less than 0.6
   - If there are such topics:
     a) Call create_topic with the most suitable topic name (use "Topic Naming Rules")
     b) If you use create_topic tool always use the topic name from the tool response even if it's not fully matches
