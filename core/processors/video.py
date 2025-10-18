@@ -172,7 +172,7 @@ async def _assign_topics(session: AsyncSession, summary: VideoSummary, video: Vi
     await topic_repo.assign_topic(topic.id, video.id, t.confidence)
     topics.append({
       "topic_id": topic.id,
-      "is_new": not t.id,
+      "is_new": t.is_new,
       "name": t.name,
       "confidence": t.confidence
     })
@@ -331,8 +331,7 @@ def _get_frame_meta(frame: Frame) -> dict:
 
 
 class VideoSeriesResult(TypedDict):
-  new_topics: list[str]
-  existing_topics: list[str]
+  topics: list[AssignedTopic]
 
 
 class VideoSeriesProcessor:
@@ -341,35 +340,31 @@ class VideoSeriesProcessor:
     self._agent = agent
     self._db = session_maker
     
-  # async def run(self, video_loader: VideoDataLoader, topic_loader: TopicLoader) -> VideoSeriesResult:
-  #   async with self._db() as session:
-  #     video_repo = VideoRepository(session)
-  #     topic_repo = TopicRepository(session)
+  async def run(self, video_loader: VideoDataLoader) -> VideoSeriesResult:
+    async with self._db() as session:
+      video_repo = VideoRepository(session)
       
-  #     video_data = await video_loader.load(video_repo)
-  #     topics = await topic_loader.load(topic_repo)
-    
-  #   topic_decisions = await self._agent.run(video_data, topics)
-    
-  #   async with self._db() as session:
-  #     topic_repo = TopicRepository(session)
-      
-  #     new_topics: list[Topic] = []
-  #     existing_topics: list[Topic] = []
-      
-  #     for t in topic_decisions.topics:
-  #       if t.decision == "new":
-  #         new_topic = await topic_repo.create_topic(t.proposed_topic_name or t.canonical_topic)
-  #         new_topics.append(new_topic)  
-  #       elif t.decision == "existing" and t.topic_id:
-  #         existing_topic = await topic_repo.get_topic(t.topic_id)
-  #         if existing_topic is not None:
-  #           existing_topics.append(existing_topic)
-          
-  #     await session.commit()
-    
-  #   return {
-  #     "existing_topics": [t.canonical_topic for t in topic_decisions.topics if t.decision == 'existing'],
-  #     "new_topics": [t.canonical_topic for t in topic_decisions.topics if t.decision == 'new']
-  #   }  
-      
+      video_data = await video_loader.load(video_repo)
+
+    topic_proposals = await self._agent.run(video_data)
+    topics: list[AssignedTopic] = []
+
+    async with self._db() as session:
+      topic_repo = TopicRepository(session)
+      for t in topic_proposals.topics:
+        topic = await topic_repo.get_topic(t.id) if t.id else None
+        if not topic:
+          topic = await topic_repo.create_topic(t.name)
+
+        topics.append({
+          "topic_id": topic.id,
+          "is_new": t.is_new,
+          "name": t.name,
+          "confidence": t.confidence
+        })
+
+      await session.commit()
+
+    return {
+      "topics": topics,
+    }

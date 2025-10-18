@@ -69,7 +69,7 @@ def init_worker_process(**kwargs):
   video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_db, "./videos")
   
   global video_series_processor
-  video_series_agent = VideoSeriesAgent(tpl_mgr)
+  video_series_agent = VideoSeriesAgent(gemini_2_5_flash_lite_model, tpl_mgr, topic_agent)
   video_series_processor = VideoSeriesProcessor(video_series_agent, async_db)
   
 
@@ -86,23 +86,26 @@ def process_author_videos(author_id: UUID, max_videos: int) -> dict:
   global loop
   if loop is None:
     raise RuntimeError("Asyncio loop not initialized")
-  
+
+  l_loop: asyncio.AbstractEventLoop = loop # type: ignore
+
   global video_series_processor
   if video_series_processor is None:
     raise RuntimeError("video Series processor not initialized")
+
+  from core.processors.video import VideoSeriesProcessor
+  l_processor: VideoSeriesProcessor = video_series_processor # type: ignore
   
   from db.repositories.videos import AuthorVideoLoader
   
   video_loader = AuthorVideoLoader(author_id, max_videos) 
   
-  # result = loop.run_until_complete(
-  #   video_series_processor.run(video_loader, topic_loader)
-  # )
+  result = l_loop.run_until_complete(
+    l_processor.run(video_loader)
+  )
   
-  # return cast(dict, result)
-  
-  return {"ok": True}
-  
+  return cast(dict, result)
+
 
 @worker_app.task
 def process_video(
