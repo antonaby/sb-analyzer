@@ -22,6 +22,7 @@ video_series_processor = None
 # TODO: recreate agents every time as the my preserve state (it's better to pass agents to "run" func)
 @worker_process_init.connect
 def init_worker_process(**kwargs):
+  import logfire
   from dotenv import load_dotenv
   from core.apify.client import ApifyClient
   from core.video import ClipTaggerClient
@@ -32,7 +33,10 @@ def init_worker_process(**kwargs):
   from core.processors.scraper import ScraperProcessor, TopicProcessor
   from core.processors.video import VideoProcessor, VideoSeriesProcessor
   from db.conf import create_db_engine, get_async_session
-  
+
+  logfire.configure()
+  logfire.instrument_pydantic_ai()
+
   load_dotenv()
   tpl_mgr = TemplateManager()
   
