@@ -1,18 +1,16 @@
 import asyncio
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from typing import TypedDict
+
 from openai import BaseModel
+from pydantic_ai import Agent, RunContext, Tool, ModelSettings
 from pydantic_ai.models import Model
-from pydantic_ai import Agent, RunContext, ModelSettings, Tool
-from pydantic_ai.models.google import GoogleModel
-from pydantic_ai.providers.google import GoogleProvider
 
 from core.agents.common import TopicAgent, TopicAgentDepsLike, TopicProposal, TemplateManager, search_topics_tool
-from core.video import Frame, VideoData
 from core.transcribe import AudioData
+from core.video import Frame, VideoData
 from models.common import PostDetails
-from core.utils import var_or_exception
 
 
 @dataclass

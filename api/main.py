@@ -1,15 +1,14 @@
-from typing import Optional
-from uuid import UUID
-from fastapi import Depends, FastAPI, Query
 from celery.result import AsyncResult
 from dotenv import load_dotenv
-from api.models import *
+from fastapi import Depends, FastAPI, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.repositories.topics import TopicRepository
-from worker.tasks import run_apidojo_search, run_apidojo_collect, process_video, process_author_videos
-from worker.main import worker_app
+
+from api.models import *
 from db.conf import create_db_engine, get_async_session, test_db_conn
+from db.repositories.topics import TopicRepository
 from db.repositories.videos import VideoRepository
+from worker.main import worker_app
+from worker.tasks import run_apidojo_search, run_apidojo_collect, process_video, process_author_videos
 
 load_dotenv()
 

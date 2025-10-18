@@ -184,7 +184,7 @@ def _run_apidojo_scrapper(topic_id: UUID, func_name: str, **kwargs):
   if topic_processor is None:
     raise RuntimeError("TopicProcessor client not initialized")
   
-  serach = loop.run_until_complete(topic_processor.new_search(topic_id, "apidojo", func_name, kwargs))
+  search = loop.run_until_complete(topic_processor.new_search(topic_id, "apidojo", func_name, kwargs))
   
   apidojo_client = apify_client.apidojo_tiktok_scrapper()
   
@@ -197,13 +197,13 @@ def _run_apidojo_scrapper(topic_id: UUID, func_name: str, **kwargs):
     )
   except Exception as e:
     loop.run_until_complete(
-      topic_processor.update_search(serach["serach_id"], -1)
+      topic_processor.update_search(search["serach_id"], -1)
     )
     raise e
   
   if len(posts) == 0:
     loop.run_until_complete(
-      topic_processor.update_search(serach["serach_id"], 0)
+      topic_processor.update_search(search["serach_id"], 0)
     )
     return run
 
@@ -228,7 +228,7 @@ def _run_apidojo_scrapper(topic_id: UUID, func_name: str, **kwargs):
       }
       
       post_details: PostDetails = {
-        "search_id": str(serach["serach_id"]),
+        "search_id": str(search["serach_id"]),
         "url": video_url,
         "download_url": download_url,
         "post_from": "tiktok",
@@ -249,6 +249,6 @@ def _run_apidojo_scrapper(topic_id: UUID, func_name: str, **kwargs):
   job.apply_async()
   
   loop.run_until_complete(
-    topic_processor.update_search(serach["serach_id"], len(posts))
+    topic_processor.update_search(search["serach_id"], len(posts))
   )
   return run
