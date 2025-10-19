@@ -11,5 +11,6 @@ wheels/
 videos
 .env
 
+.logfire
 .idea
 qdrant_storage

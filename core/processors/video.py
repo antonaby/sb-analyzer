@@ -1,17 +1,17 @@
 import logging
-from typing import TypedDict, cast
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from uuid import UUID
 from datetime import datetime, timezone
+from typing import TypedDict, cast
+from uuid import UUID
 
-from core.agents.series import VideoSeriesAgent
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
 from core.agents.summary import SummaryAgent, VideoSummary
+from core.file import AudioFile, UrlVideoSource, VideoFile
 from core.transcribe import AudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, VideoData, Frame
-from core.file import AudioFile, UrlVideoSource, VideoFile
-from db.models import Topic, Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
-from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository, VideoDataLoader
+from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
 from db.repositories.topics import TopicRepository
+from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
 from models.common import PostDetails
 
 
@@ -328,43 +328,3 @@ def _get_frame_meta(frame: Frame) -> dict:
     "frame_number": frame.frame_number,
     "time_sec": frame.time_sec
   }
-
-
-class VideoSeriesResult(TypedDict):
-  topics: list[AssignedTopic]
-
-
-class VideoSeriesProcessor:
-  
-  def __init__(self, agent: VideoSeriesAgent, session_maker: async_sessionmaker[AsyncSession]):
-    self._agent = agent
-    self._db = session_maker
-    
-  async def run(self, video_loader: VideoDataLoader) -> VideoSeriesResult:
-    async with self._db() as session:
-      video_repo = VideoRepository(session)
-      
-      video_data = await video_loader.load(video_repo)
-
-    topic_proposals = await self._agent.run(video_data)
-    topics: list[AssignedTopic] = []
-
-    async with self._db() as session:
-      topic_repo = TopicRepository(session)
-      for t in topic_proposals.topics:
-        topic = await topic_repo.get_topic(t.id) if t.id else None
-        if not topic:
-          topic = await topic_repo.create_topic(t.name)
-
-        topics.append({
-          "topic_id": topic.id,
-          "is_new": t.is_new,
-          "name": t.name,
-          "confidence": t.confidence
-        })
-
-      await session.commit()
-
-    return {
-      "topics": topics,
-    }

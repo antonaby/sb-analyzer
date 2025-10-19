@@ -1,22 +1,17 @@
-import logging
 import os
-from dataclasses import dataclass
-from typing import Optional
-from uuid import UUID
 
 from jinja2 import Environment, FileSystemLoader, Template
-from pydantic import BaseModel
-from pydantic_ai import Agent, RunContext
 from pydantic_ai.models import Model
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
+from pydantic_ai.models.openai import OpenAIResponsesModel
 from pydantic_ai.providers.google import GoogleProvider
+from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.utils import var_or_exception
-from db.repositories.topics import TopicRepository
 
 GOOGLE_API_KEY_VAR = "GOOGLE_API_KEY"
+OPENAI_KEY_VAR = "OPENAI_API_KEY"
 
 
 def google_model(model_name: str) -> Model:
@@ -40,6 +35,16 @@ def gemini_2_5_settings(budget: int) -> ModelSettings:
   })
 
 
+def openai_model(model_name: str) -> Model:
+  key = var_or_exception(OPENAI_KEY_VAR)
+  provider = OpenAIProvider(api_key=key)
+  return OpenAIResponsesModel(model_name, provider=provider)
+
+
+def gpt_5_nano() -> Model:
+  return openai_model("gpt-5-nano-2025-08-07")
+
+
 class TemplateManager:
   
   def __init__(self, tpl_dir: str | None = None) -> None:
@@ -60,150 +65,3 @@ class TemplateManager:
   def render(self, name: str, context: dict) -> str:
     tpl = self.get_template(name)
     return tpl.render(context)
-
-
-class TopicDetails(BaseModel):
-  id: UUID
-  name: str
-
-
-class TopicManager:
-  
-  def __init__(self, async_session: async_sessionmaker[AsyncSession]) -> None:
-    self._db = async_session
-    
-  async def search_topics(self, search_keywords: list[str]) -> list[TopicDetails]:
-    async with self._db() as session:
-      repo = TopicRepository(session)
-      await repo.topic_lock()
-      
-      single_words = [word for phrase in search_keywords for word in phrase.split()]
-      found_topics = await repo.search_topics(single_words)
-      return [
-        TopicDetails(id=t.id, name=t.name) 
-        for t in found_topics
-      ]
-      
-  async def create_topic(self, name: str) -> TopicDetails:
-    async with self._db() as session:
-      repo = TopicRepository(session)
-      await repo.topic_lock()
-      
-      found_topics = await repo.search_topics([name])
-      if len(found_topics) > 0:
-        t = found_topics[0] 
-        return TopicDetails(id=t.id, name=t.name) 
-      
-      new_topic = await repo.create_topic(name)
-      await session.commit()
-      
-    return TopicDetails(id=new_topic.id, name=new_topic.name)
-  
-
-@dataclass
-class TopicAgentDeps:
-  topic_manager: TopicManager
-
-
-class TopicProposal(BaseModel):
-  id: Optional[UUID]
-  name: str
-  confidence: float
-  is_new: bool
-  
-  class Config: # type: ignore
-    extra = "forbid"
-    
-
-class TopicAgentResponse(BaseModel):
-  topics: list[TopicProposal]
-  
-  class Config: # type: ignore
-    extra = "forbid"
-
-
-class TopicAgent:
-  
-  def __init__(self, model: Model, tpl_mgr: TemplateManager, topic_manager: TopicManager):
-    self._log = logging.getLogger("app.topic_agent")
-    self._tpl_mgr = tpl_mgr
-    self._topic_manager = topic_manager
-    
-    self._init_agent(model)
-  
-  def _init_agent(self, model: Model):
-    agent = Agent(
-      model,
-      instructions=self._tpl_mgr.render("topic_system", {}),
-      deps_type=TopicAgentDeps,
-      output_type=TopicAgentResponse
-    )
-    self._agent = agent
-    
-    @agent.tool
-    async def search_topics(ctx: RunContext[TopicAgentDeps], topic_names: list[str]) -> list[TopicDetails]:
-      """
-      Retrieves a list of topics based on the provided search topics.
-
-      Args:
-        topic_names (list[str]): A list of topic names to search for matching topics.
-          For example:
-            ["One - Two", "Three"]
-
-      Returns:
-        list[TopicDetails]: A list of topic details (ID and name) matching the search query.
-          The returned topics are ordered by descending relevance - topics whose names
-          more closely match the search terms appear first.
-      """
-
-      return await ctx.deps.topic_manager.search_topics(topic_names)
-    
-    @agent.tool
-    async def create_topic(ctx: RunContext[TopicAgentDeps], name: str) -> TopicDetails:
-      """
-      Creates a new topic with the given name.
-      
-      Args:
-        name (str): The name of the topic to be created.
-
-      Returns:
-          TopicDetails: Details about the newly created topic.
-      """
-      return await ctx.deps.topic_manager.create_topic(name)
-
-  async def run(self, text: str, temperature: float = 0.01) -> TopicAgentResponse:
-    user_input = {
-      "text": text
-    }
-    
-    user_prompt = self._tpl_mgr.render("only_input", {"input": user_input})
-    res = await self._agent.run(
-      user_prompt,
-      deps=TopicAgentDeps(topic_manager=self._topic_manager),
-      model_settings=ModelSettings(temperature=temperature)
-    )
-    
-    usage = res.usage()
-    self._log.debug(f"Finish: summary request, input_tokens={usage.input_tokens}, output_tokens={usage.output_tokens}")
-    
-    return res.output
-
-@dataclass
-class TopicAgentDepsLike:
-  topic_agent: TopicAgent
-
-
-async def search_topics(ctx: RunContext[TopicAgentDepsLike], text: str) -> list[TopicProposal]:
-  """
-  Retrieves a list of topics based on the provided text.
-
-  Args:
-    text (str): A text for topics to extract
-
-  Returns:
-    list[TopicDetails]: A list of topic details (ID and name) matching the text.
-      The returned topics are ordered by descending relevance - topics whose names
-      more closely match the search terms appear first.
-  """
-  response = await ctx.deps.topic_agent.run(text)
-  return response.topics

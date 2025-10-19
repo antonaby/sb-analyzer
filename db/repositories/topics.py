@@ -79,7 +79,7 @@ class TopicRepository(BaseAsyncRepo):
     return result.scalar_one()
   
   async def search_topics(self, search_keywords: list[str]) -> Sequence[Topic]:
-    if not search_keywords or len(search_keywords) == 0:
+    if len(search_keywords) == 0:
       return []
     
     cleaned = [s.replace("-", "") for s in search_keywords]

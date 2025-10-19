@@ -52,7 +52,13 @@ Once confident in understanding, output only the following JSON structure:
   "actions": [
     "List of short, factual action sentences describing visible or narrated events. Use simple subject-verb-object format, optionally with adjectives/adverbs. Example: 'black dog carefully runs across the street'. Each sentence should correspond to a distinct action."
   ],
-  "topics": <output from "search_topics" tool if called otherwise an empty array([])> 
+  "topics": ["List of short topic names"],
+  "frames": [ // it should be sorted by "time_sec" asc
+    {
+      "time_sec": <float>,
+      "requested": <boolean, false if the frame is in the input, true if the frame is requested by get_frame>
+    }
+  ]
 }
 
 If the current data is insufficient to understand the video, you may explicitly request additional frame analysis by calling "get_frame".
@@ -85,8 +91,6 @@ Budgets & Stop Criteria:
 - Soft per-minute budget: up to 6 requests per 60s of video (round up). Short videos (≤30s): up to 4.
 - Early stop when: (a) you can write the synopsis confidently; (b) all key actions are verified; (c) additional frames yield redundant info.
 - Backoff: if 2 consecutive requests don't change your understanding, stop requesting and proceed.
-
-{% include "_topic_rules.jinja" %}
 
 Guidelines:
 - Integrate information from both frame analysis and transcript.

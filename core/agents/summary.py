@@ -7,23 +7,32 @@ from openai import BaseModel
 from pydantic_ai import Agent, RunContext, Tool, ModelSettings
 from pydantic_ai.models import Model
 
-from core.agents.common import TopicAgent, TopicAgentDepsLike, TopicProposal, TemplateManager, search_topics
+from core.agents.common import TemplateManager
 from core.transcribe import AudioData
 from core.video import Frame, VideoData
 from models.common import PostDetails
 
 
 @dataclass
-class SummaryAgentDeps(TopicAgentDepsLike):
+class SummaryAgentDeps:
   video: VideoData
   audio: AudioData
+
+
+class FrameDetails(BaseModel):
+  time_sec: float
+  requested: bool
+
+  class Config: # type: ignore
+    extra = "forbid"
 
 
 class VideoSummary(BaseModel):
   label: str
   synopsis: str
   actions: list[str]
-  topics: list[TopicProposal]
+  topics: list[str]
+  frames: list[FrameDetails]
   
   class Config: # type: ignore
     extra = "forbid"
@@ -49,10 +58,9 @@ class UserPromptInput(TypedDict):
 
 class SummaryAgent:
   
-  def __init__(self, model: Model, tpl_mgr: TemplateManager, topic_agent: TopicAgent):
+  def __init__(self, model: Model, tpl_mgr: TemplateManager):
     self._log = logging.getLogger("app.video_summary")
     self._tpl_mgr = tpl_mgr
-    self._topic_agent = topic_agent
     
     self._create_agent(model)
   
@@ -61,10 +69,7 @@ class SummaryAgent:
       model,
       instructions=self._tpl_mgr.render("summary_system", {}),
       deps_type=SummaryAgentDeps,
-      output_type=VideoSummary,
-      tools=[
-        Tool(search_topics, takes_ctx=True)
-      ]
+      output_type=VideoSummary
     )
     self._agent = agent
     
@@ -81,7 +86,7 @@ class SummaryAgent:
       """
       return await ctx.deps.video.get_frame(time_sec)
 
-  async def run(self, post: PostDetails, video: VideoData, audio: AudioData, temperature: float = 0.1) -> VideoSummary:
+  async def run(self, post: PostDetails, video: VideoData, audio: AudioData, temperature: float = 0.0) -> VideoSummary:
     basic_frames, transcription = await asyncio.gather(
       video.get_n_frames(),
       audio.get_transcription()
@@ -106,7 +111,7 @@ class SummaryAgent:
     user_prompt = self._tpl_mgr.render("only_input", {"input": user_input})
     res = await self._agent.run(
       user_prompt,
-      deps=SummaryAgentDeps(video=video, audio=audio, topic_agent=self._topic_agent),
+      deps=SummaryAgentDeps(video=video, audio=audio),
       model_settings=ModelSettings(temperature=temperature)
     )
     
