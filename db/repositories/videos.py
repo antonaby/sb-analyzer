@@ -1,15 +1,14 @@
-from typing import Any, Sequence, TypedDict
-from uuid import UUID
-from abc import ABC, abstractmethod
-
 from datetime import datetime
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any, Sequence
+from uuid import UUID
+
 from sqlalchemy import or_, select, func, literal_column, desc
-from sqlalchemy.orm import joinedload, selectinload, with_loader_criteria
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload, with_loader_criteria
 
-
-from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource, VideoSearch
+from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource, \
+  VideoSearch
 from db.repositories.common import BaseAsyncRepo
 from models.common import VideoData
 
@@ -209,105 +208,71 @@ class VideoRepository(BaseAsyncRepo):
     await self._session.commit()
 
 
-class VideoDataLoader(ABC):
-  
-  @abstractmethod
-  async def load(self, video_repo: VideoRepository) -> list[VideoData]:
-    pass
+def _get_video_summary(video: Video) -> tuple[str, str, list[str], list[str]]:
+  label: str = "no label"
+  synopsis: str = "no synopsis"
+  actions: list[str] = []
+  transcription: list[str] = []
+
+  for a in video.annotations:
+    if a.kind == AnnotationKind.label:
+      label = a.value
+    if a.kind == AnnotationKind.synopsis:
+      synopsis = a.value
+    if a.kind == AnnotationKind.action:
+      actions.append(a.value)
+    if a.kind == AnnotationKind.transcription:
+      transcription.append(a.value)
+
+  return label, synopsis, actions, transcription
 
 
-class AuthorVideoLoader(VideoDataLoader):
-  
-  def __init__(self, author_id: UUID, max_videos: int = 100):
-    self._author_id = author_id
-    self._max_videos = max_videos
+def _get_video_meta(video: Video) -> list[str]:
+  topics: list[str] = []
 
-  async def load(self, video_repo: VideoRepository) -> list[VideoData]:
-    videos = await video_repo.get_videos_by_author(
-      self._author_id, 
-      load_annotations=True, 
-      annotations_to_load=[
-        AnnotationKind.label, 
-        AnnotationKind.synopsis, 
-        AnnotationKind.transcription
-      ],
-      load_meta=True, 
-      meta_to_load=[
-        MetaSource.topic, 
-        MetaSource.title, 
-        MetaSource.description, 
-        MetaSource.hashtag
-      ],
-      max_videos=self._max_videos
-    )
-    
-    video_data_list: list[VideoData] = []
-    for video in videos:
-      title, description, hashtags = self._get_post_meta(video)
-      topics = self._get_video_meta(video)
-      label, synopsis, actions, transcription = self._get_video_summary(video)
-      
-      video_data: VideoData = {
-        "video_id": str(video.id),
-        "source": video.source.value,
-        "uploaded_at_iso": video.uploaded_at.isoformat(),
-        "title": title,
-        "description": description,
-        "likes": video.likes,
-        "views": video.views,
-        "comments": video.comments,
-        "hashtags": hashtags, 
-        "topics": topics,
-        "label": label,
-        "synopsis": synopsis,
-        "actions": actions,
-        "transcription": transcription
-      }
-    
-      video_data_list.append(video_data)
-    
-    return video_data_list
+  for m in video.video_meta:
+    if m.source == MetaSource.topic:
+      topics.append(m.value)
 
-  def _get_post_meta(self, video: Video) -> tuple[str, str, list[str]]:
-    title: str = "no title"
-    description: str = "no description"
-    hashtags: list[str] = []
-    
-    for m in video.video_meta:
-      if m.source == MetaSource.title:
-        title = m.value
-      if m.source == MetaSource.description:
-        description = m.value
-      if m.source == MetaSource.hashtag:
-        hashtags.append(m.value)
-        
-    return title, description, hashtags
-  
-  def _get_video_meta(self, video: Video) -> list[str]:
-    topics: list[str] = []
-    
-    for m in video.video_meta:
-      if m.source == MetaSource.topic:
-        topics.append(m.value)
-    
-    return topics
+  return topics
 
-  def _get_video_summary(self, video: Video) -> tuple[str, str, list[str], list[str]]:
-    label: str = "no label"
-    synopsis: str = "no synopsis"
-    actions: list[str] = []
-    transcription: list[str] = []
-    
-    for a in video.annotations:
-      if a.kind == AnnotationKind.label:
-        label = a.value
-      if a.kind == AnnotationKind.synopsis:
-        synopsis = a.value
-      if a.kind == AnnotationKind.action:
-        actions.append(a.value)
-      if a.kind == AnnotationKind.transcription:
-        transcription.append(a.value)
-        
-    return label, synopsis, actions, transcription
-    
-    
+
+def _get_post_meta(video: Video) -> tuple[str, str, list[str]]:
+  title: str = "no title"
+  description: str = "no description"
+  hashtags: list[str] = []
+
+  for m in video.video_meta:
+    if m.source == MetaSource.title:
+      title = m.value
+    if m.source == MetaSource.description:
+      description = m.value
+    if m.source == MetaSource.hashtag:
+      hashtags.append(m.value)
+
+  return title, description, hashtags
+
+
+def get_video_data(video: Video) -> VideoData:
+  title, description, hashtags = _get_post_meta(video)
+  topics = _get_video_meta(video)
+  label, synopsis, actions, transcription = _get_video_summary(video)
+
+  video_data: VideoData = {
+    "video_id": str(video.id),
+    "source": video.source.value,
+    "uploaded_at_iso": video.uploaded_at.isoformat(),
+    "title": title,
+    "description": description,
+    "likes": video.likes,
+    "views": video.views,
+    "comments": video.comments,
+    "hashtags": hashtags,
+    "topics": topics,
+    "label": label,
+    "synopsis": synopsis,
+    "actions": actions,
+    "transcription": transcription
+  }
+
+  return video_data

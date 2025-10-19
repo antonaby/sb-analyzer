@@ -17,6 +17,7 @@ async_db = None
 search_processor = None
 post_details_processor = None
 video_processor = None
+topic_processor = None
 
 
 # TODO: recreate agents every time as the my preserve state (it's better to pass agents to "run" func)
@@ -31,7 +32,7 @@ def init_worker_process(**kwargs):
   from core.agents.topic import TopicManager, TopicAgent
   from core.agents.summary import SummaryAgent
   from core.processors.scraper import PostDetailsProcessor, SearchProcessor
-  from core.processors.video import VideoProcessor
+  from core.processors.video import VideoProcessor, TopicProcessor
   from db.conf import create_db_engine, get_async_session
 
   logfire.configure()
@@ -63,12 +64,14 @@ def init_worker_process(**kwargs):
   summary_agent = SummaryAgent(gpt5_nano, tpl_mgr)
   video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_db, "./videos")
 
+  global topic_processor
   topic_manager = TopicManager(async_db)
   topic_agent = TopicAgent(
     gpt5_nano,
     tpl_mgr,
     topic_manager
   )
+  topic_processor = TopicProcessor(topic_agent, async_db)
 
 
 @worker_shutting_down.connect
@@ -81,9 +84,30 @@ def clear_resources(sig, how, exitcode, **kwargs):
 
 
 @worker_app.task
+def identify_topics(video_id: UUID) -> dict:
+  global loop
+  if loop is None:
+    raise RuntimeError("Asyncio loop not initialized")
+  l_loop: asyncio.AbstractEventLoop = loop
+
+  global topic_processor
+  if topic_processor is None:
+    raise RuntimeError("Topic Processor not initialized")
+
+  from core.processors.video import TopicProcessor
+  l_topic_processor: TopicProcessor = topic_processor
+
+  result = l_loop.run_until_complete(
+    l_topic_processor.identify_topics(video_id)
+  )
+  return cast(dict, result)
+
+
+@worker_app.task
 def process_video(
     video_id: UUID,
-    delete_downloaded_files: bool = True
+    delete_downloaded_files: bool = True,
+    run_identify_topics: bool = True,
 ) -> dict:
   global loop
   if loop is None:
@@ -100,6 +124,10 @@ def process_video(
   result = l_loop.run_until_complete(
     l_video_process.create_summary(video_id, delete_downloaded_files)
   )
+  
+  if run_identify_topics and result.get("video_id"):
+    identify_topics.delay(result["video_id"])
+
   return cast(dict, result)
 
 

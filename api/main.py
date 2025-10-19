@@ -8,7 +8,7 @@ from db.conf import create_db_engine, get_async_session, test_db_conn
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import VideoRepository
 from worker.main import worker_app
-from worker.tasks import run_apidojo_search, run_apidojo_collect, process_video
+from worker.tasks import run_apidojo_search, run_apidojo_collect, process_video, identify_topics
 
 load_dotenv()
 
@@ -79,6 +79,16 @@ def collect_videos(run: ApidojoCollectUrls):
 @app.post("/tasks/process-video/{video_id}")
 def run_process_video_task(video_id: UUID):
   job = process_video.delay(video_id) # type: ignore
+
+  return {
+    "id": job.id,
+    "status": job.status,
+  }
+
+
+@app.post("/tasks/identify_topics/{video_id}")
+def run_identify_topics_task(video_id: UUID):
+  job = identify_topics.delay(video_id)
 
   return {
     "id": job.id,

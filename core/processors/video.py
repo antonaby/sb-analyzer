@@ -6,23 +6,18 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.agents.summary import SummaryAgent, VideoSummary
+from core.agents.topic import TopicAgent, TopicProposal
 from core.file import AudioFile, UrlVideoSource, VideoFile
 from core.transcribe import AudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, VideoData, Frame
 from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
-from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
+from db.repositories.topics import TopicRepository
+from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository, get_video_data
 from models.common import PostDetails
 
 
 class VideoProcessorError(Exception):
   pass
-
-
-class AssignedTopic(TypedDict):
-  topic_id: UUID
-  is_new: bool
-  name: str
-  confidence: float
 
 
 class ProcessedVideo(TypedDict):
@@ -298,23 +293,64 @@ def _get_frame_meta(frame: Frame) -> dict:
   }
 
 
-# async def _assign_topics(session: AsyncSession, summary: VideoSummary, video: Video) -> list[AssignedTopic]:
-#   topic_repo = TopicRepository(session)
-#
-#   topics: list[AssignedTopic] = []
-#
-#   for t in summary.topics:
-#     topic = await topic_repo.get_topic(t.id) if t.id else None
-#     if not topic:
-#       topic = await topic_repo.create_topic(t.name)
-#
-#     await topic_repo.assign_topic(topic.id, video.id, t.confidence)
-#     topics.append({
-#       "topic_id": topic.id,
-#       "is_new": t.is_new,
-#       "name": t.name,
-#       "confidence": t.confidence
-#     })
-#
-#   return topics
+class AssignedTopic(TypedDict):
+  topic_id: UUID
+  is_new: bool
+  name: str
+  confidence: float
 
+
+class TopicProcessorResult(TypedDict):
+  video_id: UUID
+  topics: list[AssignedTopic]
+
+
+class TopicProcessorError(Exception):
+  pass
+
+
+class TopicProcessor:
+
+  def __init__(self, topic_agent: TopicAgent, session_maker: async_sessionmaker[AsyncSession]):
+    self._topic_agent = topic_agent
+    self._db = session_maker
+
+  async def identify_topics(self, video_id: UUID) -> TopicProcessorResult:
+    async with self._db() as session:
+      repo = VideoRepository(session)
+      video = await repo.get_video_by_id(
+        video_id,
+        with_scraped_data=True,
+        with_annotations=True,
+        with_meta=True
+      )
+      if video is None:
+        raise TopicProcessorError(f"Video {video_id} not found")
+
+      video_data = get_video_data(video)
+
+    topics = await self._topic_agent.run(video_data)
+  
+    async with self._db() as session:
+      video = await session.merge(video, load=False)
+      topic_repo = TopicRepository(session)
+      assigned_topics: list[AssignedTopic] = []
+
+      for t in topics:
+        topic = await topic_repo.get_topic(t.id) if t.id else None
+        if not topic:
+          topic = await topic_repo.create_topic(t.name)
+
+        await topic_repo.assign_topic(topic.id, video.id, t.confidence)
+        assigned_topics.append({
+          "topic_id": topic.id,
+          "is_new": t.is_new,
+          "name": t.name,
+          "confidence": t.confidence
+        })
+
+      await session.commit()
+      return {
+        "video_id": video_id,
+        "topics": assigned_topics,
+      }

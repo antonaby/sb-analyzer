@@ -9,10 +9,6 @@ from db.repositories.topics import TopicRepository
 from db.models import VideoSource
 
 
-class TopicErrorProcessor(Exception):
-  pass
-
-
 class NewSearchResult(TypedDict):
   search_id: UUID
   created_at: datetime
