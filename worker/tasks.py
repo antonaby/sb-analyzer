@@ -105,9 +105,9 @@ def identify_topics(video_id: UUID) -> dict:
 
 @worker_app.task
 def process_video(
-    video_id: UUID,
-    delete_downloaded_files: bool = True,
-    run_identify_topics: bool = True,
+  video_id: UUID,
+  delete_downloaded_files: bool = True,
+  run_identify_topics: bool = True,
 ) -> dict:
   global loop
   if loop is None:
@@ -124,7 +124,7 @@ def process_video(
   result = l_loop.run_until_complete(
     l_video_process.create_summary(video_id, delete_downloaded_files)
   )
-  
+
   if run_identify_topics and result.get("video_id"):
     identify_topics.delay(result["video_id"])
 
