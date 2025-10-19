@@ -13,8 +13,8 @@ class TopicErrorProcessor(Exception):
   pass
 
 
-class NewSerachResult(TypedDict):
-  serach_id: UUID
+class NewSearchResult(TypedDict):
+  search_id: UUID
   created_at: datetime
   
   
@@ -23,31 +23,28 @@ class UpdateSearchResult(TypedDict):
   ran_at: datetime | None
 
 
-class TopicProcessor:
+class SearchProcessor:
   
   def __init__(self, session_maker: async_sessionmaker[AsyncSession]):
     self._db = session_maker
     
-  async def new_search(self, topic_id: UUID, scraper: str, kind: str, search_data: dict) -> NewSerachResult:
-    async with self._db() as session:
-      topic_repo = TopicRepository(session)  
-      topic = await topic_repo.get_topic(topic_id)
-      if topic is None:
-        raise TopicErrorProcessor(f"Topic not found, id={topic_id}")
-      
-      search = await topic_repo.create_serach(topic, scraper, kind, search_data)
-      await session.commit()
-      
-    return {
-      "serach_id": search.id,
-      "created_at": search.created_at
-    }
-  
-  async def update_search(self, serach_id: UUID, total_videos: int) -> UpdateSearchResult:
+  async def new_search(self, scraper: str, kind: str, search_data: dict) -> NewSearchResult:
     async with self._db() as session:
       topic_repo = TopicRepository(session)
       
-      updated_search = await topic_repo.update_search(serach_id, total_videos)
+      search = await topic_repo.create_search(scraper, kind, search_data)
+      await session.commit()
+      
+    return {
+      "search_id": search.id,
+      "created_at": search.created_at
+    }
+  
+  async def update_search(self, search_id: UUID, total_videos: int) -> UpdateSearchResult:
+    async with self._db() as session:
+      topic_repo = TopicRepository(session)
+      
+      updated_search = await topic_repo.update_search(search_id, total_videos)
       await session.commit()
     
     return {
@@ -56,7 +53,7 @@ class TopicProcessor:
     }
 
 
-class Result(TypedDict):
+class SavePostResult(TypedDict):
   author_id: UUID
   new_author: bool
   video_id: UUID
@@ -64,12 +61,12 @@ class Result(TypedDict):
   processing_error: bool
 
 
-class ScraperProcessor:
+class PostDetailsProcessor:
   
   def __init__(self, session_maker: async_sessionmaker[AsyncSession]):
     self._db = session_maker
     
-  async def run(self, author: AuthorDetails, post: PostDetails) -> Result:
+  async def save(self, author: AuthorDetails, post: PostDetails) -> SavePostResult:
     async with self._db() as session:
       repo = VideoRepository(session)
       
@@ -105,5 +102,5 @@ class ScraperProcessor:
         "new_author": is_author_new,
         "video_id": video_model.id,
         "new_video": is_video_new,
-        "processing_error": video_model.processing_error or False
+        "processing_error": video_model.processing_error if video_model.processing_error else False
       }

@@ -1,7 +1,7 @@
 import asyncio
 from typing import TypedDict
 from pydantic import BaseModel
-from core.utils import var_or_exception
+from utils.common import var_or_exception
 from core.file import AudioFile
 import aiohttp
 

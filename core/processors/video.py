@@ -10,7 +10,6 @@ from core.file import AudioFile, UrlVideoSource, VideoFile
 from core.transcribe import AudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, VideoData, Frame
 from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
-from db.repositories.topics import TopicRepository
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
 from models.common import PostDetails
 
@@ -29,7 +28,6 @@ class AssignedTopic(TypedDict):
 class ProcessedVideo(TypedDict):
   video_id: UUID | None
   processed_at_utc: datetime | None
-  assigned_topics: list[AssignedTopic]
 
 
 class VideoProcessor:
@@ -49,7 +47,7 @@ class VideoProcessor:
     self._db = async_session
     self._tmp_dir = tmp_dir
     
-  async def run(
+  async def create_summary(
     self, 
     video_id: UUID, 
     delete_downloaded_files: bool = True
@@ -60,16 +58,14 @@ class VideoProcessor:
       self._log.warning(f"Video not found: {video_id}")
       return {
         "video_id": None,
-        "processed_at_utc": None,
-        "assigned_topics": []
+        "processed_at_utc": None
       }
     
-    video_model, topics = await self._create_summary(video_model, delete_downloaded_files)
+    video_model = await self._create_summary(video_model, delete_downloaded_files)
     
     return {
       "video_id": video_model.id,
-      "processed_at_utc": video_model.processed_at,
-      "assigned_topics": topics
+      "processed_at_utc": video_model.processed_at
     }
         
   async def _find_video(self, video_id: UUID) -> Video | None:
@@ -81,7 +77,7 @@ class VideoProcessor:
     self,
     video_model: Video,
     delete_downloaded_files: bool
-  ) -> tuple[Video, list[AssignedTopic]]:
+  ) -> Video:
     video_file = None
     video_source = None
     
@@ -114,7 +110,7 @@ class VideoProcessor:
     video_model: Video,
     post_data: PostDetails, video_data: VideoData, 
     audio_data: AudioData, summary: VideoSummary
-  ) -> tuple[Video, list[AssignedTopic]]:
+  ) -> Video:
     processed_frames = await video_data.get_processed_frames()
     transcriptions = audio_data.get_processed_transcriptions()
     
@@ -133,9 +129,7 @@ class VideoProcessor:
       }
       video_model.processing_error = False
       video_model.processed_at = datetime.now(timezone.utc)
-      
-      topics = await _assign_topics(session, summary, video_model)
-      
+
       for annotation in annotations:
         annotation.video_id = video_model.id
         annotation.revision = revision
@@ -148,7 +142,7 @@ class VideoProcessor:
 
       await session.commit()
       
-      return video_model, topics
+      return video_model
     
   async def _set_error(self, video_model: Video):
     async with self._db() as session:
@@ -158,27 +152,6 @@ class VideoProcessor:
       
       await session.commit()
       
-
-async def _assign_topics(session: AsyncSession, summary: VideoSummary, video: Video) -> list[AssignedTopic]:
-  topic_repo = TopicRepository(session)
-  
-  topics: list[AssignedTopic] = []
-  
-  for t in summary.topics:
-    topic = await topic_repo.get_topic(t.id) if t.id else None
-    if not topic:
-      topic = await topic_repo.create_topic(t.name)
-    
-    await topic_repo.assign_topic(topic.id, video.id, t.confidence)
-    topics.append({
-      "topic_id": topic.id,
-      "is_new": t.is_new,
-      "name": t.name,
-      "confidence": t.confidence
-    })
-    
-  return topics
-
 
 def _create_video_data(
   post: PostDetails, summary: VideoSummary, 
@@ -201,22 +174,17 @@ def _create_video_data(
 
 
 def _create_summary_annotations(summary: VideoSummary) -> list[VideoAnnotation]:
-  annotations: list[VideoAnnotation] = []
-  
-  annotations.append(
+  annotations: list[VideoAnnotation] = [
     prepare_annotation(
       kind=AnnotationKind.label,
       value=summary.label
-    )
-  )
-  
-  annotations.append(
+    ),
     prepare_annotation(
       kind=AnnotationKind.synopsis,
       value=summary.synopsis
     )
-  )
-      
+  ]
+
   for action in summary.actions:
     annotations.append(
       prepare_annotation(
@@ -233,7 +201,7 @@ def _create_summary_meta(summary: VideoSummary) -> list[VideoMeta]:
   
   for topic in summary.topics:
     video_meta.append(
-      prepare_meta(MetaSource.topic, topic.name)
+      prepare_meta(MetaSource.topic, topic)
     )  
   
   return video_meta
@@ -303,8 +271,8 @@ def _create_frame_annotations(frame: Frame) -> list[VideoAnnotation]:
   _append_frame_ann(annotations, AnnotationKind.frame_environment, frame.environment, frame)
   _append_frame_ann(annotations, AnnotationKind.frame_summary, frame.summary, frame)
   
-  for object in frame.objects:
-    _append_frame_ann(annotations, AnnotationKind.frame_object, object, frame)
+  for frame_object in frame.objects:
+    _append_frame_ann(annotations, AnnotationKind.frame_object, frame_object, frame)
 
   for action in frame.actions:
     _append_frame_ann(annotations, AnnotationKind.frame_action, action, frame)
@@ -328,3 +296,25 @@ def _get_frame_meta(frame: Frame) -> dict:
     "frame_number": frame.frame_number,
     "time_sec": frame.time_sec
   }
+
+
+# async def _assign_topics(session: AsyncSession, summary: VideoSummary, video: Video) -> list[AssignedTopic]:
+#   topic_repo = TopicRepository(session)
+#
+#   topics: list[AssignedTopic] = []
+#
+#   for t in summary.topics:
+#     topic = await topic_repo.get_topic(t.id) if t.id else None
+#     if not topic:
+#       topic = await topic_repo.create_topic(t.name)
+#
+#     await topic_repo.assign_topic(topic.id, video.id, t.confidence)
+#     topics.append({
+#       "topic_id": topic.id,
+#       "is_new": t.is_new,
+#       "name": t.name,
+#       "confidence": t.confidence
+#     })
+#
+#   return topics
+

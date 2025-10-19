@@ -12,7 +12,7 @@ from alembic import context
 from db.models import *
 from db.conf import Base
 
-from core.utils import var_or_exception
+from utils.common import var_or_exception
 
 load_dotenv(find_dotenv())
 

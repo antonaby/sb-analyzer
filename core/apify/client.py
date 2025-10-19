@@ -3,7 +3,7 @@ import os
 from apify_client import ApifyClientAsync
 from .tiktok.clockworks import ClockworksTiktokScrapper
 from .tiktok.apidojo import ApidojoTiktokScrapper
-from core.utils import var_or_exception
+from utils.common import var_or_exception
 
 APIFY_API_KEY_VAR = "APIFY_API_KEY"
 

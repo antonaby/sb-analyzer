@@ -9,7 +9,6 @@ class CreateTopicRequest(BaseModel):
 
 
 class ApidojoScrapperRun(BaseModel):
-  topic_id: UUID
   keywords: list[str] = Field(min_length=1, description="At least one keyword")
   date_range: DateRange
   sort_type: SortType
@@ -18,7 +17,6 @@ class ApidojoScrapperRun(BaseModel):
 
 
 class ApidojoCollectUrls(BaseModel):
-  topic_id: UUID
   urls: list[str] = Field(min_length=1, description="At least one url")
   max_items: int
 

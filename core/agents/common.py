@@ -8,7 +8,7 @@ from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 
-from core.utils import var_or_exception
+from utils.common import var_or_exception
 
 GOOGLE_API_KEY_VAR = "GOOGLE_API_KEY"
 OPENAI_KEY_VAR = "OPENAI_API_KEY"

@@ -8,7 +8,7 @@ from db.conf import create_db_engine, get_async_session, test_db_conn
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import VideoRepository
 from worker.main import worker_app
-from worker.tasks import run_apidojo_search, run_apidojo_collect, process_video, process_author_videos
+from worker.tasks import run_apidojo_search, run_apidojo_collect, process_video
 
 load_dotenv()
 
@@ -49,8 +49,7 @@ async def new_topic(request: CreateTopicRequest, topic_repo: TopicRepository = D
 
 @app.post("/apidojo/serach")
 def run_tiktok_scrapper(run: ApidojoScrapperRun):
-  job = run_apidojo_search.delay( # type: ignore
-    topic_id=run.topic_id,                                 
+  job = run_apidojo_search.delay(
     keywords=run.keywords, 
     date_range=run.date_range, 
     sort_type=run.sort_type, 
@@ -66,8 +65,7 @@ def run_tiktok_scrapper(run: ApidojoScrapperRun):
 
 @app.post("/apidojo/collect")
 def collect_videos(run: ApidojoCollectUrls):
-  job = run_apidojo_collect.delay( # type: ignore
-    topic_id=run.topic_id,
+  job = run_apidojo_collect.delay(
     urls=run.urls,
     max_items=run.max_items
   )
@@ -82,16 +80,6 @@ def collect_videos(run: ApidojoCollectUrls):
 def run_process_video_task(video_id: UUID):
   job = process_video.delay(video_id) # type: ignore
 
-  return {
-    "id": job.id,
-    "status": job.status,
-  }
-
-
-@app.post("/tasks/process-author-videos")
-def run_process_author_videos(task: TaskProcessAuthorVideos):
-  job = process_author_videos.delay(task.author_id, task.max_videos) # type: ignore
-  
   return {
     "id": job.id,
     "status": job.status,

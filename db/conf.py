@@ -3,7 +3,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
-from core.utils import var_or_exception
+from utils.common import var_or_exception
 
 DATABASE_URL_VAR = 'DATABASE_URL'
 

@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import desc, insert, select, text, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import Topic, TopicSearch, Video, VideoTopic
+from db.models import Topic, Search, Video, VideoTopic
 from db.repositories.common import BaseAsyncRepo
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -40,22 +40,22 @@ class TopicRepository(BaseAsyncRepo):
     
     return result.scalars().all()
     
-  async def create_serach(self, topic: Topic, scraper: str, kind: str, search_data: dict) -> TopicSearch:
+  async def create_search(self, scraper: str, kind: str, search_data: dict) -> Search:
     stmt = (
-      insert(TopicSearch).
-      values(topic_id=topic.id, scraper=scraper, kind=kind, search_data=search_data).
-      returning(TopicSearch)
+      insert(Search).
+      values(scraper=scraper, kind=kind, search_data=search_data).
+      returning(Search)
     )
     result = await self._session.execute(stmt)
     
     return result.scalar_one()
   
-  async def update_search(self, serach_id: UUID, total_videos: int) -> TopicSearch:
+  async def update_search(self, search_id: UUID, total_videos: int) -> Search:
     stmt = (
-      update(TopicSearch).
-      where(TopicSearch.id == serach_id).
+      update(Search).
+      where(Search.id == search_id).
       values(total_videos=total_videos, ran_at=func.now()).
-      returning(TopicSearch)
+      returning(Search)
     )
     result = await self._session.execute(stmt)
     

@@ -76,12 +76,6 @@ class Topic(Base):
     default=func.now(), nullable=False
   )
   
-  seraches: Mapped[list["TopicSearch"]] = relationship(
-    back_populates="topic",
-    cascade="all, delete-orphan",
-    passive_deletes=True,
-  )
-  
   video_topics: Mapped[list["VideoTopic"]] = relationship(
     back_populates="topic",
     cascade="all, delete-orphan",
@@ -93,22 +87,20 @@ class Topic(Base):
     back_populates="topics",
     viewonly=True,
   )
+
+  __table_args__ = (
+    Index("ix_topic_name_tsv", "name_tsv", postgresql_using="gin"),
+  )
   
   def __repr__(self):
     return f"<Topic(id={self.id}, name={self.name!r})>"
 
 
-class TopicSearch(Base):
+class Search(Base):
   __tablename__ = "topic_searches"
   
   id: Mapped[uuid.UUID] = mapped_column(
     UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
-  )
-  topic_id: Mapped[uuid.UUID] = mapped_column(
-    UUID(as_uuid=True),
-    ForeignKey("topics.id", ondelete="CASCADE"),
-    nullable=False,
-    index=True,
   )
   scraper: Mapped[str] = mapped_column(String(128), nullable=False)
   kind: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -120,8 +112,7 @@ class TopicSearch(Base):
     default=func.now(), nullable=False
   )
   ran_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-  
-  topic: Mapped["Topic"] = relationship(back_populates="seraches")
+
   video_searches: Mapped[list["VideoSearch"]] = relationship(
     back_populates="search",
     cascade="all, delete-orphan",
@@ -129,7 +120,7 @@ class TopicSearch(Base):
   )
   videos: Mapped[list["Video"]] = relationship(
     secondary="video_searches",
-    back_populates="seraches",
+    back_populates="searches",
     viewonly=True,
   )
   
@@ -225,7 +216,7 @@ class Video(Base):
     cascade="all, delete-orphan",
     passive_deletes=True,
   )
-  seraches: Mapped[list["TopicSearch"]] = relationship(
+  searches: Mapped[list["Search"]] = relationship(
     secondary="video_searches",
     back_populates="videos",
     viewonly=True,
@@ -290,7 +281,7 @@ class VideoSearch(Base):
     default=func.now(), nullable=False
   )
   
-  search: Mapped["TopicSearch"] = relationship(back_populates="video_searches")
+  search: Mapped["Search"] = relationship(back_populates="video_searches")
   video: Mapped["Video"] = relationship(back_populates="video_searches")
 
 
