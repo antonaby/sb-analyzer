@@ -134,6 +134,7 @@ async def get_unprocessed_videos(video_repo: VideoRepository = Depends(get_video
         VideoProcessingDetails(
           job_id=j.job_id,
           source=j.source,
+          created_at=j.created_at,
           started_at=j.started_at,
           finished_at=j.finished_at
         )

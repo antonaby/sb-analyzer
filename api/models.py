@@ -31,6 +31,7 @@ class TaskProcessAuthorVideos(BaseModel):
 class VideoProcessingDetails(BaseModel):
   job_id: UUID | None
   source: VideoProcessingKind
+  created_at: datetime
   started_at: datetime | None
   finished_at: datetime | None
 
