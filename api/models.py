@@ -54,5 +54,5 @@ class TopicsShort(BaseModel):
   
 
 class TotalTopics(BaseModel):
-  total_topics: int
+  total: int
   topics: list[TopicsShort]
