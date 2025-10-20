@@ -359,6 +359,7 @@ class VideoProcessing(Base):
   started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
   finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
   processing_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+  is_canceled: Mapped[bool | None] = mapped_column(Boolean, nullable=False, server_default=text("false"))
 
   video: Mapped["Video"] = relationship(back_populates="processing")
 

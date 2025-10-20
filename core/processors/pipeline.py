@@ -25,6 +25,7 @@ class PipelineProcessor:
   ) -> VideoProcessingPipline:
     async with self._db() as session:
       repo = VideoRepository(session)
+      await repo.invalidate_old_video_processing(video_id)
 
       summarization_job: VideoProcessing | None = None
       categorization_job: VideoProcessing | None = None

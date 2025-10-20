@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Sequence
 from uuid import UUID
 
-from sqlalchemy import or_, select, func, literal_column, desc
+from sqlalchemy import or_, select, func, literal_column, desc, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, with_loader_criteria
@@ -200,6 +200,15 @@ class VideoRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalar_one()
+
+  async def invalidate_old_video_processing(self, video_id: UUID):
+    stmt = (
+      update(VideoProcessing).
+      where(VideoProcessing.video_id == video_id).
+      values(is_canceled=True)
+    )
+
+    await self._session.execute(stmt)
 
   async def get_video_processing_by_id(self, job_id: UUID) -> VideoProcessing | None:
     stmt = (
