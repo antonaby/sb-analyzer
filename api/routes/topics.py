@@ -1,6 +1,8 @@
 from fastapi import APIRouter
+
 from api.deps import *
-from api.models import CreateTopicRequest, TopicsShort, TotalTopics
+from api.models import CreateTopicRequest, TotalTopics
+from api.routes.common import to_topic_shorts
 
 router = APIRouter(
   prefix="/topics",
@@ -18,9 +20,6 @@ async def new_topic(request: CreateTopicRequest, topic_repo: TopicRepository = D
 @router.get("/")
 async def get_all_topics(topic_repo: TopicRepository = Depends(get_topic_repo)):
   topics = await topic_repo.get_total_videos_per_topic()
-  topics_short = [
-    TopicsShort(id=t["id"], name=t["name"], total_videos=t["total_videos"])
-    for t in topics
-  ]
+  result = to_topic_shorts(topics)
 
-  return TotalTopics(total=len(topics_short), topics=topics_short)
+  return TotalTopics(total=len(result), topics=result)

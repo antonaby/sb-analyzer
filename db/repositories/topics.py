@@ -106,7 +106,7 @@ class TopicRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalars().all()
   
-  async def get_total_videos_per_topic(self) -> list[TopicWithCount]:
+  async def get_total_videos_per_topic(self, author_id: UUID | None = None) -> list[TopicWithCount]:
     stmt = (
       select(
           Topic.id,
@@ -119,6 +119,9 @@ class TopicRepository(BaseAsyncRepo):
       group_by(Topic.id).
       order_by(func.count(Video.id).desc())
     )
+
+    if author_id is not None:
+      stmt = stmt.where(Video.author_id == author_id)
     
     result = await self._session.execute(stmt)
     return [

@@ -3,8 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query
 
 from api.deps import *
-from api.models import AuthorDetails, AuthorVideoDetails
-from db.models import Author, AnnotationKind, MetaSource, Video
+from api.models import AuthorDetails
+from api.routes.common import to_topic_shorts, to_video_shorts
+from db.models import Author, AnnotationKind, MetaSource
 
 router = APIRouter(
   prefix="/authors",
@@ -12,7 +13,7 @@ router = APIRouter(
 )
 
 
-def _to_author_details(author: Author) -> AuthorDetails:
+def to_author_details(author: Author) -> AuthorDetails:
   return AuthorDetails(
     id=author.id,
     url=author.url,
@@ -23,40 +24,8 @@ def _to_author_details(author: Author) -> AuthorDetails:
     is_reviewed=author.is_reviewed,
     created_at=author.created_at,
     updated_at=author.updated_at,
-    videos=[]
-  )
-
-
-def _to_video_details(video: Video) -> AuthorVideoDetails:
-  title = "no title"
-  label = "no label"
-  synopsis = "no synopsis"
-  hashtags = []
-
-  for annotation in video.annotations:
-    if annotation.kind == AnnotationKind.label:
-      label = annotation.value
-    if annotation.kind == AnnotationKind.synopsis:
-      synopsis = annotation.value
-
-  for meta in video.video_meta:
-    if meta.source == MetaSource.title:
-      title = meta.value
-    if meta.source == MetaSource.hashtag:
-      hashtags.append(meta.value)
-
-  return AuthorVideoDetails(
-    video_id=video.id,
-    url=video.url,
-    source=video.source,
-    title=title,
-    uploaded_at=video.uploaded_at,
-    likes=video.likes,
-    views=video.views,
-    comments=video.comments,
-    hashtags=hashtags,
-    label=label,
-    synopsis=synopsis
+    videos=[],
+    topics=[],
   )
 
 
@@ -65,7 +34,8 @@ async def get_author(
     author_id: UUID,
     max_videos: int = Query(20, description="Return N latest videos"),
     author_repo: AuthorRepository = Depends(get_author_repo),
-    video_repo: VideoRepository = Depends(get_video_repo)
+    video_repo: VideoRepository = Depends(get_video_repo),
+    topic_repo: TopicRepository = Depends(get_topic_repo),
 ) -> AuthorDetails:
   author = await author_repo.get_author_by_id(author_id)
   if not author:
@@ -80,9 +50,11 @@ async def get_author(
     max_videos=max_videos
   )
 
-  author_details = _to_author_details(author)
-  videos_details = [_to_video_details(v) for v in videos]
-  author_details.videos = videos_details
+  topics = await topic_repo.get_total_videos_per_topic(author.id)
+
+  author_details = to_author_details(author)
+  author_details.videos = to_video_shorts(list(videos))
+  author_details.topics = to_topic_shorts(topics)
 
   return author_details
 
@@ -102,4 +74,4 @@ async def patch_author(
 
   await author_repo.commit()
 
-  return _to_author_details(author)
+  return to_author_details(author)

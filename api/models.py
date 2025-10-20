@@ -58,8 +58,8 @@ class TotalTopics(BaseModel):
   topics: list[TopicsShort]
 
 
-class AuthorVideoDetails(BaseModel):
-  video_id: UUID
+class VideoShort(BaseModel):
+  id: UUID
   url: str
   source: VideoSource
   title: str | None
@@ -82,4 +82,5 @@ class AuthorDetails(BaseModel):
   is_reviewed: bool
   created_at: datetime
   updated_at: datetime
-  videos: list[AuthorVideoDetails]
+  videos: list[VideoShort]
+  topics: list[TopicsShort]
