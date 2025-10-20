@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Sequence
 from uuid import UUID
 
-from sqlalchemy import or_, select, func, literal_column, desc, update
+from sqlalchemy import or_, select, func, literal_column, desc, update, and_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, with_loader_criteria
@@ -80,11 +80,6 @@ class VideoRepository(BaseAsyncRepo):
     is_new = xmax == 0
     
     return author, is_new
-  
-  async def fetch_unprocessed_videos(self) -> Sequence[Video]:
-    stmt = select(Video).where(Video.processed_at.is_(None))
-    result = await self._session.execute(stmt)
-    return result.scalars().all()
   
   async def upsert_video(
     self, 
@@ -209,6 +204,25 @@ class VideoRepository(BaseAsyncRepo):
     )
 
     await self._session.execute(stmt)
+
+  async def fetch_videos_under_processing(self) -> Sequence[Video]:
+    stmt = (
+      select(Video).
+      join(Video.processing).
+      where(
+        and_(
+          VideoProcessing.is_canceled.is_(False),
+          or_(
+            VideoProcessing.started_at.is_(None),
+            VideoProcessing.finished_at.is_(None),
+          )
+        )
+      ).
+      options(selectinload(Video.processing))
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalars().all()
 
   async def get_video_processing_by_id(self, job_id: UUID) -> VideoProcessing | None:
     stmt = (

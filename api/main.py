@@ -125,9 +125,21 @@ async def get_video(
 
 @app.get("/stat/unprocessed")
 async def get_unprocessed_videos(video_repo: VideoRepository = Depends(get_video_repo)):
-  videos = await video_repo.fetch_unprocessed_videos()
+  videos = await video_repo.fetch_videos_under_processing()
   videos_short = [
-    VideoShort(id=v.id, url=v.url)
+    VideoProcessingStatus(
+      id=v.id,
+      url=v.url,
+      jobs=[
+        VideoProcessingDetails(
+          job_id=j.job_id,
+          source=j.source,
+          started_at=j.started_at,
+          finished_at=j.finished_at
+        )
+        for j in v.processing
+      ]
+    )
     for v in videos 
   ]
   

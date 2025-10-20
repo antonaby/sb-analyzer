@@ -1,6 +1,8 @@
+from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, Field
 
+from db.models import VideoProcessingKind
 from models.apidojo import DateRange, SortType
 
 
@@ -26,14 +28,22 @@ class TaskProcessAuthorVideos(BaseModel):
   max_videos: int = Field(ge=1, le=100, description="Max videos ordered by uploaded_at desc")
 
 
-class VideoShort(BaseModel):
+class VideoProcessingDetails(BaseModel):
+  job_id: UUID | None
+  source: VideoProcessingKind
+  started_at: datetime | None
+  finished_at: datetime | None
+
+
+class VideoProcessingStatus(BaseModel):
   id: UUID
-  url: str 
+  url: str
+  jobs: list[VideoProcessingDetails]
 
   
 class UnprocessedVideos(BaseModel):
   total: int
-  videos: list[VideoShort]
+  videos: list[VideoProcessingStatus]
   
 
 class TopicsShort(BaseModel):
