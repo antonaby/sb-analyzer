@@ -1,34 +1,17 @@
 from celery.result import AsyncResult
-from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import FastAPI
 
+from api.deps import *
 from api.models import *
-from db.conf import create_db_engine, get_async_session, test_db_conn
+from api.routes import videos
+from db.conf import test_db_conn
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import VideoRepository
 from worker.main import worker_app
 from worker.tasks import run_apidojo_search, run_apidojo_collect, process_video, identify_topics
 
-load_dotenv()
-
 app = FastAPI(title="SB VideoAnalyzer API", version="0.0.0")
-
-db_engine = create_db_engine()
-AsyncSessionLocal = get_async_session(db_engine)
-
-async def get_async_db():
-  async with AsyncSessionLocal() as session:
-    yield session
-
-
-def get_video_repo(session: AsyncSession = Depends(get_async_db)) -> VideoRepository:
-  return VideoRepository(session)
-
-
-def get_topic_repo(session: AsyncSession = Depends(get_async_db)) -> TopicRepository:
-  return TopicRepository(session)
-
+app.include_router(videos.router)
 
 @app.get("/health")
 async def health(db: AsyncSession = Depends(get_async_db)):
@@ -118,23 +101,6 @@ def get_task(task_id: str):
   }
 
 
-@app.get("/videos/{video_id}")
-async def get_video(
-  video_id: UUID, 
-  with_scraped_data: bool = Query(False, description="Add data produced by a scrapper"),
-  with_annotations: bool = Query(False, deprecated="Add processed data for video"),
-  with_meta: bool = Query(False, description="Add video meta"),
-  video_repo: VideoRepository = Depends(get_video_repo)
-):
-  video = await video_repo.get_video_by_id(
-    video_id, 
-    with_scraped_data=with_scraped_data, 
-    with_annotations=with_annotations, 
-    with_meta=with_meta
-  )
-  return video
-
-
 @app.get("/stat/unprocessed")
 async def get_unprocessed_videos(video_repo: VideoRepository = Depends(get_video_repo)):
   videos = await video_repo.fetch_videos_under_processing()
@@ -171,20 +137,3 @@ async def get_all_topics(topic_repo: TopicRepository = Depends(get_topic_repo)):
   ]
   
   return TotalTopics(total_topics=len(topics_short), topics=topics_short)
-
-
-@app.get("/search")
-async def search_videos(
-    q: str = Query(default=None, min_length=1),
-    with_scraped_data: bool = Query(False, description="Add data produced by a scrapper"),
-    with_annotations: bool = Query(False, deprecated="Add processed data for video"),
-    with_meta: bool = Query(False, description="Add video meta"),
-    db: AsyncSession = Depends(get_async_db)
-):
-  repo = VideoRepository(db)
-  
-  videos = await repo.search_videos(q, with_scraped_data, with_annotations, with_meta)
-  
-  return {
-    "videos": videos
-  }
