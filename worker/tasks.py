@@ -82,7 +82,10 @@ def clear_resources(sig, how, exitcode, **kwargs):
 
 
 @worker_app.task
-def identify_topics(video_id: UUID) -> dict:
+def identify_topics(pipline: VideoProcessingPipline) -> dict:
+  if not pipline["categorization_job_id"]:
+    return {"skip": True}
+
   global loop
   if loop is None:
     raise RuntimeError("Asyncio loop not initialized")
@@ -96,16 +99,14 @@ def identify_topics(video_id: UUID) -> dict:
   l_topic_processor: TopicProcessor = topic_processor
 
   result = l_loop.run_until_complete(
-    l_topic_processor.identify_topics(video_id)
+    l_topic_processor.identify_topics(pipline["categorization_job_id"])
   )
   return cast(dict, result)
 
 
 @worker_app.task
-def process_video(
-  pipline: VideoProcessingPipline
-) -> dict:
-  if not pipline["summarizing_job_id"]:
+def process_video(pipeline: VideoProcessingPipline) -> dict:
+  if not pipeline["summarizing_job_id"]:
     return { "skip": True }
 
   global loop
@@ -122,13 +123,19 @@ def process_video(
 
   result = l_loop.run_until_complete(
     l_video_process.create_summary(
-      pipline["summarizing_job_id"],
-      pipline["delete_downloaded_files"]
+      pipeline["summarizing_job_id"],
+      pipeline["delete_downloaded_files"]
     )
   )
 
-  if pipline["categorization_job_id"] and result["video_id"]:
-    identify_topics.delay(result["video_id"])
+  if pipeline["categorization_job_id"] and result["video_id"]:
+    job = identify_topics.delay(pipeline)
+
+    from core.processors.pipeline import PipelineProcessor
+    pipeline_processor = PipelineProcessor(async_db)
+    l_loop.run_until_complete(
+      pipeline_processor.set_celery_job_id(pipeline["categorization_job_id"], job.id)
+    )
 
   return cast(dict, result)
 

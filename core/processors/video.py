@@ -2,11 +2,12 @@ import logging
 from datetime import datetime, timezone
 from typing import TypedDict, cast
 from uuid import UUID
+from abc import ABC
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.agents.summary import SummaryAgent, VideoSummary
-from core.agents.topic import TopicAgent
+from core.agents.topic import TopicAgent, TopicProposal
 from core.file import AudioFile, UrlVideoSource, VideoFile
 from core.transcribe import AudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, VideoData, Frame
@@ -20,49 +21,29 @@ class VideoProcessorError(Exception):
   pass
 
 
-class ProcessedVideo(TypedDict):
-  video_id: UUID
-  processed_at_utc: datetime
+class BaseVideoProcessor(ABC):
 
-
-class VideoProcessor:
-  
-  def __init__(
-    self, 
-    ct_client: ClipTaggerClient, 
-    lm_client: LemonfoxClient, 
-    agent: SummaryAgent, 
-    async_session: async_sessionmaker[AsyncSession],
-    tmp_dir: str
-  ):
-    self._log = logging.getLogger("app.videoprocessor")
-    self._ct_client = ct_client
-    self._lm_client = lm_client
-    self._agent = agent
+  def __init__(self, async_session: async_sessionmaker[AsyncSession]):
     self._db = async_session
-    self._tmp_dir = tmp_dir
-    
-  async def create_summary(
-    self,
-    job_id: UUID,
-    delete_downloaded_files: bool = True
-  ) -> ProcessedVideo:
-    video_model, job_model = await self._start_job(job_id)
-    video_model, job_model = await self._create_summary(video_model, job_model, delete_downloaded_files)
-    
-    return {
-      "video_id": video_model.id,
-      "processed_at_utc": job_model.finished_at,
-    }
-        
-  async def _start_job(self, job_id: UUID) -> tuple[Video, VideoProcessing]:
+
+  async def _start_job(
+      self, job_id: UUID,
+      with_scraped_data: bool = False,
+      with_annotations: bool = False,
+      with_meta: bool = False
+  ) -> tuple[Video, VideoProcessing]:
     async with self._db() as session:
       repo = VideoRepository(session)
       job = await repo.get_video_processing_by_id(job_id)
       if not job:
         raise VideoProcessorError(f"Video {job_id} not found")
 
-      video = await repo.get_video_by_id(job.video_id, with_scraped_data=True)
+      video = await repo.get_video_by_id(
+        job.video_id,
+        with_scraped_data=with_scraped_data,
+        with_annotations=with_annotations,
+        with_meta=with_meta
+      )
       if not video:
         raise VideoProcessorError(f"Video {job.video_id} not found")
 
@@ -70,6 +51,50 @@ class VideoProcessor:
       await session.commit()
 
       return video, job
+
+  async def _set_error(self, job: VideoProcessing):
+    try:
+      async with self._db() as session:
+        job = await session.merge(job, load=False)
+        job.processing_error = True
+        job.finished_at = datetime.now(timezone.utc)
+
+        await session.commit()
+    except Exception as e:
+      pass
+
+
+class ProcessedVideo(TypedDict):
+  video_id: UUID
+  processed_at_utc: datetime
+
+
+class VideoProcessor(BaseVideoProcessor):
+  
+  def __init__(self,
+               ct_client: ClipTaggerClient, lm_client: LemonfoxClient, agent: SummaryAgent,
+               async_session: async_sessionmaker[AsyncSession],
+               tmp_dir: str):
+
+    super().__init__(async_session)
+    self._log = logging.getLogger("app.videoprocessor")
+    self._ct_client = ct_client
+    self._lm_client = lm_client
+    self._agent = agent
+    self._tmp_dir = tmp_dir
+    
+  async def create_summary(
+    self,
+    job_id: UUID,
+    delete_downloaded_files: bool = True
+  ) -> ProcessedVideo:
+    video_model, job_model = await self._start_job(job_id, with_scraped_data=True)
+    video_model, job_model = await self._create_summary(video_model, job_model, delete_downloaded_files)
+    
+    return {
+      "video_id": video_model.id,
+      "processed_at_utc": job_model.finished_at,
+    }
     
   async def _create_summary(
     self,
@@ -148,14 +173,6 @@ class VideoProcessor:
       await session.commit()
       
       return video_model, job_model
-    
-  async def _set_error(self, job: VideoProcessing):
-    async with self._db() as session:
-      job = await session.merge(job, load=False)
-      job.processing_error = True
-      job.finished_at = datetime.now(timezone.utc)
-      
-      await session.commit()
       
 
 def _create_video_data(
@@ -319,28 +336,24 @@ class TopicProcessorError(Exception):
   pass
 
 
-class TopicProcessor:
+class TopicProcessor(BaseVideoProcessor):
 
-  def __init__(self, topic_agent: TopicAgent, session_maker: async_sessionmaker[AsyncSession]):
+  def __init__(self, topic_agent: TopicAgent, async_session: async_sessionmaker[AsyncSession]):
+    super().__init__(async_session)
     self._topic_agent = topic_agent
-    self._db = session_maker
 
-  async def identify_topics(self, video_id: UUID) -> TopicProcessorResult:
-    async with self._db() as session:
-      repo = VideoRepository(session)
-      video = await repo.get_video_by_id(
-        video_id,
-        with_scraped_data=True,
-        with_annotations=True,
-        with_meta=True
-      )
-      if video is None:
-        raise TopicProcessorError(f"Video {video_id} not found")
+  async def identify_topics(self, job_id: UUID) -> TopicProcessorResult:
+    video, job = await self._start_job(job_id, with_scraped_data=True, with_annotations=True, with_meta=True)
+    video_data = get_video_data(video)
 
-      video_data = get_video_data(video)
+    try:
+      topics = await self._topic_agent.run(video_data)
+      return await self._save_topics(video, topics, job)
+    except Exception as e:
+      await self._set_error(job)
+      raise VideoProcessorError("cannot create summary for a video") from e
 
-    topics = await self._topic_agent.run(video_data)
-  
+  async def _save_topics(self, video: Video, topics: list[TopicProposal], job: VideoProcessing) -> TopicProcessorResult:
     async with self._db() as session:
       video = await session.merge(video, load=False)
       topic_repo = TopicRepository(session)
@@ -359,8 +372,12 @@ class TopicProcessor:
           "confidence": t.confidence
         })
 
+      job_model = await session.merge(job, load=False)
+      job_model.finished_at = datetime.now(timezone.utc)
+      job_model.processing_error = False
+
       await session.commit()
       return {
-        "video_id": video_id,
+        "video_id": video.id,
         "topics": assigned_topics,
       }
