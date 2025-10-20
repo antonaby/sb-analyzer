@@ -2,13 +2,13 @@ from datetime import datetime
 from typing import Any, Sequence
 from uuid import UUID
 
-from sqlalchemy import or_, select, func, literal_column, desc, update, and_
+from sqlalchemy import or_, select, func, literal_column, desc, update, and_, delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, with_loader_criteria
 
 from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource, \
-  VideoSearch, VideoProcessing, VideoProcessingKind
+  VideoSearch, VideoProcessing, VideoProcessingKind, Hashtag, VideoHashtag
 from db.repositories.common import BaseAsyncRepo
 from models.common import VideoData
 
@@ -182,6 +182,45 @@ class VideoRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one_or_none()
 
+  async def delete_old_data(self, video_id: UUID):
+    stmt = delete(VideoAnnotation).where(VideoAnnotation.video_id == video_id)
+    await self._session.execute(stmt)
+
+    stmt = delete(VideoMeta).where(VideoMeta.video_id == video_id)
+    await self._session.execute(stmt)
+
+  async def upsert_hashtag(self, name: str, source: VideoSource) -> Hashtag:
+    stmt = (
+      pg_insert(Hashtag)
+      .values(name=name, source=source)
+      .on_conflict_do_update(  # type: ignore
+        index_elements=[Hashtag.name, Hashtag.source],
+        set_={
+          "updated_at": func.now()
+        }
+      )
+      .returning(Hashtag)
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one()
+
+  async def assign_hashtag(self, video_id: UUID, hashtag_id: UUID) -> VideoHashtag:
+    stmt = (
+      pg_insert(VideoHashtag)
+      .values(hashtag_id=hashtag_id, video_id=video_id)
+      .on_conflict_do_update(  # type: ignore
+        index_elements=[VideoHashtag.hashtag_id, VideoHashtag.video_id],
+        set_={
+          "created_at": func.now()
+        }
+      )
+      .returning(VideoHashtag)
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one()
+
   async def create_video_processing(self, video_id: UUID, source: VideoProcessingKind) -> VideoProcessing:
     stmt = (
       pg_insert(VideoProcessing).
@@ -214,6 +253,7 @@ class VideoRepository(BaseAsyncRepo):
           )
         )
       ).
+      order_by(Video.updated_at).
       options(selectinload(Video.processing))
     )
 

@@ -16,13 +16,17 @@ async def get_unprocessed_videos(video_repo: VideoRepository = Depends(get_video
     VideoProcessingStatus(
       id=v.id,
       url=v.url,
+      created_at=v.created_at,
+      updated_at=v.updated_at,
       jobs=[
         VideoProcessingDetails(
           job_id=j.job_id,
           source=j.source,
           created_at=j.created_at,
           started_at=j.started_at,
-          finished_at=j.finished_at
+          finished_at=j.finished_at,
+          processing_error=j.processing_error,
+          is_canceled=j.is_canceled,
         )
         for j in v.processing
       ]

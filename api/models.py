@@ -34,11 +34,15 @@ class VideoProcessingDetails(BaseModel):
   created_at: datetime
   started_at: datetime | None
   finished_at: datetime | None
+  processing_error: bool | None
+  is_canceled: bool | None
 
 
 class VideoProcessingStatus(BaseModel):
   id: UUID
   url: str
+  created_at: datetime
+  updated_at: datetime
   jobs: list[VideoProcessingDetails]
 
   

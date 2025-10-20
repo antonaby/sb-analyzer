@@ -11,7 +11,7 @@ from core.agents.topic import TopicAgent, TopicProposal
 from core.file import AudioFile, UrlVideoSource, VideoFile
 from core.transcribe import AudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, VideoData, Frame
-from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource, VideoProcessing
+from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource, VideoProcessing, Hashtag
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository, get_video_data
 from models.common import PostDetails
@@ -147,7 +147,10 @@ class VideoProcessor(BaseVideoProcessor):
     async with self._db() as session:
       video_model = await session.merge(video_model, load=False)
       revision = video_model.revision + 1
-      
+
+      video_repo = VideoRepository(session)
+      await video_repo.delete_old_data(video_model.id)
+
       video_model.revision = revision
       video_model.extra_data = {
         "duration": video_data.get_duration(),

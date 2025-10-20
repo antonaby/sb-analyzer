@@ -167,10 +167,10 @@ class Hashtag(Base):
   id: Mapped[uuid.UUID] = mapped_column(
     UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
   )
+  name: Mapped[str] = mapped_column(String(512), nullable=False)
   source: Mapped[VideoSource] = mapped_column(
     Enum(VideoSource, name="hashtag_source", native_enum=True), nullable=False
   )
-  name: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
   is_reviewed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
 
   created_at: Mapped[datetime] = mapped_column(
@@ -191,6 +191,10 @@ class Hashtag(Base):
     secondary="video_hashtags",
     back_populates="hashtags",
     viewonly=True,
+  )
+
+  __table_args__ = (
+    Index("ix_hashtag_name_source", "name", "source", unique=True),
   )
 
 
@@ -269,7 +273,7 @@ class Video(Base):
     cascade="all, delete-orphan",
     passive_deletes=True,
   )
-  hashtags: Mapped[list["Video"]] = relationship(
+  hashtags: Mapped[list["Hashtag"]] = relationship(
     secondary="video_hashtags",
     back_populates="videos",
     viewonly=True,
@@ -306,7 +310,7 @@ class VideoHashtag(Base):
     default=func.now(), nullable=False
   )
 
-  topic: Mapped["Hashtag"] = relationship(back_populates="video_hashtags")
+  hashtag: Mapped["Hashtag"] = relationship(back_populates="video_hashtags")
   video: Mapped["Video"] = relationship(back_populates="video_hashtags")
 
 

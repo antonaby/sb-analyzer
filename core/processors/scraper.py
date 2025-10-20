@@ -90,7 +90,11 @@ class PostDetailsProcessor:
       session.add(scraped_data)
 
       search_id = UUID(post["search_id"])
-      await repo.add_search(search_id, video_model.id, is_video_new)     
+      await repo.add_search(search_id, video_model.id, is_video_new)
+
+      for hashtag in post["hashtags"]:
+        hashtag_model = await repo.upsert_hashtag(hashtag, video_source)
+        await repo.assign_hashtag(video_model.id, hashtag_model.id)
       
       await session.commit()
       
