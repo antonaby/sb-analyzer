@@ -54,7 +54,6 @@ class SavePostResult(TypedDict):
   new_author: bool
   video_id: UUID
   new_video: bool
-  processing_error: bool
 
 
 class PostDetailsProcessor:
@@ -87,7 +86,9 @@ class PostDetailsProcessor:
         post["views"], 
         post["comments"]
       )
-      video_model.scraped_data = prepare_scraped_data(cast(dict, post))
+      scraped_data = prepare_scraped_data(video_model.id, cast(dict, post))
+      session.add(scraped_data)
+
       search_id = UUID(post["search_id"])
       await repo.add_search(search_id, video_model.id, is_video_new)     
       
@@ -98,5 +99,4 @@ class PostDetailsProcessor:
         "new_author": is_author_new,
         "video_id": video_model.id,
         "new_video": is_video_new,
-        "processing_error": video_model.processing_error if video_model.processing_error else False
       }

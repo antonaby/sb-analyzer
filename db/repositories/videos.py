@@ -5,10 +5,10 @@ from uuid import UUID
 from sqlalchemy import or_, select, func, literal_column, desc
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload, with_loader_criteria
+from sqlalchemy.orm import selectinload, with_loader_criteria
 
 from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource, \
-  VideoSearch
+  VideoSearch, VideoProcessing, VideoProcessingKind
 from db.repositories.common import BaseAsyncRepo
 from models.common import VideoData
 
@@ -41,8 +41,8 @@ def prepare_annotation(
   return annotation
 
 
-def prepare_scraped_data(data: dict = {}) -> ScrapedData:
-  return ScrapedData(data=data)
+def prepare_scraped_data(video_id: UUID, data: dict = {}) -> ScrapedData:
+  return ScrapedData(video_id=video_id, data=data)
 
 
 class VideoRepository(BaseAsyncRepo):
@@ -182,12 +182,30 @@ class VideoRepository(BaseAsyncRepo):
   ) -> Video | None:
     stmt = select(Video).where(Video.id == video_id)
     if with_scraped_data:
-      stmt = stmt.options(joinedload(Video.scraped_data))
+      stmt = stmt.options(selectinload(Video.scraped_data))
     if with_annotations:
       stmt = stmt.options(selectinload(Video.annotations))
     if with_meta:
       stmt = stmt.options(selectinload(Video.video_meta))
       
+    result = await self._session.execute(stmt)
+    return result.scalar_one_or_none()
+
+  async def create_video_processing(self, video_id: UUID, source: VideoProcessingKind) -> VideoProcessing:
+    stmt = (
+      pg_insert(VideoProcessing).
+      values(video_id=video_id, source=source).
+      returning(VideoProcessing)
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one()
+
+  async def get_video_processing_by_id(self, job_id: UUID) -> VideoProcessing | None:
+    stmt = (
+      select(VideoProcessing).
+      where(VideoProcessing.id == job_id)
+    )
     result = await self._session.execute(stmt)
     return result.scalar_one_or_none()
 

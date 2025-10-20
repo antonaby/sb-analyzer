@@ -55,6 +55,11 @@ class AnnotationKind(enum.Enum):
   transcription = "transcription"
 
 
+class VideoProcessingKind(enum.Enum):
+  summarizing = "summarizing"
+  categorization = "categorization"
+
+
 # --- Models ------------------------------------------------------------
 class Topic(Base):
   __tablename__ = "topics"
@@ -191,11 +196,14 @@ class Video(Base):
     DateTime(timezone=True),
     default=func.now(), onupdate=func.now(), nullable=False
   )
-  processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-  processing_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
   
   author: Mapped["Author"] = relationship(back_populates="videos")
 
+  processing: Mapped[list["VideoProcessing"]] = relationship(
+    back_populates="video",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
   annotations: Mapped[list["VideoAnnotation"]] = relationship(
     back_populates="video",
     cascade="all, delete-orphan",
@@ -206,10 +214,11 @@ class Video(Base):
     cascade="all, delete-orphan",
     passive_deletes=True,
   )
-  scraped_data: Mapped["ScrapedData"] = relationship(
+  scraped_data: Mapped[list["ScrapedData"]] = relationship(
     back_populates="video",
     cascade="all, delete-orphan",
     passive_deletes=True,
+    order_by="ScrapedData.created_at.desc()",
   )
   video_searches: Mapped[list["VideoSearch"]] = relationship(
     back_populates="video",
@@ -326,6 +335,34 @@ class VideoMeta(Base):
   )
 
 
+class VideoProcessing(Base):
+  __tablename__ = "video_processing"
+
+  id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
+  )
+  video_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("videos.id", ondelete="CASCADE"),
+    nullable=False,
+    index=True,
+  )
+  source: Mapped[VideoProcessingKind] = mapped_column(
+    Enum(VideoProcessingKind, name="video_processing_kind", native_enum=True), nullable=False
+  )
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
+
+  job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=True)
+  started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+  finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+  processing_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
+  video: Mapped["Video"] = relationship(back_populates="processing")
+
+
 class ScrapedData(Base):
   __tablename__ = "scraped_data"
   
@@ -339,7 +376,11 @@ class ScrapedData(Base):
     index=True,
   )
   data: Mapped[dict | None] = mapped_column(JSONB, default=None)
-  
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    server_default=func.now(), nullable=False
+  )
+
   video: Mapped["Video"] = relationship(back_populates="scraped_data")
 
 

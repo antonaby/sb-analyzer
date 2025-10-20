@@ -6,11 +6,11 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.agents.summary import SummaryAgent, VideoSummary
-from core.agents.topic import TopicAgent, TopicProposal
+from core.agents.topic import TopicAgent
 from core.file import AudioFile, UrlVideoSource, VideoFile
 from core.transcribe import AudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, VideoData, Frame
-from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
+from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource, VideoProcessing
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository, get_video_data
 from models.common import PostDetails
@@ -21,8 +21,8 @@ class VideoProcessorError(Exception):
 
 
 class ProcessedVideo(TypedDict):
-  video_id: UUID | None
-  processed_at_utc: datetime | None
+  video_id: UUID
+  processed_at_utc: datetime
 
 
 class VideoProcessor:
@@ -43,41 +43,45 @@ class VideoProcessor:
     self._tmp_dir = tmp_dir
     
   async def create_summary(
-    self, 
-    video_id: UUID, 
+    self,
+    job_id: UUID,
     delete_downloaded_files: bool = True
   ) -> ProcessedVideo:
-    video_model = await self._find_video(video_id)
-    
-    if video_model is None:
-      self._log.warning(f"Video not found: {video_id}")
-      return {
-        "video_id": None,
-        "processed_at_utc": None
-      }
-    
-    video_model = await self._create_summary(video_model, delete_downloaded_files)
+    video_model, job_model = await self._start_job(job_id)
+    video_model, job_model = await self._create_summary(video_model, job_model, delete_downloaded_files)
     
     return {
       "video_id": video_model.id,
-      "processed_at_utc": video_model.processed_at
+      "processed_at_utc": job_model.finished_at,
     }
         
-  async def _find_video(self, video_id: UUID) -> Video | None:
+  async def _start_job(self, job_id: UUID) -> tuple[Video, VideoProcessing]:
     async with self._db() as session:
       repo = VideoRepository(session)
-      return await repo.get_video_by_id(video_id, with_scraped_data=True)
+      job = await repo.get_video_processing_by_id(job_id)
+      if not job:
+        raise VideoProcessorError(f"Video {job_id} not found")
+
+      video = await repo.get_video_by_id(job.video_id, with_scraped_data=True)
+      if not video:
+        raise VideoProcessorError(f"Video {job.video_id} not found")
+
+      job.started_at = datetime.now(timezone.utc)
+      await session.commit()
+
+      return video, job
     
   async def _create_summary(
     self,
     video_model: Video,
+    job_model: VideoProcessing,
     delete_downloaded_files: bool
-  ) -> Video:
+  ) -> tuple[Video, VideoProcessing]:
     video_file = None
     video_source = None
     
     try:
-      post_data = cast(PostDetails, video_model.scraped_data.data)
+      post_data = cast(PostDetails, video_model.scraped_data[0].data)
       video_source = await UrlVideoSource.new(post_data["download_url"], self._tmp_dir)
       
       video_file = VideoFile(video_source)  
@@ -87,9 +91,9 @@ class VideoProcessor:
       audio_data = AudioData(self._lm_client, audio_file)
       
       summary = await self._agent.run(post_data, video_data, audio_data)
-      return await self._save_video_details(video_model, post_data, video_data, audio_data, summary)
+      return await self._save_video_details(video_model, job_model, post_data, video_data, audio_data, summary)
     except Exception as e:
-      await self._set_error(video_model)
+      await self._set_error(job_model)
       raise VideoProcessorError("cannot create summary for a video") from e
     finally:
       try:
@@ -103,9 +107,11 @@ class VideoProcessor:
   async def _save_video_details(
     self, 
     video_model: Video,
+    job_model: VideoProcessing,
     post_data: PostDetails, video_data: VideoData, 
     audio_data: AudioData, summary: VideoSummary
-  ) -> Video:
+  ) -> tuple[Video, VideoProcessing]:
+
     processed_frames = await video_data.get_processed_frames()
     transcriptions = audio_data.get_processed_transcriptions()
     
@@ -135,15 +141,19 @@ class VideoProcessor:
         meta.revision = revision
       session.add_all(video_meta)
 
+      job_model = await session.merge(job_model, load=False)
+      job_model.finished_at = datetime.now(timezone.utc)
+      job_model.processing_error = False
+
       await session.commit()
       
-      return video_model
+      return video_model, job_model
     
-  async def _set_error(self, video_model: Video):
+  async def _set_error(self, job: VideoProcessing):
     async with self._db() as session:
-      video_model = await session.merge(video_model, load=False)
-      video_model.processing_error = True     
-      video_model.processed_at = datetime.now(timezone.utc)
+      job = await session.merge(job, load=False)
+      job.processing_error = True
+      job.finished_at = datetime.now(timezone.utc)
       
       await session.commit()
       

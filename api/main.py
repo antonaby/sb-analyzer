@@ -47,7 +47,7 @@ async def new_topic(request: CreateTopicRequest, topic_repo: TopicRepository = D
   return topic 
 
 
-@app.post("/apidojo/serach")
+@app.post("/apidojo/search")
 def run_tiktok_scrapper(run: ApidojoScrapperRun):
   job = run_apidojo_search.delay(
     keywords=run.keywords, 

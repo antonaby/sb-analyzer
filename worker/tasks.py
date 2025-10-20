@@ -2,12 +2,14 @@ import asyncio
 from datetime import datetime
 from typing import cast
 from uuid import UUID
+
 from celery import group
 from celery.signals import worker_process_init, worker_shutting_down
 
 from models.apidojo import DateRange, SortType, TikTokPost
 from models.apify import ActorRun
 from models.common import AuthorDetails, PostDetails
+from models.processing import VideoProcessingPipline
 from utils.common import is_url
 from .main import worker_app
 
@@ -15,7 +17,6 @@ loop = None
 apify_client = None
 async_db = None
 search_processor = None
-post_details_processor = None
 video_processor = None
 topic_processor = None
 
@@ -31,7 +32,7 @@ def init_worker_process(**kwargs):
   from core.agents.common import TemplateManager, gpt_5_nano
   from core.agents.topic import TopicManager, TopicAgent
   from core.agents.summary import SummaryAgent
-  from core.processors.scraper import PostDetailsProcessor, SearchProcessor
+  from core.processors.scraper import SearchProcessor
   from core.processors.video import VideoProcessor, TopicProcessor
   from db.conf import create_db_engine, get_async_session
 
@@ -54,9 +55,6 @@ def init_worker_process(**kwargs):
 
   global search_processor
   search_processor = SearchProcessor(async_db)
-
-  global post_details_processor
-  post_details_processor = PostDetailsProcessor(async_db)
 
   global video_processor
   clip_tagger_client = ClipTaggerClient()
@@ -105,10 +103,11 @@ def identify_topics(video_id: UUID) -> dict:
 
 @worker_app.task
 def process_video(
-  video_id: UUID,
-  delete_downloaded_files: bool = True,
-  run_identify_topics: bool = True,
+  pipline: VideoProcessingPipline
 ) -> dict:
+  if not pipline["summarizing_job_id"]:
+    return { "skip": True }
+
   global loop
   if loop is None:
     raise RuntimeError("Asyncio loop not initialized")
@@ -122,38 +121,48 @@ def process_video(
   l_video_process: VideoProcessor = video_processor
 
   result = l_loop.run_until_complete(
-    l_video_process.create_summary(video_id, delete_downloaded_files)
+    l_video_process.create_summary(
+      pipline["summarizing_job_id"],
+      pipline["delete_downloaded_files"]
+    )
   )
 
-  if run_identify_topics and result.get("video_id"):
+  if pipline["categorization_job_id"] and result["video_id"]:
     identify_topics.delay(result["video_id"])
 
   return cast(dict, result)
 
 
 @worker_app.task
-def save_video(author: AuthorDetails, post: PostDetails, process_new: bool = True) -> dict:
+def run_pipline(author: AuthorDetails, post: PostDetails, force_run_pipeline: bool = False) -> dict:
   global loop
   if loop is None:
     raise RuntimeError("Asyncio loop not initialized")
   l_loop: asyncio.AbstractEventLoop = loop
 
-  global post_details_processor
-  if post_details_processor is None:
-    raise RuntimeError("Scraper processor not initialized")
+  global async_db
+  if async_db is None:
+    raise RuntimeError("AsyncDB not initialized")
 
   from core.processors.scraper import PostDetailsProcessor
-  l_post_details_processor: PostDetailsProcessor = post_details_processor
+  post_processor: PostDetailsProcessor = PostDetailsProcessor(async_db)
 
   result = l_loop.run_until_complete(
-    l_post_details_processor.save(author, post)
+    post_processor.save(author, post)
   )
 
-  if (
-    result["processing_error"]
-    or (process_new and result["new_video"])
-  ):
-    process_video.delay(result["video_id"])  # type: ignore
+  if result["new_video"] or force_run_pipeline:
+    from core.processors.pipeline import PipelineProcessor
+    pipeline_processor = PipelineProcessor(async_db)
+
+    pipeline = l_loop.run_until_complete(
+      pipeline_processor.create_pipeline(result["video_id"])
+    )
+
+    job = process_video.delay(pipeline)  # type: ignore
+    l_loop.run_until_complete(
+      pipeline_processor.set_celery_job_id(pipeline["summarizing_job_id"], job.id)
+    )
 
   return cast(dict, result)
 
@@ -181,7 +190,7 @@ def run_apidojo_collect(urls: list[str], max_items: int = 1000) -> ActorRun:
   return _run_apidojo_scrapper("collect_videos_by_urls", urls=urls, max_items=max_items)
 
 
-def _run_apidojo_scrapper( func_name: str, **kwargs):
+def _run_apidojo_scrapper(func_name: str, **kwargs):
   global loop
   if loop is None:
     raise RuntimeError("Asyncio loop not initialized")
@@ -196,6 +205,7 @@ def _run_apidojo_scrapper( func_name: str, **kwargs):
   global search_processor
   if search_processor is None:
     raise RuntimeError("TopicProcessor client not initialized")
+
   from core.processors.scraper import SearchProcessor
   l_search_process: SearchProcessor = search_processor
 
@@ -256,7 +266,7 @@ def _run_apidojo_scrapper( func_name: str, **kwargs):
         "source": cast(dict, post)
       }
 
-      tasks.append(save_video.s(author_details, post_details))  # type: ignore
+      tasks.append(run_pipline.s(author_details, post_details))  # type: ignore
 
   job = group(tasks)
   job.apply_async()
