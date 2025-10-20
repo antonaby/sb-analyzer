@@ -174,10 +174,16 @@ async def get_all_topics(topic_repo: TopicRepository = Depends(get_topic_repo)):
 
 
 @app.get("/search")
-async def search_videos(q: str = Query(default=None, min_length=1), db: AsyncSession = Depends(get_async_db)):
+async def search_videos(
+    q: str = Query(default=None, min_length=1),
+    with_scraped_data: bool = Query(False, description="Add data produced by a scrapper"),
+    with_annotations: bool = Query(False, deprecated="Add processed data for video"),
+    with_meta: bool = Query(False, description="Add video meta"),
+    db: AsyncSession = Depends(get_async_db)
+):
   repo = VideoRepository(db)
   
-  videos = await repo.find_videos(q)
+  videos = await repo.search_videos(q, with_scraped_data, with_annotations, with_meta)
   
   return {
     "videos": videos

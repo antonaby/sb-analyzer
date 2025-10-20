@@ -232,15 +232,34 @@ class VideoRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one_or_none()
 
-  async def find_videos(self, q: str):
-    ts_query = func.plainto_tsquery("english", q)
+  async def search_videos(
+      self,
+      query: str,
+      with_scraped_data: bool = False,
+      with_annotations: bool = False,
+      with_meta: bool = False
+  ):
+    ts_query = func.plainto_tsquery("english", query)
     
     stmt = (
-      select(Video)
-      .join(Video.annotations)  # join VideoAnnotation
-      .where(VideoAnnotation.value_tsv.op("@@")(ts_query))
-      .distinct()  # avoid duplicates if multiple annotations match
+      select(Video).
+      join(Video.annotations).
+      join(Video.video_meta).
+      where(
+        or_(
+          VideoMeta.value_tsv.op("@@")(ts_query),
+          VideoAnnotation.value_tsv.op("@@")(ts_query)
+        )
+      )
+      .distinct()
     )
+
+    if with_scraped_data:
+      stmt = stmt.options(selectinload(Video.scraped_data))
+    if with_annotations:
+      stmt = stmt.options(selectinload(Video.annotations))
+    if with_meta:
+      stmt = stmt.options(selectinload(Video.video_meta))
 
     videos = await self._session.scalars(stmt)
     return videos.all()
