@@ -56,8 +56,10 @@ class BaseVideoProcessor(ABC):
     try:
       async with self._db() as session:
         job = await session.merge(job, load=False)
-        job.processing_error = True
         job.finished_at = datetime.now(timezone.utc)
+
+        repo = VideoRepository(session)
+        await repo.mark_processing_as_error(job.video_id)
 
         await session.commit()
     except Exception as e:

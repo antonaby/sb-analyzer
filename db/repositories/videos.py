@@ -231,6 +231,15 @@ class VideoRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one()
 
+  async def mark_processing_as_error(self, video_id: UUID):
+    stmt = (
+      update(VideoProcessing).
+      where(VideoProcessing.video_id == video_id).
+      values(processing_error=True)
+    )
+
+    await self._session.execute(stmt)
+
   async def invalidate_old_video_processing(self, video_id: UUID):
     stmt = (
       update(VideoProcessing).
@@ -247,6 +256,7 @@ class VideoRepository(BaseAsyncRepo):
       where(
         and_(
           VideoProcessing.is_canceled.is_(False),
+          VideoProcessing.processing_error.isnot(True),
           or_(
             VideoProcessing.started_at.is_(None),
             VideoProcessing.finished_at.is_(None),
