@@ -143,7 +143,8 @@ class Author(Base):
   verified: Mapped[bool] = mapped_column(Boolean, nullable=True, server_default=text("false"))
   followers: Mapped[int] = mapped_column(Integer, nullable=True, server_default=text("0"))
   total_videos: Mapped[int] = mapped_column(Integer, nullable=True, server_default=text("0"))
-  
+  is_reviewed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+
   created_at: Mapped[datetime] = mapped_column(
     DateTime(timezone=True),
     default=func.now(), nullable=False

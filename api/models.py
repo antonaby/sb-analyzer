@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, Field
 
-from db.models import VideoProcessingKind
+from db.models import VideoProcessingKind, VideoSource
 from models.apidojo import DateRange, SortType
 
 
@@ -56,3 +56,15 @@ class TopicsShort(BaseModel):
 class TotalTopics(BaseModel):
   total: int
   topics: list[TopicsShort]
+
+
+class AuthorDetails(BaseModel):
+  id: UUID
+  url: str
+  source: VideoSource
+  verified: bool | None
+  followers: int | None
+  total_videos: int | None
+  is_reviewed: bool
+  created_at: datetime
+  updated_at: datetime

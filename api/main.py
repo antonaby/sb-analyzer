@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 
 from api.deps import *
-from api.routes import videos, apidojo, tasks, queue, topics
+from api.routes import videos, apidojo, tasks, queue, topics, authors
 from db.conf import test_db_conn
 
+
 app = FastAPI(title="SB VideoAnalyzer API", version="0.0.0")
+app.include_router(authors.router)
 app.include_router(videos.router)
 app.include_router(apidojo.router)
 app.include_router(tasks.router)

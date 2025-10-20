@@ -3,6 +3,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.conf import create_db_engine, get_async_session
+from db.repositories.authors import AuthorRepository
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import VideoRepository
 
@@ -23,3 +24,6 @@ def get_video_repo(session: AsyncSession = Depends(get_async_db)) -> VideoReposi
 
 def get_topic_repo(session: AsyncSession = Depends(get_async_db)) -> TopicRepository:
   return TopicRepository(session)
+
+def get_author_repo(session: AsyncSession = Depends(get_async_db)) -> AuthorRepository:
+  return AuthorRepository(session)
