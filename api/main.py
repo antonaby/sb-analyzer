@@ -104,7 +104,19 @@ def get_task(task_id: str):
     "status": job.status,
     "result": job.result
   }
-  
+
+
+@app.delete("/tasks/{task_id}")
+def get_task(task_id: str):
+  job = AsyncResult(task_id, app=worker_app)
+  job.revoke(terminate=True, signal='SIGTERM')
+
+  return {
+    "id": job.id,
+    "status": job.status,
+    "result": job.result
+  }
+
 
 @app.get("/videos/{video_id}")
 async def get_video(
