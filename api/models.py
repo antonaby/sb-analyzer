@@ -58,6 +58,20 @@ class TotalTopics(BaseModel):
   topics: list[TopicsShort]
 
 
+class AuthorVideoDetails(BaseModel):
+  video_id: UUID
+  url: str
+  source: VideoSource
+  title: str | None
+  uploaded_at: datetime | None
+  likes: int | None
+  views: int | None
+  comments: int | None
+  hashtags: list[str]
+  label: str | None
+  synopsis: str | None
+
+
 class AuthorDetails(BaseModel):
   id: UUID
   url: str
@@ -68,3 +82,4 @@ class AuthorDetails(BaseModel):
   is_reviewed: bool
   created_at: datetime
   updated_at: datetime
+  videos: list[AuthorVideoDetails]

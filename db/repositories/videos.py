@@ -136,17 +136,13 @@ class VideoRepository(BaseAsyncRepo):
     load_meta: bool = False,
     meta_to_load: list[MetaSource] = [],
     max_videos: int = 100,
-    sort_desc: bool = True,
-    include_processing_errors: bool = False
+    sort_desc: bool = True
   ) -> Sequence[Video]:
     sort_by = desc(Video.uploaded_at) if sort_desc else Video.uploaded_at
-    conditions = [Video.author_id == author_id]
-    if not include_processing_errors:
-      conditions.append(or_(Video.processing_error.is_(False), Video.processing_error.is_(None)))
       
     stmt = (
       select(Video).
-      where(*conditions).
+      where(Video.author_id == author_id).
       order_by(sort_by).
       limit(max_videos)
     )
