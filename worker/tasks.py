@@ -1,7 +1,6 @@
 import asyncio
 from datetime import datetime
 from typing import cast
-from uuid import UUID
 
 from celery import group
 from celery.signals import worker_process_init, worker_shutting_down
@@ -21,7 +20,7 @@ video_processor = None
 topic_processor = None
 
 
-# TODO: recreate agents every time as the my preserve state (it's better to pass agents to "run" func)
+# TODO: recreate agents every time as they may preserve state (it's better to pass agents to "run" func)
 @worker_process_init.connect
 def init_worker_process(**kwargs):
   import logfire

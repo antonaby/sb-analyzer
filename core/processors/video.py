@@ -143,7 +143,7 @@ class VideoProcessor(BaseVideoProcessor):
     processed_frames = await video_data.get_processed_frames()
     transcriptions = audio_data.get_processed_transcriptions()
     
-    annotations, video_meta = _create_video_data(
+    annotations, video_meta = self._create_video_data(
       post_data, summary, processed_frames, transcriptions
     )
     
@@ -180,150 +180,151 @@ class VideoProcessor(BaseVideoProcessor):
       
       return video_model, job_model
       
+  @classmethod
+  def _create_video_data(
+      cls,
+      post: PostDetails, summary: VideoSummary,
+      frames: list[Frame], transcriptions: list[Transcription]
+  ) -> tuple[list[VideoAnnotation], list[VideoMeta]]:
+    annotations: list[VideoAnnotation] = cls._create_summary_annotations(summary)
+    video_meta: list[VideoMeta] = cls._create_summary_meta(summary)
 
-def _create_video_data(
-  post: PostDetails, summary: VideoSummary, 
-  frames: list[Frame], transcriptions: list[Transcription]
-) -> tuple[list[VideoAnnotation], list[VideoMeta]]:
-  annotations: list[VideoAnnotation] = _create_summary_annotations(summary)
-  video_meta: list[VideoMeta] = _create_summary_meta(summary)
-  
-  annotations.extend(
-    _create_transcribe_annotations(transcriptions)
-  )
-  
-  for frame in frames:
-    annotations.extend(_create_frame_annotations(frame))
-    video_meta.extend(_create_frame_video_meta(frame))
-        
-  video_meta.extend(_create_post_meta(post))
-  
-  return annotations, video_meta
-
-
-def _create_summary_annotations(summary: VideoSummary) -> list[VideoAnnotation]:
-  annotations: list[VideoAnnotation] = [
-    prepare_annotation(
-      kind=AnnotationKind.label,
-      value=summary.label
-    ),
-    prepare_annotation(
-      kind=AnnotationKind.synopsis,
-      value=summary.synopsis
+    annotations.extend(
+      cls._create_transcribe_annotations(transcriptions)
     )
-  ]
 
-  for action in summary.actions:
-    annotations.append(
+    for frame in frames:
+      annotations.extend(cls._create_frame_annotations(frame))
+      video_meta.extend(cls._create_frame_video_meta(frame))
+
+    video_meta.extend(cls._create_post_meta(post))
+
+    return annotations, video_meta
+
+  @classmethod
+  def _create_summary_annotations(cls, summary: VideoSummary) -> list[VideoAnnotation]:
+    annotations: list[VideoAnnotation] = [
       prepare_annotation(
-        kind=AnnotationKind.action,
-        value=action
-      )
-    )
-  
-  return annotations
-
-
-def _create_summary_meta(summary: VideoSummary) -> list[VideoMeta]:
-  video_meta: list[VideoMeta] = []
-  
-  for topic in summary.topics:
-    video_meta.append(
-      prepare_meta(MetaSource.topic, topic)
-    )  
-  
-  return video_meta
-
-
-def _create_transcribe_annotations(transcriptions: list[Transcription]) -> list[VideoAnnotation]:
-  annotations: list[VideoAnnotation] = []
-  
-  for segment in transcriptions:
-    annotations.append(
+        kind=AnnotationKind.label,
+        value=summary.label
+      ),
       prepare_annotation(
-        kind=AnnotationKind.transcription,
-        value=segment.text,
-        meta={
-          "start_sec": segment.start_sec,
-          "end_sec": segment.end_sec
-        }
+        kind=AnnotationKind.synopsis,
+        value=summary.synopsis
       )
-    )
-  
-  return annotations
+    ]
 
+    for action in summary.actions:
+      annotations.append(
+        prepare_annotation(
+          kind=AnnotationKind.action,
+          value=action
+        )
+      )
 
-def _create_post_meta(post: PostDetails) -> list[VideoMeta]:
-  video_meta: list[VideoMeta] = []
-  
-  if post.get("title"):
+    return annotations
+
+  @classmethod
+  def _create_summary_meta(cls, summary: VideoSummary) -> list[VideoMeta]:
+    video_meta: list[VideoMeta] = []
+
+    for topic in summary.topics:
+      video_meta.append(
+        prepare_meta(MetaSource.topic, topic)
+      )
+
+    return video_meta
+
+  @classmethod
+  def _create_transcribe_annotations(cls, transcriptions: list[Transcription]) -> list[VideoAnnotation]:
+    annotations: list[VideoAnnotation] = []
+
+    for segment in transcriptions:
+      annotations.append(
+        prepare_annotation(
+          kind=AnnotationKind.transcription,
+          value=segment.text,
+          meta={
+            "start_sec": segment.start_sec,
+            "end_sec": segment.end_sec
+          }
+        )
+      )
+
+    return annotations
+
+  @classmethod
+  def _create_post_meta(cls, post: PostDetails) -> list[VideoMeta]:
+    video_meta: list[VideoMeta] = []
+
+    if post.get("title"):
+      video_meta.append(
+        prepare_meta(MetaSource.title, post.get("title"))
+      )
+
+    if post.get("description"):
+      video_meta.append(
+        prepare_meta(MetaSource.title, post.get("description"))
+      )
+
+    for hash_tag in post.get("hashtags", []):
+      video_meta.append(
+        prepare_meta(MetaSource.hashtag, hash_tag)
+      )
+
+    return video_meta
+
+  @classmethod
+  def _create_frame_video_meta(cls, frame: Frame) -> list[VideoMeta]:
+    video_meta: list[VideoMeta] = []
+
+    meta_data = cls._get_frame_meta(frame)
+
     video_meta.append(
-      prepare_meta(MetaSource.title, post.get("title"))
+      prepare_meta(MetaSource.frame_content_type, frame.content_type, meta_data)
     )
-    
-  if post.get("description"):
     video_meta.append(
-      prepare_meta(MetaSource.title, post.get("description"))
+      prepare_meta(MetaSource.frame_style, frame.specific_style, meta_data)
     )
-  
-  for hash_tag in post.get("hashtags", []):
     video_meta.append(
-      prepare_meta(MetaSource.hashtag, hash_tag)
+      prepare_meta(MetaSource.frame_quality, frame.production_quality, meta_data)
     )
-  
-  return video_meta
 
+    return video_meta
 
-def _create_frame_video_meta(frame: Frame) -> list[VideoMeta]:
-  video_meta: list[VideoMeta] = []
-  
-  meta_data = _get_frame_meta(frame)
-  
-  video_meta.append(
-    prepare_meta(MetaSource.frame_content_type, frame.content_type, meta_data)
-  )
-  video_meta.append(
-    prepare_meta(MetaSource.frame_style, frame.specific_style, meta_data)
-  )
-  video_meta.append(
-    prepare_meta(MetaSource.frame_quality, frame.production_quality, meta_data)
-  )
-  
-  return video_meta
-  
+  @classmethod
+  def _create_frame_annotations(cls, frame: Frame) -> list[VideoAnnotation]:
+    annotations: list[VideoAnnotation] = []
 
-def _create_frame_annotations(frame: Frame) -> list[VideoAnnotation]:
-  annotations: list[VideoAnnotation] = []
-  
-  _append_frame_ann(annotations, AnnotationKind.frame, frame.description, frame)
-  _append_frame_ann(annotations, AnnotationKind.frame_environment, frame.environment, frame)
-  _append_frame_ann(annotations, AnnotationKind.frame_summary, frame.summary, frame)
-  
-  for frame_object in frame.objects:
-    _append_frame_ann(annotations, AnnotationKind.frame_object, frame_object, frame)
+    cls._append_frame_ann(annotations, AnnotationKind.frame, frame.description, frame)
+    cls._append_frame_ann(annotations, AnnotationKind.frame_environment, frame.environment, frame)
+    cls._append_frame_ann(annotations, AnnotationKind.frame_summary, frame.summary, frame)
 
-  for action in frame.actions:
-    _append_frame_ann(annotations, AnnotationKind.frame_action, action, frame)
+    for frame_object in frame.objects:
+      cls._append_frame_ann(annotations, AnnotationKind.frame_object, frame_object, frame)
 
-  for logo in frame.logos:
-    _append_frame_ann(annotations, AnnotationKind.frame_logo, logo, frame)
-  
-  return annotations
+    for action in frame.actions:
+      cls._append_frame_ann(annotations, AnnotationKind.frame_action, action, frame)
 
+    for logo in frame.logos:
+      cls._append_frame_ann(annotations, AnnotationKind.frame_logo, logo, frame)
 
-def _append_frame_ann(annotations: list[VideoAnnotation], kind: AnnotationKind, value: str, frame: Frame):
-  annotations.append(prepare_annotation(
-    kind=kind,
-    value=value,
-    meta=_get_frame_meta(frame)
-  ))
+    return annotations
 
+  @classmethod
+  def _append_frame_ann(cls, annotations: list[VideoAnnotation], kind: AnnotationKind, value: str, frame: Frame):
+    annotations.append(prepare_annotation(
+      kind=kind,
+      value=value,
+      meta=cls._get_frame_meta(frame)
+    ))
 
-def _get_frame_meta(frame: Frame) -> dict:
-  return {
-    "frame_number": frame.frame_number,
-    "time_sec": frame.time_sec
-  }
+  @classmethod
+  def _get_frame_meta(cls, frame: Frame) -> dict:
+    return {
+      "frame_number": frame.frame_number,
+      "time_sec": frame.time_sec
+    }
 
 
 class AssignedTopic(TypedDict):
