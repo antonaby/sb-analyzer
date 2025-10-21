@@ -101,6 +101,49 @@ class Topic(Base):
     return f"<Topic(id={self.id}, name={self.name!r})>"
 
 
+class Challenge(Base):
+  __tablename__ = "challenges"
+
+  id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
+  )
+  topic_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("topics.id", ondelete="CASCADE"),
+    nullable=False,
+    index=True,
+  )
+  name: Mapped[str] = mapped_column(String(512), nullable=False)
+
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
+  translated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ChallengeTranslation(Base):
+  __tablename__ = "challenge_translations"
+
+  id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
+  )
+  challenge_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("challenges.id", ondelete="CASCADE"),
+    nullable=False,
+    index=True,
+  )
+  lang: Mapped[str] = mapped_column(String(2), nullable=False)
+  value: Mapped[str] = mapped_column(String(512), nullable=False)
+  value_tsv: Mapped[str] = mapped_column(TSVECTOR, nullable=False)
+
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
+
+
 class Search(Base):
   __tablename__ = "topic_searches"
   
