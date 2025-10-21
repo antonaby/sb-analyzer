@@ -2,13 +2,14 @@ from datetime import datetime
 from typing import Any, Sequence
 from uuid import UUID
 
-from sqlalchemy import or_, select, func, literal_column, desc, update, and_, delete
+from sqlalchemy import or_, select, func, literal_column, desc, update, and_, delete, GenerativeSelect
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, with_loader_criteria
+from sqlalchemy.sql.selectable import Select
 
 from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource, \
-  VideoSearch, VideoProcessing, VideoProcessingKind, Hashtag, VideoHashtag
+  VideoSearch, VideoProcessing, VideoProcessingKind, Hashtag, VideoHashtag, VideoTopic
 from db.repositories.common import BaseAsyncRepo
 
 
@@ -126,14 +127,49 @@ class VideoRepository(BaseAsyncRepo):
     
     result = await self._session.execute(stmt)
     return result.scalar_one()
+
+  async def get_video_by_topic(
+      self,
+      topic_id: UUID,
+      load_annotations: bool = False,
+      annotations_to_load: list[AnnotationKind] | None = None,
+      load_meta: bool = False,
+      meta_to_load: list[MetaSource] | None = None,
+      max_videos: int = 100,
+      uploaded_after: datetime | None = None,
+      sort_desc: bool = True
+  ) -> Sequence[Video]:
+    sort_by = desc(Video.uploaded_at) if sort_desc else Video.uploaded_at
+
+    conditions = [
+      VideoTopic.topic_id == topic_id
+    ]
+
+    if uploaded_after:
+      conditions.append(
+        Video.uploaded_at >= uploaded_after
+      )
+
+    stmt = (
+      select(Video).
+      join(VideoTopic).
+      where(*conditions).
+      order_by(sort_by).
+      limit(max_videos)
+    )
+
+    stmt = self._append_eager_loading(stmt, load_annotations, annotations_to_load, load_meta, meta_to_load)
+
+    result = await self._session.execute(stmt)
+    return result.scalars().all()
   
   async def get_videos_by_author(
     self, 
     author_id: UUID, 
     load_annotations: bool = False,
-    annotations_to_load: list[AnnotationKind] = [],
+    annotations_to_load: list[AnnotationKind] | None = None,
     load_meta: bool = False,
-    meta_to_load: list[MetaSource] = [],
+    meta_to_load: list[MetaSource] | None = None,
     max_videos: int = 100,
     sort_desc: bool = True
   ) -> Sequence[Video]:
@@ -146,22 +182,34 @@ class VideoRepository(BaseAsyncRepo):
       limit(max_videos)
     )
     
-    if load_annotations:
-      stmt = stmt.options(selectinload(Video.annotations))
-      if len(annotations_to_load) > 0:
-        stmt = stmt.options(
-          with_loader_criteria(VideoAnnotation, VideoAnnotation.kind.in_(annotations_to_load))
-        )
-    
-    if load_meta:
-      stmt = stmt.options(selectinload(Video.video_meta))
-      if len(meta_to_load) > 0:
-        stmt = stmt.options(
-          with_loader_criteria(VideoMeta, VideoMeta.source.in_(meta_to_load))
-        )
+    stmt = self._append_eager_loading(stmt, load_annotations, annotations_to_load, load_meta, meta_to_load)
     
     result = await self._session.execute(stmt)
     return result.scalars().all()
+
+  @staticmethod
+  def _append_eager_loading(
+      stmt: Select,
+      load_annotations: bool,
+      annotations_to_load: list[AnnotationKind] | None,
+      load_meta: bool,
+      meta_to_load: list[MetaSource] | None,
+  ) -> Select:
+    if load_annotations:
+      stmt = stmt.options(selectinload(Video.annotations))
+      if annotations_to_load:
+        stmt = stmt.options(
+          with_loader_criteria(VideoAnnotation, VideoAnnotation.kind.in_(annotations_to_load))
+        )
+
+    if load_meta:
+      stmt = stmt.options(selectinload(Video.video_meta))
+      if meta_to_load:
+        stmt = stmt.options(
+          with_loader_criteria(VideoMeta, VideoMeta.source.in_(meta_to_load))
+        )
+
+    return stmt
     
   async def get_video_by_id(
     self, 
