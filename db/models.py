@@ -121,6 +121,12 @@ class Challenge(Base):
   )
   translated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
+  translations: Mapped[list["ChallengeTranslation"]] = relationship(
+    back_populates="challenge",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+
 
 class ChallengeTranslation(Base):
   __tablename__ = "challenge_translations"
@@ -142,6 +148,8 @@ class ChallengeTranslation(Base):
     DateTime(timezone=True),
     default=func.now(), nullable=False
   )
+
+  challenge: Mapped["Challenge"] = relationship(back_populates="translations")
 
 
 class Search(Base):
