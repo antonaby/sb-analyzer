@@ -51,12 +51,13 @@ class ChallengeGenAgentResponse(BaseModel):
 
 class ChallengeGenAgent:
 
-  def __init__(self, model: Model, tpl_mgr: TemplateManager):
+  def __init__(self, model: Model, model_settings: ModelSettings, tpl_mgr: TemplateManager):
     self._log = logging.getLogger("app.challenge_gen_agent")
     self._tpl_mgr = tpl_mgr
 
     agent = Agent(
       model,
+      model_settings=model_settings,
       instructions=self._tpl_mgr.render("challenge_gen_system", {}),
       output_type=ChallengeGenAgentResponse
     )

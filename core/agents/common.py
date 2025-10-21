@@ -3,7 +3,7 @@ import os
 from jinja2 import Environment, FileSystemLoader, Template
 from pydantic_ai.models import Model
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
-from pydantic_ai.models.openai import OpenAIResponsesModel
+from pydantic_ai.models.openai import OpenAIResponsesModel, OpenAIResponsesModelSettings
 from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
@@ -43,6 +43,13 @@ def openai_model(model_name: str) -> Model:
 
 def gpt_5_nano() -> Model:
   return openai_model("gpt-5-nano-2025-08-07")
+
+
+def medium_effort_gpt_5() -> ModelSettings:
+  return OpenAIResponsesModelSettings(
+    openai_reasoning_effort='medium',
+    openai_reasoning_summary='detailed',
+  )
 
 
 class TemplateManager:
