@@ -1,8 +1,8 @@
 import logging
+from abc import ABC
 from datetime import datetime, timezone
 from typing import TypedDict, cast
 from uuid import UUID
-from abc import ABC
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -11,9 +11,10 @@ from core.agents.topic import TopicAgent, TopicProposal
 from core.file import AudioFile, UrlVideoSource, VideoFile
 from core.transcribe import AudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, VideoData, Frame
-from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource, VideoProcessing, Hashtag
+from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource, VideoProcessing
 from db.repositories.topics import TopicRepository
-from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository, get_video_data
+from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
+from db.repositories.helpers import full_video_data
 from models.common import PostDetails
 
 
@@ -349,7 +350,7 @@ class TopicProcessor(BaseVideoProcessor):
 
   async def identify_topics(self, job_id: UUID) -> TopicProcessorResult:
     video, job = await self._start_job(job_id, with_scraped_data=True, with_annotations=True, with_meta=True)
-    video_data = get_video_data(video)
+    video_data = full_video_data(video)
 
     try:
       topics = await self._topic_agent.run(video_data)

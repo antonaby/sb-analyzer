@@ -10,7 +10,6 @@ from sqlalchemy.orm import selectinload, with_loader_criteria
 from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource, \
   VideoSearch, VideoProcessing, VideoProcessingKind, Hashtag, VideoHashtag
 from db.repositories.common import BaseAsyncRepo
-from models.common import VideoData
 
 
 def prepare_meta(
@@ -312,73 +311,3 @@ class VideoRepository(BaseAsyncRepo):
   
   async def commit(self):
     await self._session.commit()
-
-
-def _get_video_summary(video: Video) -> tuple[str, str, list[str], list[str]]:
-  label: str = "no label"
-  synopsis: str = "no synopsis"
-  actions: list[str] = []
-  transcription: list[str] = []
-
-  for a in video.annotations:
-    if a.kind == AnnotationKind.label:
-      label = a.value
-    if a.kind == AnnotationKind.synopsis:
-      synopsis = a.value
-    if a.kind == AnnotationKind.action:
-      actions.append(a.value)
-    if a.kind == AnnotationKind.transcription:
-      transcription.append(a.value)
-
-  return label, synopsis, actions, transcription
-
-
-def _get_video_meta(video: Video) -> list[str]:
-  topics: list[str] = []
-
-  for m in video.video_meta:
-    if m.source == MetaSource.topic:
-      topics.append(m.value)
-
-  return topics
-
-
-def _get_post_meta(video: Video) -> tuple[str, str, list[str]]:
-  title: str = "no title"
-  description: str = "no description"
-  hashtags: list[str] = []
-
-  for m in video.video_meta:
-    if m.source == MetaSource.title:
-      title = m.value
-    if m.source == MetaSource.description:
-      description = m.value
-    if m.source == MetaSource.hashtag:
-      hashtags.append(m.value)
-
-  return title, description, hashtags
-
-
-def get_video_data(video: Video) -> VideoData:
-  title, description, hashtags = _get_post_meta(video)
-  topics = _get_video_meta(video)
-  label, synopsis, actions, transcription = _get_video_summary(video)
-
-  video_data: VideoData = {
-    "video_id": str(video.id),
-    "source": video.source.value,
-    "uploaded_at_iso": video.uploaded_at.isoformat(),
-    "title": title,
-    "description": description,
-    "likes": video.likes,
-    "views": video.views,
-    "comments": video.comments,
-    "hashtags": hashtags,
-    "topics": topics,
-    "label": label,
-    "synopsis": synopsis,
-    "actions": actions,
-    "transcription": transcription
-  }
-
-  return video_data

@@ -9,8 +9,8 @@ from pydantic_ai.models import Model
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from core.agents.common import TemplateManager
+from db.repositories.helpers import VideoData
 from db.repositories.topics import TopicRepository
-from models.common import VideoData
 
 
 class TopicDetails(BaseModel):
@@ -125,7 +125,7 @@ class TopicAgent:
       return await ctx.deps.topic_manager.search_topics(topic_names)
 
   async def run(self, video: VideoData, temperature: float = 0) -> list[TopicProposal]:
-    user_prompt = self._tpl_mgr.render("only_input", {"input": video})
+    user_prompt = self._tpl_mgr.render("only_input", {"input": video.model_dump(mode="json")})
     res = await self._agent.run(
       user_prompt,
       deps=TopicAgentDeps(topic_manager=self._topic_manager),

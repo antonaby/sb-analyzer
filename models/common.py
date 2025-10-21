@@ -23,20 +23,3 @@ class PostDetails(TypedDict):
   comments: int
   scraper: str
   source: dict
-
-
-class VideoData(TypedDict):
-  video_id: str
-  source: str
-  title: str
-  description: str
-  uploaded_at_iso: str
-  likes: int
-  views: int
-  comments: int
-  hashtags: list[str]
-  topics: list[str]
-  label: str
-  synopsis: str
-  actions: list[str]
-  transcription: list[str]
