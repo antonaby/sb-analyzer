@@ -6,6 +6,13 @@ from db.models import VideoProcessingKind, VideoSource
 from models.apidojo import DateRange, SortType
 
 
+class JobRunDetails(BaseModel):
+  id: UUID
+  created_at: datetime
+  celery_job_id: str
+  celery_job_status: str
+
+
 class CreateTopicRequest(BaseModel):
   name: str = Field(min_length=3, description="Topic name")
 

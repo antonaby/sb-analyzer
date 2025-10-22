@@ -1,11 +1,12 @@
 from uuid import UUID
 
 from celery.result import AsyncResult
+from fastapi import APIRouter, Depends
 
+from api.deps import get_job_repo
+from api.models import JobRunDetails
+from db.repositories.jobs import JobRepository, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob
 from worker.tasks.challenges import generate_challenges_for_topic
-
-from fastapi import APIRouter
-from pydantic import BaseModel, Field
 
 router = APIRouter(
   prefix="/runs",
@@ -13,15 +14,21 @@ router = APIRouter(
 )
 
 
-class ChallengeGenRequest(BaseModel):
-  topic_id: UUID = Field(description="Id of Topic to generate Challenges")
-
-
 @router.post("/challenge-gen")
-async def run_challenge_gen(request: ChallengeGenRequest):
-  job: AsyncResult = generate_challenges_for_topic.delay(topic_id=request.topic_id)
+async def run_challenge_gen(request: ChallengeGenJob, job_repo: JobRepository = Depends(get_job_repo)) -> JobRunDetails:
+  job = await job_repo.create_job(
+    CHALLENGE_GEN_JOB_NAME,
+    request.model_dump(mode="json")
+  )
+  await job_repo.commit()
 
-  return {
-    "id": job.id,
-    "status": job.status,
-  }
+  celery_job: AsyncResult = generate_challenges_for_topic.delay(job_id=job.id)
+  await job_repo.set_celery_job_id(job.id, UUID(celery_job.id))
+  await job_repo.commit()
+
+  return JobRunDetails(
+    id=job.id,
+    created_at=job.created_at,
+    celery_job_id=celery_job.id,
+    celery_job_status=celery_job.status
+  )

@@ -5,8 +5,8 @@ from worker.main import worker_app
 
 
 router = APIRouter(
-  prefix="/tasks",
-  tags=["tasks"],
+  prefix="/jobs",
+  tags=["jobs"],
 )
 
 

@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.conf import create_db_engine, get_async_session
 from db.repositories.authors import AuthorRepository
+from db.repositories.jobs import JobRepository
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import VideoRepository
 
@@ -27,3 +28,6 @@ def get_topic_repo(session: AsyncSession = Depends(get_async_db)) -> TopicReposi
 
 def get_author_repo(session: AsyncSession = Depends(get_async_db)) -> AuthorRepository:
   return AuthorRepository(session)
+
+def get_job_repo(session: AsyncSession = Depends(get_async_db)) -> JobRepository:
+  return JobRepository(session)
