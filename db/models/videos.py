@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.schema import Index
 
 from db.conf import Base
-from .enums import VideoSource, MetaSource, AnnotationKind, VideoProcessingKind
+from .enums import VideoSource, MetaSource, AnnotationKind
 
 
 if TYPE_CHECKING:
@@ -55,11 +55,6 @@ class Video(Base):
 
   author: Mapped["Author"] = relationship(back_populates="videos")
 
-  processing: Mapped[list["VideoProcessing"]] = relationship(
-    back_populates="video",
-    cascade="all, delete-orphan",
-    passive_deletes=True,
-  )
   annotations: Mapped[list["VideoAnnotation"]] = relationship(
     back_populates="video",
     cascade="all, delete-orphan",
@@ -209,32 +204,3 @@ class VideoAnnotation(Base):
   __table_args__ = (
     Index("ix_video_annotations_value_tsv", "value_tsv", postgresql_using="gin"),
   )
-
-
-class VideoProcessing(Base):
-  __tablename__ = "video_processing"
-
-  id: Mapped[uuid.UUID] = mapped_column(
-    UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
-  )
-  video_id: Mapped[uuid.UUID] = mapped_column(
-    UUID(as_uuid=True),
-    ForeignKey("videos.id", ondelete="CASCADE"),
-    nullable=False,
-    index=True,
-  )
-  source: Mapped[VideoProcessingKind] = mapped_column(
-    Enum(VideoProcessingKind, name="video_processing_kind", native_enum=True), nullable=False
-  )
-  created_at: Mapped[datetime] = mapped_column(
-    DateTime(timezone=True),
-    default=func.now(), nullable=False
-  )
-
-  job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=True)
-  started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
-  finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
-  processing_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-  is_canceled: Mapped[bool | None] = mapped_column(Boolean, nullable=False, server_default=text("false"))
-
-  video: Mapped["Video"] = relationship(back_populates="processing")

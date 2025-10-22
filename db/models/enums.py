@@ -29,8 +29,3 @@ class AnnotationKind(Enum):
   synopsis = "synopsis"
   action = "action"
   transcription = "transcription"
-
-
-class VideoProcessingKind(Enum):
-  summarizing = "summarizing"
-  categorization = "categorization"

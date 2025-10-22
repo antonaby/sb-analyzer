@@ -8,6 +8,15 @@ from db.repositories.common import BaseAsyncRepo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+PROCESS_VIDEO_JOB_NAME = "process_video"
+class ProcessVideoJob(BaseModel):
+  video_id: UUID
+  delete_downloaded_files: bool
+
+CATEGORIZATION_VIDEO_JOB_NAME = "categorization_video"
+class CategorizationVideoJob(BaseModel):
+  video_id: UUID
+
 CHALLENGE_GEN_JOB_NAME = "challenge_gen"
 class ChallengeGenJob(BaseModel):
   topic_id: UUID

@@ -1,20 +1,23 @@
 import logging
-from abc import ABC
 from datetime import datetime, timezone
-from typing import TypedDict, cast
+from typing import cast
 from uuid import UUID
 
+from openai import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.agents.summary import SummaryAgent, VideoSummary
 from core.agents.topic import TopicAgent, TopicProposal
-from core.file import AudioFile, UrlVideoSource, VideoFile
+from core.file import AudioFile, UrlVideoSource, VideoFile, VideoSource
+from core.processors.common import JobProcessor
 from core.transcribe import AudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, VideoData, Frame
-from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource, VideoProcessing
+from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
+from db.repositories.helpers import full_video_data
+from db.repositories.jobs import PROCESS_VIDEO_JOB_NAME, ProcessVideoJob, CATEGORIZATION_VIDEO_JOB_NAME, \
+  CategorizationVideoJob
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
-from db.repositories.helpers import full_video_data
 from models.common import PostDetails
 
 
@@ -22,54 +25,34 @@ class VideoProcessorError(Exception):
   pass
 
 
-class BaseVideoProcessor(ABC):
+class BaseVideoProcessor(JobProcessor):
 
   def __init__(self, async_session: async_sessionmaker[AsyncSession]):
-    self._db = async_session
+    super().__init__(async_session)
 
-  async def _start_job(
-      self, job_id: UUID,
+  async def _find_video(
+      self,
+      video_id: UUID,
       with_scraped_data: bool = False,
       with_annotations: bool = False,
       with_meta: bool = False
-  ) -> tuple[Video, VideoProcessing]:
+  ) -> Video:
     async with self._db() as session:
       repo = VideoRepository(session)
-      job = await repo.get_video_processing_by_id(job_id)
-      if not job:
-        raise VideoProcessorError(f"Video {job_id} not found")
-
       video = await repo.get_video_by_id(
-        job.video_id,
+        video_id,
         with_scraped_data=with_scraped_data,
         with_annotations=with_annotations,
         with_meta=with_meta
       )
       if not video:
-        raise VideoProcessorError(f"Video {job.video_id} not found")
+        raise VideoProcessorError(f"Video {video_id} not found")
 
-      job.started_at = datetime.now(timezone.utc)
-      await session.commit()
-
-      return video, job
-
-  async def _set_error(self, job: VideoProcessing):
-    try:
-      async with self._db() as session:
-        job = await session.merge(job, load=False)
-        job.finished_at = datetime.now(timezone.utc)
-
-        repo = VideoRepository(session)
-        await repo.mark_processing_as_error(job.video_id)
-
-        await session.commit()
-    except Exception as e:
-      pass
+      return video
 
 
-class ProcessedVideo(TypedDict):
+class ProcessedVideo(BaseModel):
   video_id: UUID
-  processed_at_utc: datetime
 
 
 class VideoProcessor(BaseVideoProcessor):
@@ -86,30 +69,18 @@ class VideoProcessor(BaseVideoProcessor):
     self._agent = agent
     self._tmp_dir = tmp_dir
     
-  async def create_summary(
-    self,
-    job_id: UUID,
-    delete_downloaded_files: bool = True
-  ) -> ProcessedVideo:
-    video_model, job_model = await self._start_job(job_id, with_scraped_data=True)
-    video_model, job_model = await self._create_summary(video_model, job_model, delete_downloaded_files)
-    
-    return {
-      "video_id": video_model.id,
-      "processed_at_utc": job_model.finished_at,
-    }
-    
-  async def _create_summary(
-    self,
-    video_model: Video,
-    job_model: VideoProcessing,
-    delete_downloaded_files: bool
-  ) -> tuple[Video, VideoProcessing]:
-    video_file = None
-    video_source = None
-    
+  async def run(self, job_id: UUID) -> ProcessedVideo:
+    job = await self.start_job(job_id, PROCESS_VIDEO_JOB_NAME)
+
+    video_file: VideoFile | None = None
+    video_source: VideoSource | None  = None
+    job_meta: ProcessVideoJob | None = None
+
     try:
-      post_data = cast(PostDetails, video_model.scraped_data[0].data)
+      job_meta = ProcessVideoJob(**job.meta)
+      video = await self._find_video(job_meta.video_id, with_scraped_data=True)
+
+      post_data = cast(PostDetails, video.scraped_data[0].data)
       video_source = await UrlVideoSource.new(post_data["download_url"], self._tmp_dir)
       
       video_file = VideoFile(video_source)  
@@ -119,26 +90,29 @@ class VideoProcessor(BaseVideoProcessor):
       audio_data = AudioData(self._lm_client, audio_file)
       
       summary = await self._agent.run(post_data, video_data, audio_data)
-      return await self._save_video_details(video_model, job_model, post_data, video_data, audio_data, summary)
+
+      video = await self._save_video_details(video, post_data, video_data, audio_data, summary)
+      await self.set_job_finished(job_id, False)
+
+      return ProcessedVideo(video_id=video.id)
     except Exception as e:
-      await self._set_error(job_model)
-      raise VideoProcessorError("cannot create summary for a video") from e
+      await self.set_job_finished(job_id, True)
+      raise e
     finally:
       try:
         if video_file is not None:
           video_file.close()
-        if delete_downloaded_files and video_source is not None:
+        if video_source and job_meta and job_meta.delete_downloaded_files:
           video_source.delete()
       except Exception as e:
         self._log.exception(e)
         
   async def _save_video_details(
-    self, 
-    video_model: Video,
-    job_model: VideoProcessing,
-    post_data: PostDetails, video_data: VideoData, 
-    audio_data: AudioData, summary: VideoSummary
-  ) -> tuple[Video, VideoProcessing]:
+      self,
+      video_model: Video,
+      post_data: PostDetails, video_data: VideoData,
+      audio_data: AudioData, summary: VideoSummary
+  ) -> Video:
 
     processed_frames = await video_data.get_processed_frames()
     transcriptions = audio_data.get_processed_transcriptions()
@@ -172,13 +146,9 @@ class VideoProcessor(BaseVideoProcessor):
         meta.revision = revision
       session.add_all(video_meta)
 
-      job_model = await session.merge(job_model, load=False)
-      job_model.finished_at = datetime.now(timezone.utc)
-      job_model.processing_error = False
-
       await session.commit()
       
-      return video_model, job_model
+      return video_model
       
   @classmethod
   def _create_video_data(
@@ -327,20 +297,16 @@ class VideoProcessor(BaseVideoProcessor):
     }
 
 
-class AssignedTopic(TypedDict):
+class AssignedTopic(BaseModel):
   topic_id: UUID
   is_new: bool
   name: str
   confidence: float
 
 
-class TopicProcessorResult(TypedDict):
+class TopicProcessorResult(BaseModel):
   video_id: UUID
   topics: list[AssignedTopic]
-
-
-class TopicProcessorError(Exception):
-  pass
 
 
 class TopicProcessor(BaseVideoProcessor):
@@ -349,18 +315,25 @@ class TopicProcessor(BaseVideoProcessor):
     super().__init__(async_session)
     self._topic_agent = topic_agent
 
-  async def identify_topics(self, job_id: UUID) -> TopicProcessorResult:
-    video, job = await self._start_job(job_id, with_scraped_data=True, with_annotations=True, with_meta=True)
-    video_data = full_video_data(video)
+  async def run(self, job_id: UUID) -> TopicProcessorResult:
+    job = await self.start_job(job_id, CATEGORIZATION_VIDEO_JOB_NAME)
 
     try:
-      topics = await self._topic_agent.run(video_data)
-      return await self._save_topics(video, topics, job)
-    except Exception as e:
-      await self._set_error(job)
-      raise VideoProcessorError("cannot create summary for a video") from e
+      job_meta = CategorizationVideoJob(**job.meta)
+      video = await self._find_video(job_meta.video_id, with_scraped_data=True, with_annotations=True, with_meta=True)
 
-  async def _save_topics(self, video: Video, topics: list[TopicProposal], job: VideoProcessing) -> TopicProcessorResult:
+      video_data = full_video_data(video)
+      topics = await self._topic_agent.run(video_data)
+
+      result = await self._save_topics(video, topics)
+      await self.set_job_finished(job_id, False)
+
+      return result
+    except Exception as e:
+      await self.set_job_finished(job_id, True)
+      raise e
+
+  async def _save_topics(self, video: Video, topics: list[TopicProposal]) -> TopicProcessorResult:
     async with self._db() as session:
       video = await session.merge(video, load=False)
       topic_repo = TopicRepository(session)
@@ -372,19 +345,9 @@ class TopicProcessor(BaseVideoProcessor):
           topic = await topic_repo.create_topic(t.name)
 
         await topic_repo.assign_topic(topic.id, video.id, t.confidence)
-        assigned_topics.append({
-          "topic_id": topic.id,
-          "is_new": t.is_new,
-          "name": t.name,
-          "confidence": t.confidence
-        })
-
-      job_model = await session.merge(job, load=False)
-      job_model.finished_at = datetime.now(timezone.utc)
-      job_model.processing_error = False
+        assigned_topics.append(
+          AssignedTopic(topic_id=topic.id, is_new=t.is_new, name=t.name, confidence=t.confidence)
+        )
 
       await session.commit()
-      return {
-        "video_id": video.id,
-        "topics": assigned_topics,
-      }
+      return TopicProcessorResult(video_id=video.id, topics=assigned_topics)

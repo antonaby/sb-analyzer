@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload, with_loader_criteria
 from sqlalchemy.sql.selectable import Select
 
 from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource, \
-  VideoSearch, VideoProcessing, VideoProcessingKind, Hashtag, VideoHashtag, VideoTopic
+  VideoSearch, Hashtag, VideoHashtag, VideoTopic
 from db.repositories.common import BaseAsyncRepo
 
 
@@ -267,63 +267,6 @@ class VideoRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalar_one()
-
-  async def create_video_processing(self, video_id: UUID, source: VideoProcessingKind) -> VideoProcessing:
-    stmt = (
-      pg_insert(VideoProcessing).
-      values(video_id=video_id, source=source).
-      returning(VideoProcessing)
-    )
-
-    result = await self._session.execute(stmt)
-    return result.scalar_one()
-
-  async def mark_processing_as_error(self, video_id: UUID):
-    stmt = (
-      update(VideoProcessing).
-      where(VideoProcessing.video_id == video_id).
-      values(processing_error=True)
-    )
-
-    await self._session.execute(stmt)
-
-  async def invalidate_old_video_processing(self, video_id: UUID):
-    stmt = (
-      update(VideoProcessing).
-      where(VideoProcessing.video_id == video_id).
-      values(is_canceled=True)
-    )
-
-    await self._session.execute(stmt)
-
-  async def fetch_videos_under_processing(self) -> Sequence[Video]:
-    stmt = (
-      select(Video).
-      join(Video.processing).
-      where(
-        and_(
-          VideoProcessing.is_canceled.is_(False),
-          VideoProcessing.processing_error.isnot(True),
-          or_(
-            VideoProcessing.started_at.is_(None),
-            VideoProcessing.finished_at.is_(None),
-          )
-        )
-      ).
-      order_by(Video.updated_at).
-      options(selectinload(Video.processing))
-    )
-
-    result = await self._session.execute(stmt)
-    return result.scalars().all()
-
-  async def get_video_processing_by_id(self, job_id: UUID) -> VideoProcessing | None:
-    stmt = (
-      select(VideoProcessing).
-      where(VideoProcessing.id == job_id)
-    )
-    result = await self._session.execute(stmt)
-    return result.scalar_one_or_none()
 
   async def search_videos(
       self,
