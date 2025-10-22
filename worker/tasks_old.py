@@ -25,7 +25,7 @@ topic_processor = None
 def init_worker_process(**kwargs):
   import logfire
   from dotenv import load_dotenv
-  from core.apify.client import ApifyClient
+  from apify.client import ApifyClient
   from core.video import ClipTaggerClient
   from core.transcribe import LemonfoxClient
   from core.agents.common import TemplateManager, gpt_5_nano
@@ -205,7 +205,7 @@ def _run_apidojo_scrapper(func_name: str, **kwargs):
   global apify_client
   if apify_client is None:
     raise RuntimeError("Apify client not initialized")
-  from core.apify.client import ApifyClient
+  from apify.client import ApifyClient
   l_apify_client: ApifyClient = apify_client
 
   global search_processor

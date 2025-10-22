@@ -1,9 +1,9 @@
 import logging
-from typing import Any, TypedDict, cast
+from typing import TypedDict, cast
 
 from apify_client import ApifyClientAsync
 
-from core.apify.actor import BaseApifyActor
+from apify.actor import BaseApifyActor
 from models.apify import ActorRun
 
 

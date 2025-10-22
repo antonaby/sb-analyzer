@@ -1,7 +1,7 @@
 import logging
-from typing import Any, Literal, cast, TypedDict
+from typing import cast
 from apify_client import ApifyClientAsync
-from core.apify.actor import BaseApifyActor
+from apify.actor import BaseApifyActor
 from models.apidojo import DateRange, SortType, TikTokPost
 from models.apify import ActorRun
 
