@@ -2,32 +2,11 @@ from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, Field
 
-from db.models import VideoProcessingKind, VideoSource
-from models.apidojo import DateRange, SortType
-
-
-class JobRunDetails(BaseModel):
-  id: UUID
-  created_at: datetime
-  celery_job_id: str
-  celery_job_status: str
+from db.models import VideoSource
 
 
 class CreateTopicRequest(BaseModel):
   name: str = Field(min_length=3, description="Topic name")
-
-
-class ApidojoScrapperRun(BaseModel):
-  keywords: list[str] = Field(min_length=1, description="At least one keyword")
-  date_range: DateRange
-  sort_type: SortType
-  location: str
-  max_items: int
-
-
-class ApidojoCollectUrls(BaseModel):
-  urls: list[str] = Field(min_length=1, description="At least one url")
-  max_items: int
 
 
 class TaskProcessAuthorVideos(BaseModel):
@@ -37,7 +16,7 @@ class TaskProcessAuthorVideos(BaseModel):
 
 class VideoProcessingDetails(BaseModel):
   job_id: UUID | None
-  source: VideoProcessingKind
+  source: str
   created_at: datetime
   started_at: datetime | None
   finished_at: datetime | None

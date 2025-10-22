@@ -8,6 +8,12 @@ from db.repositories.common import BaseAsyncRepo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+APIDOJO_SCRAPER_NAME = "run_apidojo_scraper"
+class ApidojoScraperJob(BaseModel):
+  func: str
+  args: dict
+
+
 PROCESS_VIDEO_JOB_NAME = "process_video"
 class ProcessVideoJob(BaseModel):
   video_id: UUID
@@ -25,7 +31,6 @@ CHALLENGE_TRANSLATION_JOB_NAME = "challenge_translation"
 class ChallengeTranslationJob(BaseModel):
   challenge_id: UUID
   langs: list[str]
-
 
 
 class JobRepository(BaseAsyncRepo):

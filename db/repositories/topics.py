@@ -39,27 +39,6 @@ class TopicRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     
     return result.scalars().all()
-    
-  async def create_search(self, scraper: str, kind: str, search_data: dict) -> Search:
-    stmt = (
-      insert(Search).
-      values(scraper=scraper, kind=kind, search_data=search_data).
-      returning(Search)
-    )
-    result = await self._session.execute(stmt)
-    
-    return result.scalar_one()
-  
-  async def update_search(self, search_id: UUID, total_videos: int) -> Search:
-    stmt = (
-      update(Search).
-      where(Search.id == search_id).
-      values(total_videos=total_videos, ran_at=func.now()).
-      returning(Search)
-    )
-    result = await self._session.execute(stmt)
-    
-    return result.scalar_one()
   
   async def assign_topic(self, topic_id: UUID, video_id: UUID, confidence: float) -> VideoTopic:
     stmt = (

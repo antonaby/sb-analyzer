@@ -1,10 +1,36 @@
 from abc import ABC
+from datetime import datetime
 from uuid import UUID
 
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
-from db.models import Job
+from db.models import Job, VideoSource
 from db.repositories.jobs import JobRepository
+
+
+class AuthorDetails(BaseModel):
+  url: str
+  author_from: VideoSource
+  verified: bool | None
+  followers: int | None
+  total_videos: int | None
+
+
+class PostDetails(BaseModel):
+  search_id: UUID
+  url: str
+  download_url: str
+  post_from: VideoSource
+  title: str
+  description: str
+  hashtags: list[str]
+  uploaded_at: datetime
+  likes: int
+  views: int
+  comments: int
+  scraper: str
+  source: dict
 
 
 class JobProcessorError(Exception):

@@ -1,1 +1,1 @@
-from . import worker, challenges
+from . import worker, challenges, apidojo
