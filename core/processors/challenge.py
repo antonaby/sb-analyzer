@@ -5,12 +5,13 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from core.agents.challenge import ChallengeGenAgent, ChallengeGenAgentRun, ChallengeGenAgentResponse
-from core.agents.translation import TranslationAgent, TranslationAgentRun, Translation
+from core.agents.translation import TranslationAgent, TranslationAgentRun, Translation, TranslationAgentResponse
 from core.processors.common import JobProcessor
 from db.models import AnnotationKind, Challenge, ChallengeTranslation, Topic, Job
 from db.repositories.challenges import ChallengeRepository
 from db.repositories.helpers import full_video_data, VideoData
-from db.repositories.jobs import JobRepository, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob
+from db.repositories.jobs import CHALLENGE_GEN_JOB_NAME, ChallengeGenJob, CHALLENGE_TRANSLATION_JOB_NAME, \
+  ChallengeTranslationJob
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import VideoRepository
 
@@ -34,7 +35,7 @@ class ChallengeProcessor(JobProcessor):
     super().__init__(session_maker)
     self._challenge_agent = challenge_agent
 
-  async def create_challenges(self, job_id: UUID) -> ChallengeProcessorResult:
+  async def run(self, job_id: UUID) -> ChallengeProcessorResult:
     job = await self.start_job(job_id, CHALLENGE_GEN_JOB_NAME)
     try:
       topic, video_data = await self._get_video_data(job)
@@ -80,6 +81,9 @@ class ChallengeProcessor(JobProcessor):
   async def _save_challenges(self, topic: Topic, agent_response: ChallengeGenAgentResponse) -> ChallengeProcessorResult:
     new_challenges: list[Challenge] = []
     async with self._db() as session:
+      topic = await session.merge(topic, load=False)
+      topic.last_challenges_created_at = datetime.now(timezone.utc)
+
       challenge_repo = ChallengeRepository(session)
       for c in agent_response.challenges:
         en_translation = [t for t in c.translations if t.lang == "en"][0]
@@ -104,21 +108,44 @@ class TranslationProcessorResult(BaseModel):
   translations: list[CreatedTranslation]
 
 
-class TranslationProcessor:
+class TranslationProcessor(JobProcessor):
 
   def __init__(self, translation_agent: TranslationAgent, session_maker: async_sessionmaker[AsyncSession]):
+    super().__init__(session_maker)
     self._translation_agent = translation_agent
-    self._db = session_maker
 
-  async def translate(self, challenge_id: UUID, langs: list[str]) -> TranslationProcessorResult:
-    translations_to_create: list[str] = langs
+  async def run(self, job_id: UUID) -> TranslationProcessorResult:
+    job = await self.start_job(job_id, CHALLENGE_TRANSLATION_JOB_NAME)
+    try:
+      challenge, en_translation, translations_to_create = await self._get_translation(job)
+      if len(translations_to_create) == 0:
+        await self.set_job_finished(job_id, False)
+        return TranslationProcessorResult(translations=[])
+
+      agent_response = await self._translation_agent.run(TranslationAgentRun(
+        languages=translations_to_create,
+        input=Translation(lang=en_translation.lang, text=en_translation.value)
+      ))
+
+      result = await self._save_translations(challenge, agent_response)
+      await self.set_job_finished(job_id, False)
+
+      return result
+    except Exception as e:
+      await self.set_job_finished(job_id, True)
+      raise e
+
+  async def _get_translation(self, job: Job) -> tuple[Challenge, ChallengeTranslation, list[str]]:
+    job_meta = ChallengeTranslationJob(**job.meta)
+
+    translations_to_create: list[str] = job_meta.langs
     en_translation: ChallengeTranslation | None = None
 
     async with self._db() as session:
       challenge_repo = ChallengeRepository(session)
-      challenge = await challenge_repo.get_challenge(challenge_id, with_translations=True)
+      challenge = await challenge_repo.get_challenge(job_meta.challenge_id, with_translations=True)
       if not challenge:
-        raise ChallengeProcessorError(f"Challenge {challenge_id} not found")
+        raise ChallengeProcessorError(f"Challenge {job_meta.challenge_id} not found")
 
       for c in challenge.translations:
         if c.lang == "en":
@@ -127,16 +154,15 @@ class TranslationProcessor:
           translations_to_create.remove(c.lang)
 
     if not en_translation:
-      raise ChallengeProcessorError(f"No en translation for challenge {challenge_id}")
+      raise ChallengeProcessorError(f"No en translation for challenge {job_meta.challenge_id}")
 
-    if len(translations_to_create) == 0:
-      return TranslationProcessorResult(translations=[])
+    return challenge, en_translation, translations_to_create
 
-    result = await self._translation_agent.run(TranslationAgentRun(
-      languages=translations_to_create,
-      input=Translation(lang=en_translation.lang, text=en_translation.value)
-    ))
-
+  async def _save_translations(
+      self,
+      challenge: Challenge,
+      agent_response: TranslationAgentResponse
+  ) -> TranslationProcessorResult:
     created_translations: list[ChallengeTranslation] = []
     async with self._db() as session:
       challenge = await session.merge(challenge, load=False)
@@ -144,7 +170,7 @@ class TranslationProcessor:
 
       challenge_repo = ChallengeRepository(session)
 
-      for t in result.translations:
+      for t in agent_response.translations:
         t_model = await challenge_repo.create_translation(challenge.id, t.lang, t.text)
         created_translations.append(t_model)
 

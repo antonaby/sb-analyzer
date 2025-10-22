@@ -12,6 +12,12 @@ CHALLENGE_GEN_JOB_NAME = "challenge_gen"
 class ChallengeGenJob(BaseModel):
   topic_id: UUID
 
+CHALLENGE_TRANSLATION_JOB_NAME = "challenge_translation"
+class ChallengeTranslationJob(BaseModel):
+  challenge_id: UUID
+  langs: list[str]
+
+
 
 class JobRepository(BaseAsyncRepo):
 

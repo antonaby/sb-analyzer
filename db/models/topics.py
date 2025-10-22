@@ -21,13 +21,13 @@ class Topic(Base):
     UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
   )
   name: Mapped[str] = mapped_column(String(512), nullable=False)
-
   # Full-text search vector (auto-generated from name)
   name_tsv: Mapped[str] = mapped_column(
     TSVECTOR,
     Computed("to_tsvector('english', coalesce(name, ''))", persisted=True),
     nullable=False,
   )
+  last_challenges_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
   created_at: Mapped[datetime] = mapped_column(
     DateTime(timezone=True),
