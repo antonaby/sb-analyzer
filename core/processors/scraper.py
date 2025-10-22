@@ -167,7 +167,7 @@ class PostDetailsProcessor(JobProcessor):
         post.views,
         post.comments
       )
-      scraped_data = prepare_scraped_data(video_model.id, cast(dict, post))
+      scraped_data = prepare_scraped_data(video_model.id, post.model_dump(mode="json"))
       session.add(scraped_data)
 
       await video_repo.add_search(post.search_id, video_model.id, is_video_new)

@@ -30,8 +30,8 @@ def run_apidojo_scraper(job_id: UUID) -> ActorRun:
       for video in scraper_run.videos:
         meta = PostDetailsJob(
           scraper="apidojo",
-          author=video.author.model_dump(mode="json"),
-          post=video.post.model_dump(mode="json")
+          post=video.post.model_dump(mode="json"),
+          author=video.author.model_dump(mode="json")
         )
         job = await job_repo.create_job(POST_DETAILS_JOB_NAME, meta.model_dump(mode="json"))
 
