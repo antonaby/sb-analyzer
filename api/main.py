@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from api.deps import *
-from api.routes import videos, apidojo, tasks, queue, topics, authors
+from api.routes import videos, apidojo, tasks, queue, topics, authors, runs
 from db.conf import test_db_conn
 
 
@@ -12,6 +12,7 @@ app.include_router(apidojo.router)
 app.include_router(tasks.router)
 app.include_router(queue.router)
 app.include_router(topics.router)
+app.include_router(runs.router)
 
 
 @app.get("/health")

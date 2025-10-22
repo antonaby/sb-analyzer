@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -121,6 +122,9 @@ class TranslationProcessor:
 
     created_translations: list[ChallengeTranslation] = []
     async with self._db() as session:
+      challenge = await session.merge(challenge, load=False)
+      challenge.translated_at = datetime.now(timezone.utc)
+
       challenge_repo = ChallengeRepository(session)
 
       for t in result.translations:

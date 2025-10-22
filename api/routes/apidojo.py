@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from api.models import ApidojoScrapperRun, ApidojoCollectUrls
-from worker.tasks import run_apidojo_search, run_apidojo_collect
+from worker.tasks_old import run_apidojo_search, run_apidojo_collect
 
 
 router = APIRouter(

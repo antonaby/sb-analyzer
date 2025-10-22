@@ -28,3 +28,8 @@ def get_async_session(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 async def test_db_conn(session: AsyncSession) -> int | None:
   result = await session.execute(text("SELECT 1"))
   return result.scalar()
+
+
+async def test_db_conn_with_session(async_db: async_sessionmaker[AsyncSession]) -> int | None:
+  async with async_db() as session:
+    return await test_db_conn(session)

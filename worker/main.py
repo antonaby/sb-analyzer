@@ -16,4 +16,4 @@ worker_app.conf.result_backend_transport_options = {
   'global_keyprefix': 'sb-analyzer:'
 }
 
-worker_app.conf.imports = ("worker.tasks")
+worker_app.conf.imports = ["worker.tasks"]
