@@ -10,7 +10,8 @@ from apify.client import ApifyClient
 from apify.tiktok.apidojo import TikTokPost
 from core.processors.common import JobProcessor, AuthorDetails, PostDetails
 from db.models import VideoSource, Job, Search
-from db.repositories.jobs import APIDOJO_SCRAPER_NAME, ApidojoScraperJob
+from db.repositories.authors import AuthorRepository
+from db.repositories.jobs import APIDOJO_SCRAPER_NAME, ApidojoScraperJob, POST_DETAILS_JOB_NAME, PostDetailsJob
 from db.repositories.searches import SearchRepository
 from db.repositories.videos import VideoRepository, prepare_scraped_data
 from utils.common import is_url
@@ -117,58 +118,69 @@ class ApidojoScrapperProcessor(JobProcessor):
       return updated_search
 
 
-class SavePostResult(TypedDict):
+class SavePostResult(BaseModel):
   author_id: UUID
   new_author: bool
   video_id: UUID
   new_video: bool
 
 
-class PostDetailsProcessor:
+class PostDetailsProcessor(JobProcessor):
   
   def __init__(self, session_maker: async_sessionmaker[AsyncSession]):
-    self._db = session_maker
+    super().__init__(session_maker)
     
-  async def save(self, author: AuthorDetails, post: PostDetails) -> SavePostResult:
+  async def run(self, job_id: UUID) -> SavePostResult:
+    job = await self.start_job(job_id, POST_DETAILS_JOB_NAME)
+    try:
+      result = await self._process_post(job)
+      await self.set_job_finished(job_id, False)
+
+      return result
+    except Exception as e:
+      await self.set_job_finished(job_id, True)
+      raise e
+
+  async def _process_post(self, job: Job) -> SavePostResult:
+    job_meta = PostDetailsJob(**job.meta)
+    post = PostDetails(**job_meta.post)
+    author = AuthorDetails(**job_meta.author)
+
     async with self._db() as session:
-      repo = VideoRepository(session)
-      
-      author_source = VideoSource(author['author_from'])
-      author_model, is_author_new = await repo.upsert_author(
-        author['url'], 
-        author_source, 
-        author['verified'], 
-        author['followers'], 
-        author['total_videos']
+      author_repo = AuthorRepository(session)
+      video_repo = VideoRepository(session)
+
+      author_model, is_author_new = await author_repo.upsert_author(
+        author.url,
+        author.author_from,
+        author.verified,
+        author.followers,
+        author.total_videos
       )
       
-      video_source = VideoSource(post['post_from'])
-      uploaded_at = datetime.fromisoformat(post["uploaded_at_iso"])
-      
-      video_model, is_video_new = await repo.upsert_video(
-        post['url'], 
-        video_source, 
+      video_model, is_video_new = await video_repo.upsert_video(
+        post.url,
+        post.post_from,
         author_model, 
-        uploaded_at, 
-        post["likes"], 
-        post["views"], 
-        post["comments"]
+        post.uploaded_at,
+        post.likes,
+        post.views,
+        post.comments
       )
       scraped_data = prepare_scraped_data(video_model.id, cast(dict, post))
       session.add(scraped_data)
 
-      search_id = UUID(post["search_id"])
-      await repo.add_search(search_id, video_model.id, is_video_new)
+      await video_repo.add_search(post.search_id, video_model.id, is_video_new)
 
-      for hashtag in post["hashtags"]:
-        hashtag_model = await repo.upsert_hashtag(hashtag, video_source)
-        await repo.assign_hashtag(video_model.id, hashtag_model.id)
+      for hashtag in post.hashtags:
+        hashtag_model = await video_repo.upsert_hashtag(hashtag, post.post_from)
+        await video_repo.assign_hashtag(video_model.id, hashtag_model.id)
       
       await session.commit()
-      
-      return {
-        "author_id": author_model.id,
-        "new_author": is_author_new,
-        "video_id": video_model.id,
-        "new_video": is_video_new,
-      }
+
+      return SavePostResult(
+        author_id=author_model.id,
+        new_author=is_author_new,
+        video_id=video_model.id,
+        new_video=is_video_new
+      )

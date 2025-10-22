@@ -13,6 +13,11 @@ class ApidojoScraperJob(BaseModel):
   func: str
   args: dict
 
+POST_DETAILS_JOB_NAME = "process_post"
+class PostDetailsJob(BaseModel):
+  scraper: str
+  post: dict
+  author: dict
 
 PROCESS_VIDEO_JOB_NAME = "process_video"
 class ProcessVideoJob(BaseModel):

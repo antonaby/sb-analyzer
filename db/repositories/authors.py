@@ -1,9 +1,11 @@
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func, literal_column
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import Author
+from db.models import Author, VideoSource
 from db.repositories.common import BaseAsyncRepo
 
 
@@ -11,6 +13,37 @@ class AuthorRepository(BaseAsyncRepo):
 
   def __init__(self, session: AsyncSession):
     self._session = session
+
+  async def upsert_author(
+      self,
+      url: str, source: VideoSource,
+      verified: bool | None, followers: int | None, total_videos: int | None) -> tuple[Author, bool]:
+
+    update_values: dict[str, Any] = {"updated_at": func.now()}
+
+    if verified is not None:
+      update_values["verified"] = verified
+    if followers is not None:
+      update_values["followers"] = followers
+    if total_videos is not None:
+      update_values["total_videos"] = total_videos
+
+    stmt = (
+      pg_insert(Author)
+      .values(url=url, source=source, verified=verified, followers=followers, total_videos=total_videos)
+      .on_conflict_do_update(  # type: ignore
+        index_elements=[Author.url],
+        set_=update_values
+      )
+      .returning(Author, literal_column("xmax"))
+    )
+
+    result = await self._session.execute(stmt)
+    row, xmax = result.first()  # type: ignore
+    author: Author = row
+    is_new = xmax == 0
+
+    return author, is_new
 
   async def get_author_by_id(self, author_id: UUID) -> Author | None:
     stmt = select(Author).where(Author.id == author_id)
