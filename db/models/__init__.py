@@ -6,6 +6,8 @@ from .challenges import *
 from .hashtags import *
 from .videos import *
 from .searches import *
+from .jobs import *
+
 
 __all__ = [
   "VideoSource", "MetaSource", "AnnotationKind", "VideoProcessingKind",
@@ -14,5 +16,6 @@ __all__ = [
   "Author",
   "Challenge", "ChallengeTranslation",
   "Hashtag", "VideoHashtag",
-  "Search", "VideoSearch"
+  "Search", "VideoSearch",
+  "Job"
 ]
