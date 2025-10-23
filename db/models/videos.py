@@ -17,6 +17,7 @@ if TYPE_CHECKING:
   from .authors import Author
   from .hashtags import Hashtag, VideoHashtag
   from .searches import Search, VideoSearch
+  from .challenges import ChallengeVideo, Challenge
 
 
 class Video(Base):
@@ -103,6 +104,16 @@ class Video(Base):
   )
   topics: Mapped[list["Topic"]] = relationship(
     secondary="video_topics",
+    back_populates="videos",
+    viewonly=True,
+  )
+  challenge_videos: Mapped[list["ChallengeVideo"]] = relationship(
+    back_populates="video",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+  challenges: Mapped[list["Challenge"]] = relationship(
+    secondary="challenge_videos",
     back_populates="videos",
     viewonly=True,
   )
