@@ -5,9 +5,13 @@ from worker.main import worker_app
 
 @worker_app.task
 def process_video(job_id: UUID):
-  from worker.tasks.deps import loop, video_processor
+  from worker.tasks.deps import loop, video_processor, async_db
+  from worker.tasks.helpers import create_categorize_job
 
   processed_video = loop.run_until_complete(video_processor.run(job_id))
+  post_process_job_id = loop.run_until_complete(create_categorize_job(processed_video, async_db))
+  categorize_video.delay(post_process_job_id)
+
   return processed_video.model_dump(mode="json")
 
 
