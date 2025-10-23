@@ -150,8 +150,8 @@ def run_pipline(author: AuthorDetails, post: PostDetails, force_run_pipeline: bo
   if async_db is None:
     raise RuntimeError("AsyncDB not initialized")
 
-  from core.processors.scraper import PostDetailsProcessor
-  post_processor: PostDetailsProcessor = PostDetailsProcessor(async_db)
+  from core.processors.scraper import ApidojoPostProcessor
+  post_processor: ApidojoPostProcessor = ApidojoPostProcessor(async_db)
 
   result = l_loop.run_until_complete(
     post_processor.save(author, post)

@@ -41,10 +41,6 @@ def prepare_annotation(
   return annotation
 
 
-def prepare_scraped_data(video_id: UUID, data: dict = {}) -> ScrapedData:
-  return ScrapedData(video_id=video_id, data=data)
-
-
 class VideoRepository(BaseAsyncRepo):
   
   def __init__(self, session: AsyncSession):
@@ -79,6 +75,12 @@ class VideoRepository(BaseAsyncRepo):
     is_new = xmax == 0
 
     return video, is_new
+
+  async def add_scraped_data(self, video_id: UUID, data: dict) -> ScrapedData:
+    stmt = pg_insert(ScrapedData).values(video_id=video_id, data=data).returning(ScrapedData)
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one()
   
   async def add_search(self, search_id: UUID, video_id: UUID, is_new: bool) -> VideoSearch:
     stmt = (

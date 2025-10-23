@@ -8,31 +8,30 @@ from db.repositories.common import BaseAsyncRepo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-APIDOJO_SCRAPER_NAME = "run_apidojo_scraper"
+APIDOJO_SCRAPER_JOB_NAME = "apidojo.scraper"
 class ApidojoScraperJob(BaseModel):
   func: str
   args: dict
 
-POST_DETAILS_JOB_NAME = "process_post"
-class PostDetailsJob(BaseModel):
-  scraper: str
-  post: dict
-  author: dict
+APIDOJO_POST_PROCESSOR_JOB_NAME = "apidojo.postprocessor"
+class ApidojoPostProcessorJob(BaseModel):
+  search_id: UUID
+  default_dataset_id: str
 
-PROCESS_VIDEO_JOB_NAME = "process_video"
+PROCESS_VIDEO_JOB_NAME = "video.process"
 class ProcessVideoJob(BaseModel):
   video_id: UUID
   delete_downloaded_files: bool
 
-CATEGORIZATION_VIDEO_JOB_NAME = "categorization_video"
+CATEGORIZATION_VIDEO_JOB_NAME = "video.categorization"
 class CategorizationVideoJob(BaseModel):
   video_id: UUID
 
-CHALLENGE_GEN_JOB_NAME = "challenge_gen"
+CHALLENGE_GEN_JOB_NAME = "challenge.gen"
 class ChallengeGenJob(BaseModel):
   topic_id: UUID
 
-CHALLENGE_TRANSLATION_JOB_NAME = "challenge_translation"
+CHALLENGE_TRANSLATION_JOB_NAME = "challenge.translation"
 class ChallengeTranslationJob(BaseModel):
   challenge_id: UUID
   langs: list[str]
@@ -43,7 +42,10 @@ class JobRepository(BaseAsyncRepo):
   def __init__(self, session: AsyncSession):
     self._session = session
 
-  async def create_job(self, name: str, meta: dict) -> Job:
+  async def create_job(self, name: str, meta: BaseModel | dict) -> Job:
+    if isinstance(meta, BaseModel):
+      meta = meta.model_dump(mode="json")
+
     stmt = insert(Job).values(name=name, meta=meta).returning(Job)
 
     result = await self._session.execute(stmt)

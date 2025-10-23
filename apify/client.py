@@ -1,9 +1,10 @@
-import os
+from typing import Any
 
 from apify_client import ApifyClientAsync
-from .tiktok.clockworks import ClockworksTiktokScrapper
-from .tiktok.apidojo import ApidojoTiktokScrapper
+
 from utils.common import var_or_exception
+from .tiktok.apidojo import ApidojoTiktokScrapper
+from .tiktok.clockworks import ClockworksTiktokScrapper
 
 APIFY_API_KEY_VAR = "APIFY_API_KEY"
 
@@ -18,3 +19,9 @@ class ApifyClient:
 
   def apidojo_tiktok_scrapper(self) -> ApidojoTiktokScrapper:
     return ApidojoTiktokScrapper(self.client)
+
+  async def get_dataset(self, dataset_id: str) -> list[Any]:
+    dataset_client = self.client.dataset(dataset_id)
+    items = await dataset_client.list_items()
+
+    return items.items

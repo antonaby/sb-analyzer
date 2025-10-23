@@ -104,13 +104,12 @@ class ApidojoTiktokScrapper(BaseApifyActor):
     self.actor_client = client.actor('apidojo/tiktok-scraper')
     self._log = logging.getLogger("app.apify.tiktok.apidojo")
   
-  async def search(self, 
-    keywords: list[str], 
-    date_range: DateRange,
-    sort_type: SortType,
-    location: str = "US", 
-    max_items: int = 1000,
-  ) -> tuple[ActorRun, list[TikTokPost]]:
+  async def search(self,
+                   keywords: list[str],
+                   date_range: DateRange,
+                   sort_type: SortType,
+                   location: str = "US",
+                   max_items: int = 1000) -> ActorRun:
     run_input = {
       "dateRange": date_range,
       "includeSearchKeywords": True,
@@ -122,7 +121,7 @@ class ApidojoTiktokScrapper(BaseApifyActor):
     
     return await self._run(run_input)
   
-  async def collect_videos_by_urls(self, urls: list[str], max_items: int = 1000):
+  async def collect_videos_by_urls(self, urls: list[str], max_items: int = 1000) -> ActorRun:
     run_input = {
       "startUrls": urls,
       "maxItems": max_items
@@ -130,7 +129,7 @@ class ApidojoTiktokScrapper(BaseApifyActor):
     
     return await self._run(run_input)
     
-  async def _run(self, run_input: dict) -> tuple[ActorRun, list[TikTokPost]]:
+  async def _run(self, run_input: dict) -> ActorRun:
     try:
       call_result = await self.actor_client.call(run_input=run_input, logger=self._log)
         
@@ -138,8 +137,7 @@ class ApidojoTiktokScrapper(BaseApifyActor):
         raise ApidojoTikTokScrapperError("no call result")
       
       actor_run = cast(ActorRun, call_result)
-      dataset = await self._get_dataset(call_result["defaultDatasetId"])
             
-      return actor_run, dataset
+      return actor_run
     except Exception as e:
       raise ApidojoTikTokScrapperError("run failed") from e

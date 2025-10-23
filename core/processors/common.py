@@ -33,6 +33,11 @@ class PostDetails(BaseModel):
   source: dict
 
 
+class ScrapedVideo(BaseModel):
+  post: PostDetails
+  author: AuthorDetails
+
+
 class JobProcessorError(Exception):
   pass
 

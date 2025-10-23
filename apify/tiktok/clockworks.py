@@ -121,7 +121,7 @@ class ClockworksTiktokScrapper(BaseApifyActor):
     hashtags: list[str], 
     max_results: int = 1000, 
     download: bool = True
-  ) -> tuple[ActorRun, list[TikTokPost]]:
+  ) -> ActorRun:
     try:
       run_input = {
         "excludePinnedPosts": True,
@@ -144,8 +144,7 @@ class ClockworksTiktokScrapper(BaseApifyActor):
         raise TikTokScrapperError("no call result")
       
       actor_run = cast(ActorRun, call_result)
-      dataset = await self._get_dataset(call_result["defaultDatasetId"])
            
-      return actor_run, dataset
+      return actor_run
     except Exception as e:
       raise TikTokScrapperError("run failed") from e

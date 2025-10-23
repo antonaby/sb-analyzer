@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from api.deps import get_job_repo
 from apify.tiktok.apidojo import DateRange, SortType
 from db.repositories.jobs import JobRepository, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob, ChallengeTranslationJob, \
-  CHALLENGE_TRANSLATION_JOB_NAME, APIDOJO_SCRAPER_NAME, ApidojoScraperJob
+  CHALLENGE_TRANSLATION_JOB_NAME, APIDOJO_SCRAPER_JOB_NAME, ApidojoScraperJob
 from worker.tasks.challenges import generate_challenges_for_topic, produce_challenge_translations
 from worker.tasks.apidojo import run_apidojo_scraper
 
@@ -44,7 +44,7 @@ class ApidojoCollectUrls(BaseModel):
 async def run_tiktok_scrapper(request: ApidojoScrapperRun, job_repo: JobRepository = Depends(get_job_repo))  -> JobRunDetails:
   return await _run_job_by_id(
     run_apidojo_scraper,  # type: ignore[attr-defined]
-    APIDOJO_SCRAPER_NAME,
+    APIDOJO_SCRAPER_JOB_NAME,
     ApidojoScraperJob(func="search", args=request.model_dump(mode="json")),
     job_repo
   )
@@ -54,7 +54,7 @@ async def run_tiktok_scrapper(request: ApidojoScrapperRun, job_repo: JobReposito
 async def collect_videos(request: ApidojoCollectUrls, job_repo: JobRepository = Depends(get_job_repo)) -> JobRunDetails:
   return await _run_job_by_id(
     run_apidojo_scraper,  # type: ignore[attr-defined]
-    APIDOJO_SCRAPER_NAME,
+    APIDOJO_SCRAPER_JOB_NAME,
     ApidojoScraperJob(func="collect_videos_by_urls", args=request.model_dump(mode="json")),
     job_repo
   )
