@@ -2,10 +2,11 @@ from typing import Final
 from uuid import UUID
 
 from sqlalchemy import insert, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from db.models import Challenge, ChallengeTranslation
+from db.models import Challenge, ChallengeTranslation, ChallengeVideo
 from db.repositories.common import BaseAsyncRepo
 
 
@@ -70,6 +71,22 @@ class ChallengeRepository(BaseAsyncRepo):
         value_tsv=func.to_tsvector(regconfig_for(lang), value)
       ).
       returning(ChallengeTranslation)
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one()
+
+  async def add_video(self, challenge_id: UUID, video_id: UUID) -> ChallengeVideo:
+    stmt = (
+      pg_insert(ChallengeVideo)
+      .values(challenge_id=challenge_id, video_id=video_id)
+      .on_conflict_do_update(  # type: ignore
+        index_elements=[ChallengeVideo.challenge_id, ChallengeVideo.video_id],
+        set_={
+          "created_at": func.now()
+        }
+      )
+      .returning(ChallengeVideo)
     )
 
     result = await self._session.execute(stmt)

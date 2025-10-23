@@ -91,6 +91,9 @@ class ChallengeProcessor(JobProcessor):
         new_challenges.append(challenge_model)
         await challenge_repo.create_translation(challenge_model.id, en_translation.lang, en_translation.name)
 
+        for video in c.videos:
+          await challenge_repo.add_video(challenge_model.id, video.id)
+
       await session.commit()
 
     return ChallengeProcessorResult(

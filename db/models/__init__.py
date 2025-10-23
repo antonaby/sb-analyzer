@@ -14,7 +14,7 @@ __all__ = [
   "Topic", "VideoTopic",
   "Video", "VideoMeta", "VideoAnnotation", "ScrapedData",
   "Author",
-  "Challenge", "ChallengeTranslation",
+  "Challenge", "ChallengeTranslation", "ChallengeVideo",
   "Hashtag", "VideoHashtag",
   "Search", "VideoSearch",
   "Job"
