@@ -11,7 +11,7 @@ from .jobs import *
 
 __all__ = [
   "VideoSource", "MetaSource", "AnnotationKind",
-  "Topic", "VideoTopic",
+  "Topic", "VideoTopic", "TopicTranslation",
   "Video", "VideoMeta", "VideoAnnotation", "ScrapedData",
   "Author",
   "Challenge", "ChallengeTranslation", "ChallengeVideo",

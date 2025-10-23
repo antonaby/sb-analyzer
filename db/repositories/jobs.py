@@ -31,9 +31,10 @@ CHALLENGE_GEN_JOB_NAME = "challenge.gen"
 class ChallengeGenJob(BaseModel):
   topic_id: UUID
 
+TOPIC_TRANSLATION_JOB_NAME = "topic.translation"
 CHALLENGE_TRANSLATION_JOB_NAME = "challenge.translation"
-class ChallengeTranslationJob(BaseModel):
-  challenge_id: UUID
+class TranslationJob(BaseModel):
+  target_id: UUID
   langs: list[str]
 
 

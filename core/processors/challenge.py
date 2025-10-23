@@ -5,13 +5,11 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from core.agents.challenge import ChallengeGenAgent, ChallengeGenAgentRun, ChallengeGenAgentResponse
-from core.agents.translation import TranslationAgent, TranslationAgentRun, Translation, TranslationAgentResponse
 from core.processors.common import JobProcessor
-from db.models import AnnotationKind, Challenge, ChallengeTranslation, Topic, Job
+from db.models import AnnotationKind, Challenge, Topic, Job
 from db.repositories.challenges import ChallengeRepository
 from db.repositories.helpers import full_video_data, TextVideoData
-from db.repositories.jobs import CHALLENGE_GEN_JOB_NAME, ChallengeGenJob, CHALLENGE_TRANSLATION_JOB_NAME, \
-  ChallengeTranslationJob
+from db.repositories.jobs import CHALLENGE_GEN_JOB_NAME, ChallengeGenJob
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import VideoRepository
 
@@ -99,86 +97,3 @@ class ChallengeProcessor(JobProcessor):
     return ChallengeProcessorResult(
       challenges=[CreatedChallenge(id=c.id, name=c.name) for c in new_challenges]
     )
-
-
-class CreatedTranslation(BaseModel):
-  id: UUID
-  land: str
-  text: str
-
-
-class TranslationProcessorResult(BaseModel):
-  translations: list[CreatedTranslation]
-
-
-class TranslationProcessor(JobProcessor):
-
-  def __init__(self, translation_agent: TranslationAgent, session_maker: async_sessionmaker[AsyncSession]):
-    super().__init__(session_maker)
-    self._translation_agent = translation_agent
-
-  async def run(self, job_id: UUID) -> TranslationProcessorResult:
-    job = await self.start_job(job_id, CHALLENGE_TRANSLATION_JOB_NAME)
-    try:
-      challenge, en_translation, translations_to_create = await self._get_translation(job)
-      if len(translations_to_create) == 0:
-        await self.set_job_finished(job_id, False)
-        return TranslationProcessorResult(translations=[])
-
-      agent_response = await self._translation_agent.run(TranslationAgentRun(
-        languages=translations_to_create,
-        input=Translation(lang=en_translation.lang, text=en_translation.value)
-      ))
-
-      result = await self._save_translations(challenge, agent_response)
-      await self.set_job_finished(job_id, False)
-
-      return result
-    except Exception as e:
-      await self.set_job_finished(job_id, True)
-      raise e
-
-  async def _get_translation(self, job: Job) -> tuple[Challenge, ChallengeTranslation, list[str]]:
-    job_meta = ChallengeTranslationJob(**job.meta)
-
-    translations_to_create: list[str] = job_meta.langs
-    en_translation: ChallengeTranslation | None = None
-
-    async with self._db() as session:
-      challenge_repo = ChallengeRepository(session)
-      challenge = await challenge_repo.get_challenge(job_meta.challenge_id, with_translations=True)
-      if not challenge:
-        raise ChallengeProcessorError(f"Challenge {job_meta.challenge_id} not found")
-
-      for c in challenge.translations:
-        if c.lang == "en":
-          en_translation = c
-        if c.lang in translations_to_create:
-          translations_to_create.remove(c.lang)
-
-    if not en_translation:
-      raise ChallengeProcessorError(f"No en translation for challenge {job_meta.challenge_id}")
-
-    return challenge, en_translation, translations_to_create
-
-  async def _save_translations(
-      self,
-      challenge: Challenge,
-      agent_response: TranslationAgentResponse
-  ) -> TranslationProcessorResult:
-    created_translations: list[ChallengeTranslation] = []
-    async with self._db() as session:
-      challenge = await session.merge(challenge, load=False)
-      challenge.translated_at = datetime.now(timezone.utc)
-
-      challenge_repo = ChallengeRepository(session)
-
-      for t in agent_response.translations:
-        t_model = await challenge_repo.create_translation(challenge.id, t.lang, t.text)
-        created_translations.append(t_model)
-
-      await session.commit()
-
-    return TranslationProcessorResult(translations=[
-      CreatedTranslation(id=t.id, land=t.lang, text=t.value) for t in created_translations
-    ])

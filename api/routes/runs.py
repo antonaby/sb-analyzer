@@ -8,12 +8,12 @@ from pydantic import BaseModel, Field
 
 from api.deps import get_job_repo
 from apify.tiktok.apidojo import DateRange, SortType
-from db.repositories.jobs import JobRepository, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob, ChallengeTranslationJob, \
+from db.repositories.jobs import JobRepository, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob, TranslationJob, \
   CHALLENGE_TRANSLATION_JOB_NAME, APIDOJO_SCRAPER_JOB_NAME, ApidojoScraperJob, PROCESS_VIDEO_JOB_NAME, ProcessVideoJob, \
-  CATEGORIZATION_VIDEO_JOB_NAME, CategorizationVideoJob
+  CATEGORIZATION_VIDEO_JOB_NAME, CategorizationVideoJob, TOPIC_TRANSLATION_JOB_NAME
 from worker.tasks.challenges import generate_challenges_for_topic, produce_challenge_translations
 from worker.tasks.apidojo import run_apidojo_scraper
-from worker.tasks.videos import process_video, categorize_video
+from worker.tasks.videos import process_video, categorize_video, translate_topic
 
 
 router = APIRouter(
@@ -98,12 +98,25 @@ async def run_challenge_gen(request: ChallengeGenJob, job_repo: JobRepository = 
 
 @router.post("/challenge/translate")
 async def run_challenge_translation(
-    request: ChallengeTranslationJob,
+    request: TranslationJob,
     job_repo: JobRepository = Depends(get_job_repo)
 ) -> JobRunDetails:
   return await _run_job_by_id(
     produce_challenge_translations, # type: ignore[attr-defined]
     CHALLENGE_TRANSLATION_JOB_NAME,
+    request,
+    job_repo
+  )
+
+
+@router.post("/topic/translate")
+async def run_challenge_translation(
+    request: TranslationJob,
+    job_repo: JobRepository = Depends(get_job_repo)
+) -> JobRunDetails:
+  return await _run_job_by_id(
+    translate_topic, # type: ignore[attr-defined]
+    TOPIC_TRANSLATION_JOB_NAME,
     request,
     job_repo
   )

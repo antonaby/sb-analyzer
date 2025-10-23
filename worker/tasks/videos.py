@@ -21,3 +21,11 @@ def categorize_video(job_id: UUID):
 
   topics = loop.run_until_complete(topic_processor.run(job_id))
   return topics.model_dump(mode="json")
+
+
+@worker_app.task
+def translate_topic(job_id: UUID):
+  from worker.tasks.deps import loop, topic_translation_processor
+
+  result = loop.run_until_complete(topic_translation_processor.run(job_id))
+  return result.model_dump(mode="json")

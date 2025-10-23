@@ -1,4 +1,3 @@
-from typing import Final
 from uuid import UUID
 
 from sqlalchemy import insert, func, select
@@ -7,34 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from db.models import Challenge, ChallengeTranslation, ChallengeVideo
-from db.repositories.common import BaseAsyncRepo
-
-
-REGCONFIG_BY_LANG: Final[dict[str, str]] = {
-  "en": "english",
-  "fr": "french",
-  "de": "german",
-  "es": "spanish",
-  "it": "italian",
-  "pt": "portuguese",
-  "ru": "russian",
-  "nl": "dutch",
-  "sv": "swedish",
-  "no": "norwegian",
-  "da": "danish",
-  "fi": "finnish",
-  "ro": "romanian",
-  "hu": "hungarian",
-  "tr": "turkish",
-  "cs": "czech",
-  "ar": "arabic",
-  "zh": "simple",
-  "ja": "simple",
-}
-
-
-def regconfig_for(lang: str) -> str:
-  return REGCONFIG_BY_LANG.get(lang.lower(), "english")
+from db.repositories.common import BaseAsyncRepo, regconfig_for
 
 
 class ChallengeRepository(BaseAsyncRepo):

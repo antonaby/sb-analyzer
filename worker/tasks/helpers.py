@@ -8,7 +8,7 @@ from core.processors.common import SavedPost
 from core.processors.video import ProcessedVideo
 from db.repositories.jobs import JobRepository, ApidojoPostProcessorJob, APIDOJO_POST_PROCESSOR_JOB_NAME, \
   CategorizationVideoJob, CATEGORIZATION_VIDEO_JOB_NAME, ProcessVideoJob, PROCESS_VIDEO_JOB_NAME, \
-  CHALLENGE_TRANSLATION_JOB_NAME, ChallengeTranslationJob
+  CHALLENGE_TRANSLATION_JOB_NAME, TranslationJob
 
 
 async def create_apidojo_post_process_job(scraper_run: ApidojoScraperRun, db: async_sessionmaker[AsyncSession]) -> UUID:
@@ -54,7 +54,7 @@ async def create_challenge_translation_jobs(challenges: list[CreatedChallenge], 
     job_ids: list[UUID] = []
 
     for challenge in challenges:
-      job_meta = ChallengeTranslationJob(challenge_id=challenge.id, langs=["ru", "fr", "de"])
+      job_meta = TranslationJob(target_id=challenge.id, langs=["ru", "fr", "de"])
       job = await job_repo.create_job(CHALLENGE_TRANSLATION_JOB_NAME, job_meta)
       job_ids.append(job.id)
 

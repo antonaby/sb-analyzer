@@ -28,6 +28,7 @@ class Topic(Base):
     nullable=False,
   )
   last_challenges_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+  translated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
   created_at: Mapped[datetime] = mapped_column(
     DateTime(timezone=True),
@@ -45,6 +46,11 @@ class Topic(Base):
     viewonly=True,
   )
   challenges: Mapped[list["Challenge"]] = relationship(
+    back_populates="topic",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+  translations: Mapped[list["TopicTranslation"]] = relationship(
     back_populates="topic",
     cascade="all, delete-orphan",
     passive_deletes=True,
@@ -82,3 +88,27 @@ class VideoTopic(Base):
 
   topic: Mapped["Topic"] = relationship(back_populates="video_topics")
   video: Mapped["Video"] = relationship(back_populates="video_topics")
+
+
+class TopicTranslation(Base):
+  __tablename__ = "topic_translations"
+
+  id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
+  )
+  topic_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("topics.id", ondelete="CASCADE"),
+    nullable=False,
+    index=True,
+  )
+  lang: Mapped[str] = mapped_column(String(2), nullable=False)
+  value: Mapped[str] = mapped_column(String(512), nullable=False)
+  value_tsv: Mapped[str] = mapped_column(TSVECTOR, nullable=False)
+
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
+
+  topic: Mapped["Topic"] = relationship(back_populates="translations")

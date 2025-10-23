@@ -70,3 +70,9 @@ class SavedPost(BaseModel):
   new_author: bool
   video_id: UUID
   new_video: bool
+
+
+class CreatedTranslation(BaseModel):
+  id: UUID
+  land: str
+  text: str

@@ -1,12 +1,13 @@
 from typing import Sequence, TypedDict
 from uuid import UUID
-from sqlalchemy import desc, insert, select, text, update, func, delete
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import Topic, Search, Video, VideoTopic
-from db.repositories.common import BaseAsyncRepo
+from sqlalchemy import insert, select, text, func, delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
+from db.models import Topic, Video, VideoTopic, TopicTranslation
+from db.repositories.common import BaseAsyncRepo, regconfig_for
 
 TOPIC_LOCK_KEY: int = 1
 
@@ -31,14 +32,14 @@ class TopicRepository(BaseAsyncRepo):
     
     return result.scalar_one()
   
-  async def get_topic(self, topic_id: UUID) -> Topic | None:
-    return await self._session.get(Topic, topic_id)
-  
-  async def fetch_all_topics(self) -> Sequence[Topic]:
-    stmt = select(Topic).order_by(desc(Topic.created_at))
+  async def get_topic(self, topic_id: UUID, with_translations: bool = False) -> Topic | None:
+    stmt = select(Topic).where(Topic.id == topic_id)
+
+    if with_translations:
+      stmt = stmt.options(joinedload(Topic.translations))
+
     result = await self._session.execute(stmt)
-    
-    return result.scalars().all()
+    return result.unique().scalar_one_or_none()
 
   async def unassign_all_topics(self, video_id: UUID):
     stmt = delete(VideoTopic).where(VideoTopic.video_id == video_id)
@@ -60,7 +61,22 @@ class TopicRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     
     return result.scalar_one()
-  
+
+  async def create_translation(self, topic_id: UUID, lang: str, value: str) -> TopicTranslation:
+    stmt = (
+      insert(TopicTranslation).
+      values(
+        topic_id=topic_id,
+        lang=lang,
+        value=value,
+        value_tsv=func.to_tsvector(regconfig_for(lang), value)
+      ).
+      returning(TopicTranslation)
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one()
+
   async def search_topics(self, search_keywords: list[str]) -> Sequence[Topic]:
     if len(search_keywords) == 0:
       return []
