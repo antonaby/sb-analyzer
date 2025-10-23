@@ -41,6 +41,7 @@ class VideoSource(ABC):
     for f in self._tmp_files:
       os.remove(f)
 
+
 class FilesystemVideoSource(VideoSource):
   
   def __init__(self, path: str) -> None:
@@ -106,6 +107,7 @@ class UrlVideoSource(VideoSource):
     self._video_url = video_url
     self._download_dir = download_dir
     self._loaded = False
+    self._file_path = None
     
   async def load(self):
     try:
@@ -120,9 +122,12 @@ class UrlVideoSource(VideoSource):
         file_path.unlink(missing_ok=True)
       
       async with aiohttp.ClientSession() as session:
-        async with session.get(self._video_url) as resp:
+        async with session.get(self._video_url) as response:
+          if not (200 <= response.status < 300):
+            raise UrlVideoSourceError(f"Status: {response.status}")
+
           with open(file_path, 'wb') as f:
-            async for chunk in resp.content.iter_chunked(1024):
+            async for chunk in response.content.iter_chunked(1024):
               f.write(chunk)
               
       self._file_path = file_path
@@ -235,11 +240,12 @@ class VideoFile:
     if interval < min_interval:
       interval = min_interval
     
-    return self.get_frames_with_interval(interval=interval, **kwargs) 
-    
-  def _frame_to_base64(self, frame: np.ndarray) -> str:
+    return self.get_frames_with_interval(interval=interval, **kwargs)
+
+  @staticmethod
+  def _frame_to_base64(frame: np.ndarray) -> str:
     _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-    return base64.b64encode(buffer).decode('utf-8')    
+    return base64.b64encode(buffer).decode('utf-8')
 
 
 class AudioFileError(BaseVideoFileError):

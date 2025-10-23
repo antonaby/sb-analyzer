@@ -81,7 +81,7 @@ class Transcription(BaseModel):
   end_sec: float = 0
 
 
-class AudioData:
+class FileAudioData:
   
   def __init__(self, lm_client: LemonfoxClient, audio_file: AudioFile):
     self._lm_client = lm_client

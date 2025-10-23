@@ -9,7 +9,7 @@ from core.agents.translation import TranslationAgent, TranslationAgentRun, Trans
 from core.processors.common import JobProcessor
 from db.models import AnnotationKind, Challenge, ChallengeTranslation, Topic, Job
 from db.repositories.challenges import ChallengeRepository
-from db.repositories.helpers import full_video_data, VideoData
+from db.repositories.helpers import full_video_data, TextVideoData
 from db.repositories.jobs import CHALLENGE_GEN_JOB_NAME, ChallengeGenJob, CHALLENGE_TRANSLATION_JOB_NAME, \
   ChallengeTranslationJob
 from db.repositories.topics import TopicRepository
@@ -51,7 +51,7 @@ class ChallengeProcessor(JobProcessor):
       await self.set_job_finished(job_id, True)
       raise e
 
-  async def _get_video_data(self, job: Job) -> tuple[Topic, list[VideoData]]:
+  async def _get_video_data(self, job: Job) -> tuple[Topic, list[TextVideoData]]:
     job_meta = ChallengeGenJob(**job.meta)
     async with self._db() as session:
       topic_repo = TopicRepository(session)

@@ -1,6 +1,6 @@
 from typing import Sequence, TypedDict
 from uuid import UUID
-from sqlalchemy import desc, insert, select, text, update, func
+from sqlalchemy import desc, insert, select, text, update, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import Topic, Search, Video, VideoTopic
@@ -39,6 +39,10 @@ class TopicRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     
     return result.scalars().all()
+
+  async def unassign_all_topics(self, video_id: UUID):
+    stmt = delete(VideoTopic).where(VideoTopic.video_id == video_id)
+    await self._session.execute(stmt)
   
   async def assign_topic(self, topic_id: UUID, video_id: UUID, confidence: float) -> VideoTopic:
     stmt = (

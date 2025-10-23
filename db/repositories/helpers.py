@@ -41,7 +41,7 @@ class VideoContent(BaseModel):
   frames: list[FrameData]
 
 
-class VideoData(BaseModel):
+class TextVideoData(BaseModel):
   video_id: UUID
   source: VideoSource
   meta: VideoMeta
@@ -52,11 +52,11 @@ class VideoData(BaseModel):
   content: VideoContent
 
 
-def full_video_data(video: Video, process_frames: bool = True) -> VideoData:
+def full_video_data(video: Video, process_frames: bool = True) -> TextVideoData:
   video_meta = _get_post_meta(video)
   video_details = _get_video_details(video, process_frames)
 
-  video_data = VideoData(
+  video_data = TextVideoData(
     video_id=video.id,
     source=video.source,
     meta=video_meta,
@@ -80,6 +80,9 @@ def _get_post_meta(video: Video) -> VideoMeta:
   frame_quality: set[str] = set()
 
   for m in video.video_meta:
+    if m.revision != video.revision:
+      continue
+
     if m.source == MetaSource.title:
       title = m.value
     if m.source == MetaSource.description:
@@ -115,6 +118,9 @@ def _get_video_details(video: Video, process_frames: bool) -> VideoContent:
   frame_data: list[FrameData] = []
 
   for a in video.annotations:
+    if a.revision != video.revision:
+      continue
+
     if a.kind == AnnotationKind.label:
       label = a.value
     if a.kind == AnnotationKind.synopsis:

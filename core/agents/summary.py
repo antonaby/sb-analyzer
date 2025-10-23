@@ -4,19 +4,19 @@ from dataclasses import dataclass
 from typing import TypedDict
 
 from openai import BaseModel
-from pydantic_ai import Agent, RunContext, Tool, ModelSettings
+from pydantic_ai import Agent, RunContext, ModelSettings
 from pydantic_ai.models import Model
 
 from core.agents.common import TemplateManager
-from core.transcribe import AudioData
-from core.video import Frame, VideoData
-from models.common import PostDetails
+from core.processors.common import PostDetails
+from core.transcribe import FileAudioData
+from core.video import Frame, FileVideoData
 
 
 @dataclass
 class SummaryAgentDeps:
-  video: VideoData
-  audio: AudioData
+  video: FileVideoData
+  audio: FileAudioData
 
 
 class FrameDetails(BaseModel):
@@ -86,7 +86,7 @@ class SummaryAgent:
       """
       return await ctx.deps.video.get_frame(time_sec)
 
-  async def run(self, post: PostDetails, video: VideoData, audio: AudioData, temperature: float = 0.0) -> VideoSummary:
+  async def run(self, post: PostDetails, video: FileVideoData, audio: FileAudioData, temperature: float = 0.0) -> VideoSummary:
     basic_frames, transcription = await asyncio.gather(
       video.get_n_frames(),
       audio.get_transcription()
@@ -94,15 +94,15 @@ class SummaryAgent:
     
     user_input: UserPromptInput = {
       "metadata": {
-        "post_from": post.get("post_from", "tiktok"),
-        "title": post.get("title", "no title"),
-        "description": post.get("description", "no description"),
-        "hashtags": post.get("hashtags", []),
+        "post_from": post.post_from.value,
+        "title": post.title,
+        "description": post.description,
+        "hashtags": post.hashtags,
         "duration": video.get_duration(),
-        "uploaded_at_iso": post.get("uploaded_at_iso", "unknown"),
-        "likes": post.get("likes", 0),
-        "views": post.get("views", 0),
-        "comments": post.get("comments", 0)
+        "uploaded_at_iso": post.uploaded_at.isoformat(),
+        "likes": post.likes,
+        "views": post.views,
+        "comments": post.comments
       },
       "frames": [f.model_dump() for f in basic_frames],
       "transcriptions": [t.model_dump() for t in transcription]

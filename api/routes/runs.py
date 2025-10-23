@@ -9,9 +9,11 @@ from pydantic import BaseModel, Field
 from api.deps import get_job_repo
 from apify.tiktok.apidojo import DateRange, SortType
 from db.repositories.jobs import JobRepository, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob, ChallengeTranslationJob, \
-  CHALLENGE_TRANSLATION_JOB_NAME, APIDOJO_SCRAPER_JOB_NAME, ApidojoScraperJob
+  CHALLENGE_TRANSLATION_JOB_NAME, APIDOJO_SCRAPER_JOB_NAME, ApidojoScraperJob, PROCESS_VIDEO_JOB_NAME, ProcessVideoJob, \
+  CATEGORIZATION_VIDEO_JOB_NAME, CategorizationVideoJob
 from worker.tasks.challenges import generate_challenges_for_topic, produce_challenge_translations
 from worker.tasks.apidojo import run_apidojo_scraper
+from worker.tasks.videos import process_video, categorize_video
 
 
 router = APIRouter(
@@ -38,6 +40,30 @@ class ApidojoScrapperRun(BaseModel):
 class ApidojoCollectUrls(BaseModel):
   urls: list[str] = Field(min_length=1, description="At least one url")
   max_items: int
+
+
+class ProcessVideoRequest(BaseModel):
+  video_id: UUID
+
+
+@router.post("/video/process")
+async def run_process_video(request: ProcessVideoRequest, job_repo: JobRepository = Depends(get_job_repo)) -> JobRunDetails:
+  return await _run_job_by_id(
+    process_video,  # type: ignore[attr-defined]
+    PROCESS_VIDEO_JOB_NAME,
+    ProcessVideoJob(video_id=request.video_id, delete_downloaded_files=True),
+    job_repo
+  )
+
+
+@router.post("/video/categorize")
+async def run_categorize_video(request: ProcessVideoRequest, job_repo: JobRepository = Depends(get_job_repo)) -> JobRunDetails:
+  return await _run_job_by_id(
+    categorize_video,  # type: ignore[attr-defined]
+    CATEGORIZATION_VIDEO_JOB_NAME,
+    CategorizationVideoJob(video_id=request.video_id),
+    job_repo
+  )
 
 
 @router.post("/apidojo/search")
@@ -84,7 +110,7 @@ async def run_challenge_translation(
 
 
 async def _run_job_by_id(delay_func: Task, job_name: str, meta: BaseModel, job_repo: JobRepository) -> JobRunDetails:
-  job = await job_repo.create_job(job_name, meta.model_dump(mode="json"))
+  job = await job_repo.create_job(job_name, meta)
   await job_repo.commit()
 
   celery_job: AsyncResult = delay_func.delay(job_id=job.id)

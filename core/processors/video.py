@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime, timezone
-from typing import cast
 from uuid import UUID
 
 from openai import BaseModel
@@ -9,16 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from core.agents.summary import SummaryAgent, VideoSummary
 from core.agents.topic import TopicAgent, TopicProposal
 from core.file import AudioFile, UrlVideoSource, VideoFile, VideoSource
-from core.processors.common import JobProcessor
-from core.transcribe import AudioData, LemonfoxClient, Transcription
-from core.video import ClipTaggerClient, VideoData, Frame
+from core.processors.common import JobProcessor, PostDetails
+from core.transcribe import FileAudioData, LemonfoxClient, Transcription
+from core.video import ClipTaggerClient, FileVideoData, Frame
 from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
 from db.repositories.helpers import full_video_data
 from db.repositories.jobs import PROCESS_VIDEO_JOB_NAME, ProcessVideoJob, CATEGORIZATION_VIDEO_JOB_NAME, \
   CategorizationVideoJob
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
-from models.common import PostDetails
 
 
 class VideoProcessorError(Exception):
@@ -80,14 +78,18 @@ class VideoProcessor(BaseVideoProcessor):
       job_meta = ProcessVideoJob(**job.meta)
       video = await self._find_video(job_meta.video_id, with_scraped_data=True)
 
-      post_data = cast(PostDetails, video.scraped_data[0].data)
-      video_source = await UrlVideoSource.new(post_data["download_url"], self._tmp_dir)
-      
-      video_file = VideoFile(video_source)  
+      if len(video.scraped_data) == 0:
+        raise VideoProcessorError(f"Video {job_meta.video_id} has no scraped data")
+
+      last_scraped_data = max(video.scraped_data, key=lambda d: d.created_at)
+      post_data = PostDetails(**last_scraped_data.data)
+      video_source = await UrlVideoSource.new(post_data.download_url, self._tmp_dir)
+
       audio_file = AudioFile(video_source)
-      
-      video_data = VideoData(self._ct_client, video_file)
-      audio_data = AudioData(self._lm_client, audio_file)
+      video_file = VideoFile(video_source)
+
+      audio_data = FileAudioData(self._lm_client, audio_file)
+      video_data = FileVideoData(self._ct_client, video_file)
       
       summary = await self._agent.run(post_data, video_data, audio_data)
 
@@ -96,6 +98,9 @@ class VideoProcessor(BaseVideoProcessor):
 
       return ProcessedVideo(video_id=video.id)
     except Exception as e:
+      if job_meta:
+        await self._set_processing_error(job_meta.video_id)
+
       await self.set_job_finished(job_id, True)
       raise e
     finally:
@@ -106,12 +111,18 @@ class VideoProcessor(BaseVideoProcessor):
           video_source.delete()
       except Exception as e:
         self._log.exception(e)
+
+  async def _set_processing_error(self, video_id: UUID):
+    async with self._db() as session:
+      video_repo = VideoRepository(session)
+      await video_repo.set_video_processing(video_id, True)
+      await session.commit()
         
   async def _save_video_details(
       self,
       video_model: Video,
-      post_data: PostDetails, video_data: VideoData,
-      audio_data: AudioData, summary: VideoSummary
+      post_data: PostDetails, video_data: FileVideoData,
+      audio_data: FileAudioData, summary: VideoSummary
   ) -> Video:
 
     processed_frames = await video_data.get_processed_frames()
@@ -124,9 +135,6 @@ class VideoProcessor(BaseVideoProcessor):
     async with self._db() as session:
       video_model = await session.merge(video_model, load=False)
       revision = video_model.revision + 1
-
-      video_repo = VideoRepository(session)
-      await video_repo.delete_old_data(video_model.id)
 
       video_model.revision = revision
       video_model.extra_data = {
@@ -227,17 +235,17 @@ class VideoProcessor(BaseVideoProcessor):
   def _create_post_meta(cls, post: PostDetails) -> list[VideoMeta]:
     video_meta: list[VideoMeta] = []
 
-    if post.get("title"):
+    if post.title:
       video_meta.append(
-        prepare_meta(MetaSource.title, post.get("title"))
+        prepare_meta(MetaSource.title, post.title)
       )
 
-    if post.get("description"):
+    if post.description:
       video_meta.append(
-        prepare_meta(MetaSource.title, post.get("description"))
+        prepare_meta(MetaSource.title, post.description)
       )
 
-    for hash_tag in post.get("hashtags", []):
+    for hash_tag in post.hashtags:
       video_meta.append(
         prepare_meta(MetaSource.hashtag, hash_tag)
       )
@@ -317,10 +325,13 @@ class TopicProcessor(BaseVideoProcessor):
 
   async def run(self, job_id: UUID) -> TopicProcessorResult:
     job = await self.start_job(job_id, CATEGORIZATION_VIDEO_JOB_NAME)
-
+    job_meta: CategorizationVideoJob | None = None
     try:
       job_meta = CategorizationVideoJob(**job.meta)
       video = await self._find_video(job_meta.video_id, with_scraped_data=True, with_annotations=True, with_meta=True)
+
+      if not video.processed_at or video.processing_error:
+        raise VideoProcessorError(f"Video {job_meta.video_id} unprocessed")
 
       video_data = full_video_data(video)
       topics = await self._topic_agent.run(video_data)
@@ -330,15 +341,28 @@ class TopicProcessor(BaseVideoProcessor):
 
       return result
     except Exception as e:
+      if job_meta:
+        await self._set_categorization_error(job_meta.video_id)
+
       await self.set_job_finished(job_id, True)
       raise e
+
+  async def _set_categorization_error(self, video_id: UUID):
+    async with self._db() as session:
+      video_repo = VideoRepository(session)
+      await video_repo.set_video_categorization(video_id, True)
+      await session.commit()
 
   async def _save_topics(self, video: Video, topics: list[TopicProposal]) -> TopicProcessorResult:
     async with self._db() as session:
       video = await session.merge(video, load=False)
-      topic_repo = TopicRepository(session)
-      assigned_topics: list[AssignedTopic] = []
+      video.categorization_error = False
+      video.categorized_at = datetime.now(timezone.utc)
 
+      topic_repo = TopicRepository(session)
+      await topic_repo.unassign_all_topics(video.id)
+
+      assigned_topics: list[AssignedTopic] = []
       for t in topics:
         topic = await topic_repo.get_topic(t.id) if t.id else None
         if not topic:

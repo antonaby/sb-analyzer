@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Sequence
 from uuid import UUID
 
-from sqlalchemy import or_, select, func, literal_column, desc, delete
+from sqlalchemy import or_, select, func, literal_column, desc, delete, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, with_loader_criteria
@@ -200,11 +200,12 @@ class VideoRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one_or_none()
 
-  async def delete_old_data(self, video_id: UUID):
-    stmt = delete(VideoAnnotation).where(VideoAnnotation.video_id == video_id)
+  async def set_video_processing(self, video_id: UUID, with_error: bool):
+    stmt = update(Video).where(Video.id == video_id).values(processed_at=func.now(), processing_error=with_error)
     await self._session.execute(stmt)
 
-    stmt = delete(VideoMeta).where(VideoMeta.video_id == video_id)
+  async def set_video_categorization(self, video_id: UUID, with_error: bool):
+    stmt = update(Video).where(Video.id == video_id).values(categorized_at=func.now(), categorization_error=with_error)
     await self._session.execute(stmt)
 
   async def upsert_hashtag(self, name: str, source: VideoSource) -> Hashtag:

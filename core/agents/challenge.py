@@ -6,13 +6,13 @@ from pydantic_ai import Agent, ModelSettings
 from pydantic_ai.models import Model
 
 from core.agents.common import TemplateManager
-from db.repositories.helpers import VideoData
+from db.repositories.helpers import TextVideoData
 
 
 class ChallengeGenAgentRun(BaseModel):
   topic: str
   languages: list[str]
-  videos: list[VideoData]
+  videos: list[TextVideoData]
 
   class Config:  # type: ignore
     extra = "forbid"

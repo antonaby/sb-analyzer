@@ -132,10 +132,10 @@ class Frame(FrameContent):
   time_sec: float
 
 
-class VideoData:
+class FileVideoData:
   
   def __init__(self, ct_client: ClipTaggerClient, video_file: VideoFile, temperature: float = 0.1, max_tokens: int = 2000):
-    self._log = logging.getLogger("app.videoframeanalyzer")
+    self._log = logging.getLogger("app.frame_analyzer")
     self._ct_client = ct_client
     self._video_file = video_file
     self._temperature = temperature
@@ -155,15 +155,11 @@ class VideoData:
       cache_copy = copy.deepcopy(self._frame_cache)
       return cache_copy
     
-  async def get_frame(self, timetamp: float) -> Frame:
+  async def get_frame(self, timestamp: float) -> Frame:
     async with self._processing_lock:
-      frame = self._video_file.get_frame(timetamp)  
+      frame = self._video_file.get_frame(timestamp)  
     
     return await self._frame_content(frame)
-  
-  async def get_frames(self, interval: float = 10, **kwargs) -> list[Frame]:
-    frames = self._video_file.get_frames_with_interval(interval=interval, **kwargs)
-    return await self._process_frames(frames)
   
   async def get_n_frames(self, frame_n: int = 5, **kwargs) -> list[Frame]:
     frames = self._video_file.get_n_frames(frame_n=frame_n, **kwargs)

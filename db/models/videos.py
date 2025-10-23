@@ -44,6 +44,11 @@ class Video(Base):
   revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
   extra_data: Mapped[dict | None] = mapped_column(JSONB, default=None)
 
+  processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+  processing_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+  categorized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+  categorization_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
   created_at: Mapped[datetime] = mapped_column(
     DateTime(timezone=True),
     default=func.now(), nullable=False
