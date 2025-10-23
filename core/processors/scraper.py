@@ -8,11 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from apify.actor import ActorRun
 from apify.client import ApifyClient
 from apify.tiktok.apidojo import TikTokPost
-from core.processors.common import JobProcessor, AuthorDetails, PostDetails, ScrapedVideo
+from core.processors.common import JobProcessor, AuthorDetails, PostDetails, ScrapedVideo, SavedPost
 from db.models import VideoSource, Job, Search
 from db.repositories.authors import AuthorRepository
 from db.repositories.jobs import APIDOJO_SCRAPER_JOB_NAME, ApidojoScraperJob, APIDOJO_POST_PROCESSOR_JOB_NAME, \
-  ApidojoPostProcessorJob, JobRepository, PROCESS_VIDEO_JOB_NAME, ProcessVideoJob
+  ApidojoPostProcessorJob
 from db.repositories.searches import SearchRepository
 from db.repositories.videos import VideoRepository
 from utils.common import is_url
@@ -75,15 +75,7 @@ class ApidojoScrapperProcessor(JobProcessor):
       return updated_search
 
 
-class SavedPost(BaseModel):
-  author_id: UUID
-  new_author: bool
-  video_id: UUID
-  new_video: bool
-  processing_job_id: UUID | None
-
-
-class PostProcessorResult(BaseModel):
+class ApidojoPostProcessResult(BaseModel):
   posts: list[SavedPost]
 
 
@@ -93,7 +85,7 @@ class ApidojoPostProcessor(JobProcessor):
     super().__init__(session_maker)
     self._apify_client = apify_client
     
-  async def run(self, job_id: UUID) -> PostProcessorResult:
+  async def run(self, job_id: UUID) -> ApidojoPostProcessResult:
     job = await self.start_job(job_id, APIDOJO_POST_PROCESSOR_JOB_NAME)
     try:
       job_meta = ApidojoPostProcessorJob(**job.meta)
@@ -101,7 +93,7 @@ class ApidojoPostProcessor(JobProcessor):
       result = await self._process_posts(dataset)
       await self.set_job_finished(job_id, False)
 
-      return PostProcessorResult(posts=result)
+      return ApidojoPostProcessResult(posts=result)
     except Exception as e:
       await self.set_job_finished(job_id, True)
       raise e
@@ -154,10 +146,9 @@ class ApidojoPostProcessor(JobProcessor):
     async with self._db() as session:
       video_repo = VideoRepository(session)
       author_repo = AuthorRepository(session)
-      job_repo = JobRepository(session)
 
       for video in dataset:
-        saved_post = await self._save_post(video.post, video.author, video_repo, author_repo, job_repo)
+        saved_post = await self._save_post(video.post, video.author, video_repo, author_repo)
         saved_posts.append(saved_post)
 
       await session.commit()
@@ -168,8 +159,7 @@ class ApidojoPostProcessor(JobProcessor):
   async def _save_post(post: PostDetails,
                        author: AuthorDetails,
                        video_repo: VideoRepository,
-                       author_repo: AuthorRepository,
-                       job_repo: JobRepository) -> SavedPost:
+                       author_repo: AuthorRepository) -> SavedPost:
 
     author_model, is_author_new = await author_repo.upsert_author(
       author.url,
@@ -192,12 +182,6 @@ class ApidojoPostProcessor(JobProcessor):
     await video_repo.add_scraped_data(video_model.id, post.model_dump(mode="json"))
     await video_repo.add_search(post.search_id, video_model.id, is_video_new)
 
-    job_id: UUID | None = None
-    if is_video_new:
-      process_job_meta = ProcessVideoJob(video_id=video_model.id, delete_downloaded_files=True)
-      job = await job_repo.create_job(PROCESS_VIDEO_JOB_NAME, process_job_meta)
-      job_id = job.id
-
     for hashtag in post.hashtags:
       hashtag_model = await video_repo.upsert_hashtag(hashtag, post.post_from)
       await video_repo.assign_hashtag(video_model.id, hashtag_model.id)
@@ -207,5 +191,4 @@ class ApidojoPostProcessor(JobProcessor):
       new_author=is_author_new,
       video_id=video_model.id,
       new_video=is_video_new,
-      processing_job_id=job_id
     )

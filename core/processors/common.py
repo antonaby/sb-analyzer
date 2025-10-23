@@ -63,3 +63,10 @@ class JobProcessor(ABC):
       job_repo = JobRepository(session)
       await job_repo.set_job_finished(job_id, is_error)
       await session.commit()
+
+
+class SavedPost(BaseModel):
+  author_id: UUID
+  new_author: bool
+  video_id: UUID
+  new_video: bool

@@ -9,12 +9,14 @@ from worker.tasks.videos import process_video
 
 @worker_app.task
 def post_process_apidojo_dataset(job_id: UUID) -> dict:
-  from worker.tasks.deps import loop, apidojo_post_processor
+  from worker.tasks.deps import loop, apidojo_post_processor, async_db
+  from worker.tasks.helpers import create_video_processing_jobs
 
   saved_posts = loop.run_until_complete(apidojo_post_processor.run(job_id))
+  job_ids = loop.run_until_complete(create_video_processing_jobs(saved_posts.posts, async_db))
 
-  tasks = [process_video.s(p.processing_job_id) for p in saved_posts.posts if p.processing_job_id]
-  if len(tasks) > 0:
+  if len(job_ids) > 0:
+    tasks = [process_video.s(job_id) for job_id in job_ids]
     processing_job = group(tasks)
     processing_job.apply_async()
 
