@@ -52,9 +52,9 @@ class TextVideoData(BaseModel):
   content: VideoContent
 
 
-def full_video_data(video: Video, process_frames: bool = True) -> TextVideoData:
+def full_video_data(video: Video, include_frames: bool = True) -> TextVideoData:
   video_meta = _get_post_meta(video)
-  video_details = _get_video_details(video, process_frames)
+  video_details = _get_video_details(video, include_frames)
 
   video_data = TextVideoData(
     video_id=video.id,
@@ -109,7 +109,7 @@ def _get_post_meta(video: Video) -> VideoMeta:
   )
 
 
-def _get_video_details(video: Video, process_frames: bool) -> VideoContent:
+def _get_video_details(video: Video, include_frames: bool) -> VideoContent:
   label: str = "no label"
   synopsis: str = "no synopsis"
   actions: list[str] = []
@@ -141,7 +141,7 @@ def _get_video_details(video: Video, process_frames: bool) -> VideoContent:
         frame_data_list.append(a)
         frames[frame_number] = frame_data_list
 
-  if process_frames:
+  if include_frames:
     for k, v in frames.items():
       frame_data.append(_process_frame(k, v))
 

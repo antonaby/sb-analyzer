@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 from api.deps import *
-
+from db.repositories.helpers import TextVideoData, full_video_data
 
 router = APIRouter(
   prefix="/videos",
@@ -12,19 +12,19 @@ router = APIRouter(
 
 @router.get("/{video_id}")
 async def get_video(
-  video_id: UUID,
-  with_scraped_data: bool = Query(False, description="Add data produced by a scrapper"),
-  with_annotations: bool = Query(False, deprecated="Add processed data for video"),
-  with_meta: bool = Query(False, description="Add video meta"),
-  video_repo: VideoRepository = Depends(get_video_repo)
-):
+    video_id: UUID,
+    include_frames: bool = Query(False, deprecated="Include Processed frames"),
+    with_annotations: bool = Query(False, deprecated="Add processed data for video"),
+    with_meta: bool = Query(False, description="Add video meta"),
+    video_repo: VideoRepository = Depends(get_video_repo)
+) -> TextVideoData:
   video = await video_repo.get_video_by_id(
     video_id,
-    with_scraped_data=with_scraped_data,
     with_annotations=with_annotations,
     with_meta=with_meta
   )
-  return video
+
+  return full_video_data(video, include_frames)
 
 
 @router.get("/")
