@@ -8,7 +8,7 @@ from worker.main import worker_app
 @worker_app.task
 def process_video(job_id: UUID):
   from worker.tasks.deps import loop, video_processor, async_db
-  from worker.tasks.helpers import create_categorize_job
+  from core.processors.jobs import create_categorize_job
 
   processed_video = loop.run_until_complete(video_processor.run(job_id))
   post_process_job_id = loop.run_until_complete(create_categorize_job(processed_video, async_db))
@@ -20,7 +20,7 @@ def process_video(job_id: UUID):
 @worker_app.task
 def categorize_video(job_id: UUID):
   from worker.tasks.deps import loop, topic_processor, async_db
-  from worker.tasks.helpers import create_topic_translation_jobs
+  from core.processors.jobs import create_topic_translation_jobs
 
   result = loop.run_until_complete(topic_processor.run(job_id))
   job_ids = loop.run_until_complete(create_topic_translation_jobs(result.topics, async_db))

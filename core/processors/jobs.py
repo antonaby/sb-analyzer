@@ -3,12 +3,13 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from core.processors.challenge import CreatedChallenge
-from core.processors.scraper import ApidojoScraperRun
 from core.processors.common import SavedPost
+from core.processors.scraper import ApidojoScraperRun
 from core.processors.video import ProcessedVideo, AssignedTopic
 from db.repositories.jobs import JobRepository, ApidojoPostProcessorJob, APIDOJO_POST_PROCESSOR_JOB_NAME, \
-  CategorizationVideoJob, CATEGORIZATION_VIDEO_JOB_NAME, ProcessVideoJob, PROCESS_VIDEO_JOB_NAME, \
-  CHALLENGE_TRANSLATION_JOB_NAME, TranslationJob, TOPIC_TRANSLATION_JOB_NAME
+  ProcessVideoJob, PROCESS_VIDEO_JOB_NAME, CategorizationVideoJob, CATEGORIZATION_VIDEO_JOB_NAME, TranslationJob, \
+  CHALLENGE_TRANSLATION_JOB_NAME, TOPIC_TRANSLATION_JOB_NAME, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob
+from db.repositories.topics import TopicRepository
 
 
 async def create_apidojo_post_process_job(scraper_run: ApidojoScraperRun, db: async_sessionmaker[AsyncSession]) -> UUID:
@@ -61,6 +62,7 @@ async def create_challenge_translation_jobs(challenges: list[CreatedChallenge], 
     await session.commit()
     return job_ids
 
+
 async def create_topic_translation_jobs(topics: list[AssignedTopic], db: async_sessionmaker[AsyncSession]) -> list[UUID]:
   new_topics: list[AssignedTopic] = [t for t in topics if t.is_new]
   if len(new_topics) == 0:
@@ -75,6 +77,23 @@ async def create_topic_translation_jobs(topics: list[AssignedTopic], db: async_s
         job_meta = TranslationJob(target_id=topic.topic_id, langs=["en", "ru", "fr", "de"])
         job = await job_repo.create_job(TOPIC_TRANSLATION_JOB_NAME, job_meta)
         job_ids.append(job.id)
+
+    await session.commit()
+    return job_ids
+
+
+async def create_challenge_gen_jobs(db: async_sessionmaker[AsyncSession]) -> list[UUID]:
+  async with db() as session:
+    job_repo = JobRepository(session)
+    topic_repo = TopicRepository(session)
+    topics = await topic_repo.find_topics_without_challenges(min_videos=40)
+
+    job_ids: list[UUID] = []
+    for topic in topics:
+      job_meta = ChallengeGenJob(topic_id=topic.id)
+      job = await job_repo.create_job(CHALLENGE_GEN_JOB_NAME, job_meta)
+      job_ids.append(job.id)
+
 
     await session.commit()
     return job_ids

@@ -39,7 +39,7 @@ class TopicManager:
       await repo.topic_lock()
 
       single_words = [word for phrase in search_keywords for word in phrase.split()]
-      found_topics = await repo.search_topics(single_words)
+      found_topics = await repo.search_topics_by_name(single_words)
       return [
         TopicDetails(id=t.id, name=t.name)
         for t in found_topics
@@ -56,7 +56,7 @@ class TopicManager:
         is_new = False
         topic = await repo.get_topic(proposal.id) if proposal.id else None
         if not topic:
-          found_topics = await repo.search_topics([proposal.name])
+          found_topics = await repo.search_topics_by_name([proposal.name])
           if len(found_topics) > 0:
             topic = found_topics[0]
           else:

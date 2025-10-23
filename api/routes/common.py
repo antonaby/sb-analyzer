@@ -1,13 +1,13 @@
 from api.models import TopicsShort, VideoShort
 from db.models import Video, AnnotationKind, MetaSource
-from db.repositories.topics import TopicWithCount
+from db.repositories.topics import TopicWithVideoCount
 
 
-def to_topic_short(t: TopicWithCount) -> TopicsShort:
-  return TopicsShort(id=t["id"], name=t["name"], total_videos=t["total_videos"])
+def to_topic_short(t: TopicWithVideoCount) -> TopicsShort:
+  return TopicsShort(id=t.id, name=t.name, total_videos=t.total_videos)
 
 
-def to_topic_shorts(topics: list[TopicWithCount]) -> list[TopicsShort]:
+def to_topic_shorts(topics: list[TopicWithVideoCount]) -> list[TopicsShort]:
   return [
     to_topic_short(t)
     for t in topics

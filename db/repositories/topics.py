@@ -1,7 +1,8 @@
 from typing import Sequence, TypedDict
 from uuid import UUID
 
-from sqlalchemy import insert, select, text, func, delete
+from pydantic import BaseModel
+from sqlalchemy import insert, select, text, func, delete, Select, Result
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -12,7 +13,7 @@ from db.repositories.common import BaseAsyncRepo, regconfig_for
 TOPIC_LOCK_KEY: int = 1
 
 
-class TopicWithCount(TypedDict):
+class TopicWithVideoCount(BaseModel):
   id: UUID
   name: str
   total_videos: int
@@ -77,7 +78,7 @@ class TopicRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one()
 
-  async def search_topics(self, search_keywords: list[str]) -> Sequence[Topic]:
+  async def search_topics_by_name(self, search_keywords: list[str]) -> Sequence[Topic]:
     if len(search_keywords) == 0:
       return []
     
@@ -104,9 +105,34 @@ class TopicRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalars().all()
-  
-  async def get_total_videos_per_topic(self, author_id: UUID | None = None) -> list[TopicWithCount]:
-    stmt = (
+
+  async def find_topics_without_challenges(self, min_videos: int) -> list[TopicWithVideoCount]:
+    stmt = self._base_total_videos_query()
+    stmt = stmt.where(Topic.last_challenges_created_at.is_(None))
+
+    if min_videos:
+      stmt = stmt.having(func.count(Video.id) >= min_videos)
+
+    result = await self._session.execute(stmt)
+    return self._parse_total_videos_result(result)
+
+  async def get_total_videos_per_topic(self,
+                                       author_id: UUID | None = None,
+                                       min_videos: int = 0) -> list[TopicWithVideoCount]:
+    stmt = self._base_total_videos_query()
+
+    if author_id is not None:
+      stmt = stmt.where(Video.author_id == author_id)
+
+    if min_videos:
+      stmt = stmt.having(func.count(Video.id) >= min_videos)
+
+    result = await self._session.execute(stmt)
+    return self._parse_total_videos_result(result)
+
+  @staticmethod
+  def _base_total_videos_query() -> Select:
+    return (
       select(
           Topic.id,
           Topic.name,
@@ -119,12 +145,10 @@ class TopicRepository(BaseAsyncRepo):
       order_by(func.count(Video.id).desc())
     )
 
-    if author_id is not None:
-      stmt = stmt.where(Video.author_id == author_id)
-    
-    result = await self._session.execute(stmt)
+  @staticmethod
+  def _parse_total_videos_result(result: Result) -> list[TopicWithVideoCount]:
     return [
-      TopicWithCount(id=row.id, name=row.name, total_videos=row.total_videos)
+      TopicWithVideoCount(id=row.id, name=row.name, total_videos=row.total_videos)
       for row in result
     ]
   

@@ -13,8 +13,8 @@ router = APIRouter(
 @router.get("/{video_id}")
 async def get_video(
     video_id: UUID,
-    include_frames: bool = Query(False, deprecated="Include Processed frames"),
-    with_annotations: bool = Query(False, deprecated="Add processed data for video"),
+    include_frames: bool = Query(False, description="Include Processed frames"),
+    with_annotations: bool = Query(False, description="Add processed data for video"),
     with_meta: bool = Query(False, description="Add video meta"),
     video_repo: VideoRepository = Depends(get_video_repo)
 ) -> TextVideoData:
@@ -31,7 +31,7 @@ async def get_video(
 async def search_videos(
     q: str = Query(default=None, min_length=1),
     with_scraped_data: bool = Query(False, description="Add data produced by a scrapper"),
-    with_annotations: bool = Query(False, deprecated="Add processed data for video"),
+    with_annotations: bool = Query(False, description="Add processed data for video"),
     with_meta: bool = Query(False, description="Add video meta"),
     db: AsyncSession = Depends(get_async_db)
 ):
