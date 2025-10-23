@@ -2,11 +2,13 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
+from core.processors.challenge import CreatedChallenge
 from core.processors.scraper import ApidojoScraperRun
 from core.processors.common import SavedPost
 from core.processors.video import ProcessedVideo
 from db.repositories.jobs import JobRepository, ApidojoPostProcessorJob, APIDOJO_POST_PROCESSOR_JOB_NAME, \
-  CategorizationVideoJob, CATEGORIZATION_VIDEO_JOB_NAME, ProcessVideoJob, PROCESS_VIDEO_JOB_NAME
+  CategorizationVideoJob, CATEGORIZATION_VIDEO_JOB_NAME, ProcessVideoJob, PROCESS_VIDEO_JOB_NAME, \
+  CHALLENGE_TRANSLATION_JOB_NAME, ChallengeTranslationJob
 
 
 async def create_apidojo_post_process_job(scraper_run: ApidojoScraperRun, db: async_sessionmaker[AsyncSession]) -> UUID:
@@ -44,3 +46,17 @@ async def create_categorize_job(video: ProcessedVideo, db: async_sessionmaker[As
     post_process_job = await job_repo.create_job(CATEGORIZATION_VIDEO_JOB_NAME, meta)
     await session.commit()
     return post_process_job.id
+
+
+async def create_challenge_translation_jobs(challenges: list[CreatedChallenge], db: async_sessionmaker[AsyncSession]) -> list[UUID]:
+  async with db() as session:
+    job_repo = JobRepository(session)
+    job_ids: list[UUID] = []
+
+    for challenge in challenges:
+      job_meta = ChallengeTranslationJob(challenge_id=challenge.id, langs=["ru", "fr", "de"])
+      job = await job_repo.create_job(CHALLENGE_TRANSLATION_JOB_NAME, job_meta)
+      job_ids.append(job.id)
+
+    await session.commit()
+    return job_ids
