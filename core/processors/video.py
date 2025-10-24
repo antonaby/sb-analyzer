@@ -6,7 +6,7 @@ from openai import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.agents.summary import SummaryAgent, VideoSummary
-from core.agents.topic import TopicAgent, TopicProposal
+from core.agents.topic import TopicAgent, MainTopic
 from core.file import AudioFile, UrlVideoSource, VideoFile, VideoSource
 from core.processors.common import JobProcessor, PostDetails
 from core.transcribe import FileAudioData, LemonfoxClient, Transcription
@@ -353,7 +353,7 @@ class TopicProcessor(BaseVideoProcessor):
       await video_repo.set_video_categorization(video_id, True)
       await session.commit()
 
-  async def _save_topics(self, video: Video, topics: list[TopicProposal]) -> TopicProcessorResult:
+  async def _save_topics(self, video: Video, topics: list[MainTopic]) -> TopicProcessorResult:
     async with self._db() as session:
       video = await session.merge(video, load=False)
       video.categorization_error = False

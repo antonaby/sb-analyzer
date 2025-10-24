@@ -10,6 +10,10 @@ router = APIRouter(
 )
 
 
+class VideoExtended(TextVideoData):
+  url: str
+
+
 @router.get("/{video_id}")
 async def get_video(
     video_id: UUID,
@@ -17,14 +21,18 @@ async def get_video(
     with_annotations: bool = Query(False, description="Add processed data for video"),
     with_meta: bool = Query(False, description="Add video meta"),
     video_repo: VideoRepository = Depends(get_video_repo)
-) -> TextVideoData:
+) -> VideoExtended:
   video = await video_repo.get_video_by_id(
     video_id,
     with_annotations=with_annotations,
     with_meta=with_meta
   )
 
-  return full_video_data(video, include_frames)
+  video_data = full_video_data(video, include_frames)
+  return VideoExtended(
+    url=video.url,
+    **video_data.model_dump()
+  )
 
 
 @router.get("/")
