@@ -7,7 +7,7 @@ from sqlalchemy import (
   String,
   DateTime,
   func,
-  text
+  text, Integer
 )
 from sqlalchemy.dialects.postgresql import UUID, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -19,19 +19,57 @@ if TYPE_CHECKING:
   from .videos import Video
 
 
+class ChallengeGroup(Base):
+  __tablename__ = "challenge_groups"
+
+  id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
+  )
+  main_topic_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("topics.id", ondelete="CASCADE"),
+    nullable=False,
+    index=True,
+  )
+  additional_topic_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("topics.id", ondelete="CASCADE"),
+    nullable=False,
+    index=True,
+  )
+  last_challenges_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+  last_batch: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
+  updated_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), onupdate=func.now(), nullable=False
+  )
+
+  challenges: Mapped[list["Challenge"]] = relationship(
+    back_populates="group",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+
+
 class Challenge(Base):
   __tablename__ = "challenges"
 
   id: Mapped[uuid.UUID] = mapped_column(
     UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
   )
-  topic_id: Mapped[uuid.UUID] = mapped_column(
+  challenge_group_id: Mapped[uuid.UUID] = mapped_column(
     UUID(as_uuid=True),
-    ForeignKey("topics.id", ondelete="CASCADE"),
+    ForeignKey("challenge_groups.id", ondelete="CASCADE"),
     nullable=False,
     index=True,
   )
   name: Mapped[str] = mapped_column(String(512), nullable=False)
+  batch: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
 
   created_at: Mapped[datetime] = mapped_column(
     DateTime(timezone=True),
@@ -39,7 +77,7 @@ class Challenge(Base):
   )
   translated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
-  topic: Mapped["Topic"] = relationship(back_populates="challenges")
+  group: Mapped["ChallengeGroup"] = relationship(back_populates="challenges")
   translations: Mapped[list["ChallengeTranslation"]] = relationship(
     back_populates="challenge",
     cascade="all, delete-orphan",
