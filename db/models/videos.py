@@ -5,12 +5,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy import String, text, DateTime, func, Enum, ForeignKey, BigInteger, Integer, Text, Computed, Boolean
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.dialects.postgresql.base import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship, foreign
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.schema import Index
 
 from db.conf import Base
 from .enums import VideoSource, MetaSource, AnnotationKind
-
 
 if TYPE_CHECKING:
   from .topics import Topic, VideoTopic, VideoAdditionalTopic

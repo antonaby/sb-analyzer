@@ -42,6 +42,10 @@ class TopicRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.unique().scalar_one_or_none()
 
+  async def get_all_topics(self) -> Sequence[Topic]:
+    result = await self._session.execute(select(Topic))
+    return result.scalars().all()
+
   async def unassign_all_topics(self, video_id: UUID):
     stmt = delete(VideoTopic).where(VideoTopic.video_id == video_id)
     await self._session.execute(stmt)
@@ -77,34 +81,6 @@ class TopicRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalar_one()
-
-  async def search_topics_by_name(self, search_keywords: list[str]) -> Sequence[Topic]:
-    if len(search_keywords) == 0:
-      return []
-    
-    cleaned = [s.replace("-", "") for s in search_keywords]
-    query_keywords = []
-    for kw in cleaned:
-      kw = kw.strip()
-      if not kw:
-        continue
-      
-      parts = [p for p in kw.split() if p]
-      query_keywords.append(" & ".join(parts))
-      
-    if len(query_keywords) == 0:
-      return []
-        
-    query_str = " | ".join(query_keywords)
-    
-    stmt = (
-      select(Topic).
-      where(func.to_tsquery('english', query_str).op('@@')(Topic.name_tsv)).
-      order_by(func.ts_rank_cd(Topic.name_tsv, func.to_tsquery('english', query_str)).desc())
-    )
-
-    result = await self._session.execute(stmt)
-    return result.scalars().all()
 
   async def find_topics_without_challenges(self, min_videos: int) -> list[TopicWithVideoCount]:
     stmt = self._base_total_videos_query()

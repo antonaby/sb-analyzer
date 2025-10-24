@@ -2,10 +2,10 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, text, DateTime, func, Index, ForeignKey, Float, CheckConstraint
+from sqlalchemy import String, text, DateTime, func, ForeignKey, Float, CheckConstraint
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.dialects.postgresql.base import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship, foreign
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.conf import Base
 
