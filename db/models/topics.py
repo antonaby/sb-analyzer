@@ -50,11 +50,6 @@ class Topic(Base):
     back_populates="additional_topics",
     viewonly=True,
   )
-  challenges: Mapped[list["Challenge"]] = relationship(
-    back_populates="topic",
-    cascade="all, delete-orphan",
-    passive_deletes=True,
-  )
   translations: Mapped[list["TopicTranslation"]] = relationship(
     back_populates="topic",
     cascade="all, delete-orphan",
