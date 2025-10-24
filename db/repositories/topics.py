@@ -152,7 +152,6 @@ class TopicRepository(BaseAsyncRepo):
       for r in rows
     ]
 
-
   async def find_topics_without_challenges(self, min_videos: int) -> list[TopicWithVideoCount]:
     stmt = self._base_total_videos_query()
     stmt = stmt.where(Topic.last_challenges_created_at.is_(None))

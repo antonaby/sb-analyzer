@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload, with_loader_criteria
 from sqlalchemy.sql.selectable import Select
 
 from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource, \
-  VideoSearch, Hashtag, VideoHashtag, VideoTopic
+  VideoSearch, Hashtag, VideoHashtag, VideoTopic, VideoAdditionalTopic
 from db.repositories.common import BaseAsyncRepo
 
 
@@ -239,6 +239,19 @@ class VideoRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalar_one()
+
+  async def get_video_by_main_and_additional_topics(self, main_topic_id: UUID, additional_topic_id: UUID) -> Sequence[Video]:
+    stmt = (
+      select(Video).
+      join(Video.video_additional_topics).
+      where(
+        (VideoAdditionalTopic.main_topic_id == main_topic_id) &
+        (VideoAdditionalTopic.additional_topic_id == additional_topic_id)
+      )
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalars().all()
 
   async def search_videos(
       self,

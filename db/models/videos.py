@@ -129,6 +129,9 @@ class Video(Base):
     viewonly=True,
   )
 
+  def __repr__(self):
+    return f"<Video(id={self.id}, name={self.url})>"
+
 
 class VideoMeta(Base):
   __tablename__ = "video_meta"
