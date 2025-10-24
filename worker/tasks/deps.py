@@ -6,7 +6,7 @@ from apify.client import ApifyClient
 from core.agents.challenge import ChallengeGenAgent
 from core.agents.common import TemplateManager, gpt_5_nano, medium_effort_gpt_5, gemini_2_5_flash_lite
 from core.agents.summary import SummaryAgent
-from core.agents.topic import TopicAgent, TopicManager
+from core.agents.topic import TopicAgent
 from core.agents.translation import TranslationAgent
 from core.processors.challenge import ChallengeProcessor
 from core.processors.translations import ChallengeTranslationProcessor, TopicTranslationProcessor
@@ -33,13 +33,12 @@ lemonfox_client = LemonfoxClient()
 
 # Agents Common
 template_manager = TemplateManager()
-topic_manager = TopicManager(async_db)
 
 # Agents
 challenge_agent = ChallengeGenAgent(gpt_5_nano(), medium_effort_gpt_5(), template_manager)
 translation_agent = TranslationAgent(gemini_2_5_flash_lite(), template_manager)
 summary_agent = SummaryAgent(gpt_5_nano(), template_manager)
-topic_agent = TopicAgent(gpt_5_nano(), template_manager, topic_manager)
+topic_agent = TopicAgent(gpt_5_nano(), medium_effort_gpt_5(), template_manager)
 
 #Processors
 apidojo_processor = ApidojoScrapperProcessor(apify_client, async_db)

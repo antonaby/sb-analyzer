@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from db.models import Topic, Video, VideoTopic, TopicTranslation
+from db.models import Topic, Video, VideoTopic, TopicTranslation, VideoAdditionalTopic
 from db.repositories.common import BaseAsyncRepo, regconfig_for
 
 TOPIC_LOCK_KEY: int = 1
@@ -49,6 +49,8 @@ class TopicRepository(BaseAsyncRepo):
   async def unassign_all_topics(self, video_id: UUID):
     stmt = delete(VideoTopic).where(VideoTopic.video_id == video_id)
     await self._session.execute(stmt)
+    stmt = delete(VideoAdditionalTopic).where(VideoAdditionalTopic.video_id == video_id)
+    await self._session.execute(stmt)
   
   async def assign_topic(self, topic_id: UUID, video_id: UUID, confidence: float) -> VideoTopic:
     stmt = (
@@ -66,6 +68,37 @@ class TopicRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     
     return result.scalar_one()
+
+  async def assign_additional_topic(self,
+                                    main_topic_id: UUID,
+                                    additional_topic_id: UUID,
+                                    video_id: UUID,
+                                    confidence: float) -> VideoAdditionalTopic:
+    stmt = (
+      pg_insert(VideoAdditionalTopic).
+      values(
+        video_id=video_id,
+        main_topic_id=main_topic_id,
+        additional_topic_id=additional_topic_id,
+        confidence=confidence
+      ).
+      on_conflict_do_update(  # type: ignore
+        index_elements=[
+          VideoAdditionalTopic.video_id,
+          VideoAdditionalTopic.main_topic_id,
+          VideoAdditionalTopic.additional_topic_id
+        ],
+        set_={
+          "created_at": func.now(),
+          "confidence": confidence
+        }
+      ).
+      returning(VideoAdditionalTopic)
+    )
+    result = await self._session.execute(stmt)
+
+    return result.scalar_one()
+
 
   async def create_translation(self, topic_id: UUID, lang: str, value: str) -> TopicTranslation:
     stmt = (

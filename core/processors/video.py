@@ -6,7 +6,7 @@ from openai import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.agents.summary import SummaryAgent, VideoSummary
-from core.agents.topic import TopicAgent, MainTopic
+from core.agents.topic import TopicAgent, MainTopic, TopicName
 from core.file import AudioFile, UrlVideoSource, VideoFile, VideoSource
 from core.processors.common import JobProcessor, PostDetails
 from core.transcribe import FileAudioData, LemonfoxClient, Transcription
@@ -307,7 +307,6 @@ class VideoProcessor(BaseVideoProcessor):
 
 class AssignedTopic(BaseModel):
   topic_id: UUID
-  is_new: bool
   name: str
   confidence: float
 
@@ -334,9 +333,10 @@ class TopicProcessor(BaseVideoProcessor):
         raise VideoProcessorError(f"Video {job_meta.video_id} unprocessed")
 
       video_data = full_video_data(video)
-      topics = await self._topic_agent.run(video_data)
+      topics_names = await self._find_topics()
+      agent_response = await self._topic_agent.run(video_data, topics_names)
 
-      result = await self._save_topics(video, topics)
+      result = await self._save_topics(video, agent_response.topics)
       await self.set_job_finished(job_id, False)
 
       return result
@@ -346,6 +346,12 @@ class TopicProcessor(BaseVideoProcessor):
 
       await self.set_job_finished(job_id, True)
       raise e
+
+  async def _find_topics(self) -> list[TopicName]:
+    async with self._db() as session:
+      topic_repo = TopicRepository(session)
+      all_topics = await topic_repo.get_all_topics()
+      return [TopicName(id=t.id, name=t.name) for t in all_topics]
 
   async def _set_categorization_error(self, video_id: UUID):
     async with self._db() as session:
@@ -364,14 +370,18 @@ class TopicProcessor(BaseVideoProcessor):
 
       assigned_topics: list[AssignedTopic] = []
       for t in topics:
-        topic = await topic_repo.get_topic(t.id) if t.id else None
-        if not topic:
-          topic = await topic_repo.create_topic(t.name)
-
-        await topic_repo.assign_topic(topic.id, video.id, t.confidence)
+        await topic_repo.assign_topic(t.id, video.id, t.confidence)
         assigned_topics.append(
-          AssignedTopic(topic_id=topic.id, is_new=t.is_new, name=t.name, confidence=t.confidence)
+          AssignedTopic(topic_id=t.id, name=t.name, confidence=t.confidence)
         )
+
+        for at in t.additional:
+          await topic_repo.assign_additional_topic(
+            main_topic_id=t.id,
+            additional_topic_id=at.id,
+            video_id=video.id,
+            confidence=at.confidence
+          )
 
       await session.commit()
       return TopicProcessorResult(video_id=video.id, topics=assigned_topics)
