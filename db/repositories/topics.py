@@ -2,10 +2,10 @@ from typing import Sequence, TypedDict
 from uuid import UUID
 
 from pydantic import BaseModel
-from sqlalchemy import insert, select, text, func, delete, Select, Result
+from sqlalchemy import insert, select, text, func, delete, Select, Result, desc
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, aliased
 
 from db.models import Topic, Video, VideoTopic, TopicTranslation, VideoAdditionalTopic
 from db.repositories.common import BaseAsyncRepo, regconfig_for
@@ -16,6 +16,14 @@ TOPIC_LOCK_KEY: int = 1
 class TopicWithVideoCount(BaseModel):
   id: UUID
   name: str
+  total_videos: int
+
+
+class TopicPairWithCount(BaseModel):
+  main_topic_id: UUID
+  main_topic_name: str
+  additional_topic_id: UUID
+  additional_topic_name: str
   total_videos: int
 
 
@@ -114,6 +122,36 @@ class TopicRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalar_one()
+
+  async def find_topic_pairs(self) -> list[TopicPairWithCount]:
+    t = aliased(Topic)
+    a = aliased(Topic)
+    stmt = (
+      select(
+        t.id.label("main_topic_id"),
+        t.name.label("main_topic_name"),
+        a.id.label("additional_topic_id"),
+        a.name.label("additional_topic_name"),
+        func.count(VideoAdditionalTopic.video_id).label("video_count"),
+      )
+      .join(t, t.id == VideoAdditionalTopic.main_topic_id)
+      .join(a, a.id == VideoAdditionalTopic.additional_topic_id)
+      .group_by(t.id, t.name, a.id, a.name)
+      .order_by(desc("video_count"))
+    )
+
+    rows = await self._session.execute(stmt)
+    return [
+      TopicPairWithCount(
+        main_topic_id=r.main_topic_id,
+        main_topic_name=r.main_topic_name,
+        additional_topic_id=r.additional_topic_id,
+        additional_topic_name=r.additional_topic_name,
+        total_videos=r.video_count
+      )
+      for r in rows
+    ]
+
 
   async def find_topics_without_challenges(self, min_videos: int) -> list[TopicWithVideoCount]:
     stmt = self._base_total_videos_query()

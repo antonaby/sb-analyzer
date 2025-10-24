@@ -5,10 +5,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 from core.processors.challenge import CreatedChallenge
 from core.processors.common import SavedPost
 from core.processors.scraper import ApidojoScraperRun
-from core.processors.video import ProcessedVideo, AssignedTopic
+from core.processors.video import ProcessedVideo
 from db.repositories.jobs import JobRepository, ApidojoPostProcessorJob, APIDOJO_POST_PROCESSOR_JOB_NAME, \
   ProcessVideoJob, PROCESS_VIDEO_JOB_NAME, CategorizationVideoJob, CATEGORIZATION_VIDEO_JOB_NAME, TranslationJob, \
-  CHALLENGE_TRANSLATION_JOB_NAME, TOPIC_TRANSLATION_JOB_NAME, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob
+  CHALLENGE_TRANSLATION_JOB_NAME, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob
 from db.repositories.topics import TopicRepository
 
 
