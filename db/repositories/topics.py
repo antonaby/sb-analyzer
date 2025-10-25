@@ -1,13 +1,13 @@
-from typing import Sequence, TypedDict
+from typing import Sequence
 from uuid import UUID
 
 from pydantic import BaseModel
-from sqlalchemy import insert, select, text, func, delete, Select, Result, desc
+from sqlalchemy import insert, select, text, func, delete, Select, Result
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, aliased
+from sqlalchemy.orm import joinedload
 
-from db.models import Topic, Video, VideoTopic, TopicTranslation, VideoAdditionalTopic
+from db.models import Topic, Video, VideoTopic, TopicTranslation
 from db.repositories.common import BaseAsyncRepo, regconfig_for
 
 TOPIC_LOCK_KEY: int = 1
@@ -16,14 +16,6 @@ TOPIC_LOCK_KEY: int = 1
 class TopicWithVideoCount(BaseModel):
   id: UUID
   name: str
-  total_videos: int
-
-
-class TopicPairWithCount(BaseModel):
-  main_topic_id: UUID
-  main_topic_name: str
-  additional_topic_id: UUID
-  additional_topic_name: str
   total_videos: int
 
 
@@ -57,8 +49,6 @@ class TopicRepository(BaseAsyncRepo):
   async def unassign_all_topics(self, video_id: UUID):
     stmt = delete(VideoTopic).where(VideoTopic.video_id == video_id)
     await self._session.execute(stmt)
-    stmt = delete(VideoAdditionalTopic).where(VideoAdditionalTopic.video_id == video_id)
-    await self._session.execute(stmt)
   
   async def assign_topic(self, topic_id: UUID, video_id: UUID, confidence: float) -> VideoTopic:
     stmt = (
@@ -77,37 +67,6 @@ class TopicRepository(BaseAsyncRepo):
     
     return result.scalar_one()
 
-  async def assign_additional_topic(self,
-                                    main_topic_id: UUID,
-                                    additional_topic_id: UUID,
-                                    video_id: UUID,
-                                    confidence: float) -> VideoAdditionalTopic:
-    stmt = (
-      pg_insert(VideoAdditionalTopic).
-      values(
-        video_id=video_id,
-        main_topic_id=main_topic_id,
-        additional_topic_id=additional_topic_id,
-        confidence=confidence
-      ).
-      on_conflict_do_update(  # type: ignore
-        index_elements=[
-          VideoAdditionalTopic.video_id,
-          VideoAdditionalTopic.main_topic_id,
-          VideoAdditionalTopic.additional_topic_id
-        ],
-        set_={
-          "created_at": func.now(),
-          "confidence": confidence
-        }
-      ).
-      returning(VideoAdditionalTopic)
-    )
-    result = await self._session.execute(stmt)
-
-    return result.scalar_one()
-
-
   async def create_translation(self, topic_id: UUID, lang: str, value: str) -> TopicTranslation:
     stmt = (
       insert(TopicTranslation).
@@ -122,45 +81,6 @@ class TopicRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalar_one()
-
-  async def find_topic_pairs(self) -> list[TopicPairWithCount]:
-    t = aliased(Topic)
-    a = aliased(Topic)
-    stmt = (
-      select(
-        t.id.label("main_topic_id"),
-        t.name.label("main_topic_name"),
-        a.id.label("additional_topic_id"),
-        a.name.label("additional_topic_name"),
-        func.count(VideoAdditionalTopic.video_id).label("video_count"),
-      )
-      .join(t, t.id == VideoAdditionalTopic.main_topic_id)
-      .join(a, a.id == VideoAdditionalTopic.additional_topic_id)
-      .group_by(t.id, t.name, a.id, a.name)
-      .order_by(desc("video_count"))
-    )
-
-    rows = await self._session.execute(stmt)
-    return [
-      TopicPairWithCount(
-        main_topic_id=r.main_topic_id,
-        main_topic_name=r.main_topic_name,
-        additional_topic_id=r.additional_topic_id,
-        additional_topic_name=r.additional_topic_name,
-        total_videos=r.video_count
-      )
-      for r in rows
-    ]
-
-  async def find_topics_without_challenges(self, min_videos: int) -> list[TopicWithVideoCount]:
-    stmt = self._base_total_videos_query()
-    stmt = stmt.where(Topic.last_challenges_created_at.is_(None))
-
-    if min_videos:
-      stmt = stmt.having(func.count(Video.id) >= min_videos)
-
-    result = await self._session.execute(stmt)
-    return self._parse_total_videos_result(result)
 
   async def get_total_videos_per_topic(self,
                                        author_id: UUID | None = None,

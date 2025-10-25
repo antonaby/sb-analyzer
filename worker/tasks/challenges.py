@@ -27,20 +27,3 @@ def produce_challenge_translations(job_id: UUID) -> dict:
 
   result = loop.run_until_complete(challenge_translation_processor.run(job_id))
   return result.model_dump(mode="json")
-
-
-@worker_app.task
-def generate_challenges() -> dict:
-  from worker.tasks.deps import loop, async_db
-  from core.processors.jobs import create_challenge_gen_jobs
-
-  job_ids = loop.run_until_complete(create_challenge_gen_jobs(async_db))
-  if len(job_ids) > 0:
-    tasks = [generate_challenges_for_topic.s(job_id) for job_id in job_ids]
-    processing_job = group(tasks)
-    processing_job.apply_async()
-
-  return {
-    "ok": True,
-    "total_topics": len(job_ids)
-  }

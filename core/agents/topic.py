@@ -14,22 +14,11 @@ class TopicName(BaseModel):
   name: str
 
 
-class AdditionalTopic(BaseModel):
-  id: UUID
-  name: str
-  confidence: float
-  reason: str
-
-  class Config:  # type: ignore
-    extra = "forbid"
-
-
 class MainTopic(BaseModel):
   id: UUID
   name: str
   confidence: float
   reason: str
-  additional: list[AdditionalTopic]
 
   class Config:  # type: ignore
     extra = "forbid"

@@ -375,13 +375,5 @@ class TopicProcessor(BaseVideoProcessor):
           AssignedTopic(topic_id=t.id, name=t.name, confidence=t.confidence)
         )
 
-        for at in t.additional:
-          await topic_repo.assign_additional_topic(
-            main_topic_id=t.id,
-            additional_topic_id=at.id,
-            video_id=video.id,
-            confidence=at.confidence
-          )
-
       await session.commit()
       return TopicProcessorResult(video_id=video.id, topics=assigned_topics)

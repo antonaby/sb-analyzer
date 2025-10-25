@@ -31,30 +31,21 @@ Inputs:
 
 You job:
 1) Identify topics of the provided video.
-2) Pick some main topics from the provided list of topics. A video may belong to several  topics. Don't create new topics. Only topics from the list are allowed.
-3) For each main topic suggest 1-5 additional topics that add extra details to the main topic. Don't create new topics. Only topics from the list are allowed.
-4) For each main topic and additional topic calculate "confidence". (Follow "Compute Confidence" section)
-5) Be conservative, don't pick a topic if "confidence" is less than 0.6.
-6) Return only JSON:
+2) Pick some topics from the provided list of topics. A video may belong to several topics. Don't create new topics. Only topics from the list are allowed.
+3) For each topic calculate "confidence". (Follow "Compute Confidence" section)
+4) Be conservative, don't pick a topic if "confidence" is less than 0.6.
+5) Return only JSON:
 {
   "topics": [
     {
       "id": <UUID: id of the topic from the list>,
-      "name": <string: name of main topic>,
+      "name": <string: name of topic from the list>,
       "confidence": <float>,
-      "reason": <string: a reason why this topic is picked (3 sentences max)>
-      "additional": [
-        {
-          "id": <UUID: id of the topic from the list>,
-          "name": <string: name of additional topic>,
-          "confidence": <float>,
-          "reason": <string: a reason why this topic is picked (3 sentences max)>
-        }
-      ]
+      "reason": <string: a reason why this topic is picked (1 sentence)>
     }
   ]
 }
-7) Be careful with topic ids. The topic id must match with the one from the provided list of topics.
+6) Be careful with topic ids. The topic id must match with the one from the provided list of topics.
 
 Compute Confidence:
 Compute a confidence in [0.0, 1.0] based on:

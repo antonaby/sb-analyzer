@@ -12,7 +12,7 @@ from db.conf import Base
 from .enums import VideoSource, MetaSource, AnnotationKind
 
 if TYPE_CHECKING:
-  from .topics import Topic, VideoTopic, VideoAdditionalTopic
+  from .topics import Topic, VideoTopic
   from .authors import Author
   from .hashtags import Hashtag, VideoHashtag
   from .searches import Search, VideoSearch
@@ -104,18 +104,6 @@ class Video(Base):
   topics: Mapped[list["Topic"]] = relationship(
     secondary="video_topics",
     back_populates="videos",
-    viewonly=True,
-  )
-  video_additional_topics: Mapped[list["VideoAdditionalTopic"]] = relationship(
-    back_populates="video",
-    cascade="all, delete-orphan",
-    passive_deletes=True,
-  )
-  additional_topics: Mapped[list["Topic"]] = relationship(
-    secondary="video_additional_topics",
-    primaryjoin="Video.id == foreign(VideoAdditionalTopic.video_id)",
-    secondaryjoin="Topic.id == foreign(VideoAdditionalTopic.additional_topic_id)",
-    back_populates="videos_as_additional",
     viewonly=True,
   )
   challenge_videos: Mapped[list["ChallengeVideo"]] = relationship(

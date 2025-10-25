@@ -61,20 +61,3 @@ async def create_challenge_translation_jobs(challenges: list[CreatedChallenge], 
 
     await session.commit()
     return job_ids
-
-
-async def create_challenge_gen_jobs(db: async_sessionmaker[AsyncSession]) -> list[UUID]:
-  async with db() as session:
-    job_repo = JobRepository(session)
-    topic_repo = TopicRepository(session)
-    topics = await topic_repo.find_topics_without_challenges(min_videos=40)
-
-    job_ids: list[UUID] = []
-    for topic in topics:
-      job_meta = ChallengeGenJob(topic_id=topic.id)
-      job = await job_repo.create_job(CHALLENGE_GEN_JOB_NAME, job_meta)
-      job_ids.append(job.id)
-
-
-    await session.commit()
-    return job_ids

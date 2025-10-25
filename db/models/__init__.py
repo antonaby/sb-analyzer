@@ -11,10 +11,10 @@ from .jobs import *
 
 __all__ = [
   "VideoSource", "MetaSource", "AnnotationKind",
-  "Topic", "VideoTopic", "VideoAdditionalTopic", "TopicTranslation",
+  "Topic", "VideoTopic", "TopicTranslation",
   "Video", "VideoMeta", "VideoAnnotation", "ScrapedData",
   "Author",
-  "Challenge", "ChallengeTranslation", "ChallengeVideo", "ChallengeGroup",
+  "Challenge", "ChallengeTranslation", "ChallengeVideo",
   "Hashtag", "VideoHashtag",
   "Search", "VideoSearch",
   "Job"
