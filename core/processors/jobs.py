@@ -2,7 +2,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
-from core.processors.challenge import CreatedChallenge
+from core.processors.challenge import ChallengeDetails
 from core.processors.common import SavedPost
 from core.processors.scraper import ApidojoScraperRun
 from core.processors.video import ProcessedVideo
@@ -49,7 +49,7 @@ async def create_categorize_job(video: ProcessedVideo, db: async_sessionmaker[As
     return post_process_job.id
 
 
-async def create_challenge_translation_jobs(challenges: list[CreatedChallenge], db: async_sessionmaker[AsyncSession]) -> list[UUID]:
+async def create_challenge_translation_jobs(challenges: list[ChallengeDetails], db: async_sessionmaker[AsyncSession]) -> list[UUID]:
   async with db() as session:
     job_repo = JobRepository(session)
     job_ids: list[UUID] = []

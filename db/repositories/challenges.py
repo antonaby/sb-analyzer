@@ -90,7 +90,7 @@ class ChallengeRepository(BaseAsyncRepo):
     split = [" & ".join(k.split()) for k in keywords]
     query = " | ".join(split)
 
-    ts_query = func.plainto_tsquery("english", query)
+    ts_query = func.to_tsquery("english", query)
 
     stmt = (
       select(Challenge).
@@ -101,7 +101,6 @@ class ChallengeRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalars().all()
-
 
   async def commit(self):
     await self._session.commit()

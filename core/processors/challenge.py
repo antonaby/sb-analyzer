@@ -5,20 +5,20 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from core.agents.challenge import ChallengeGenAgent, ChallengeGenAgentRun, ChallengeGenAgentResponse
 from core.processors.common import JobProcessor
-from db.models import Challenge
 from db.repositories.challenges import ChallengeRepository
 from db.repositories.helpers import full_video_data, TextVideoData
 from db.repositories.jobs import CHALLENGE_GEN_JOB_NAME, ChallengeGenJob
 from db.repositories.videos import VideoRepository
 
 
-class CreatedChallenge(BaseModel):
+class ChallengeDetails(BaseModel):
   id: UUID
   name: str
+  is_new: bool
 
 
 class ChallengeProcessorResult(BaseModel):
-  challenges: list[CreatedChallenge]
+  challenges: list[ChallengeDetails]
 
 
 class ChallengeProcessorError(Exception):
@@ -61,7 +61,7 @@ class ChallengeProcessor(JobProcessor):
       return video_data
 
   async def _save_challenges(self, job_meta: ChallengeGenJob, agent_response: ChallengeGenAgentResponse) -> ChallengeProcessorResult:
-    total_challenges: list[Challenge] = []
+    total_challenges: list[ChallengeDetails] = []
     async with self._db() as session:
       challenge_repo = ChallengeRepository(session)
       await challenge_repo.unassign_videos(job_meta.pattern_group_id, job_meta.video_id)
@@ -70,12 +70,16 @@ class ChallengeProcessor(JobProcessor):
         challenge_model = await challenge_repo.create_challenge(
           group_id=job_meta.pattern_group_id, name=c.name, pattern_used=c.pattern
         )
-        total_challenges.append(challenge_model)
+        total_challenges.append(
+          ChallengeDetails(id=challenge_model.id, name=challenge_model.name, is_new=True)
+        )
 
       for c in agent_response.existing:
         challenge_model = await challenge_repo.get_challenge(c.id) if c.id is not None else None
         if challenge_model is not None:
-          total_challenges.append(challenge_model)
+          total_challenges.append(
+            ChallengeDetails(id=challenge_model.id, name=challenge_model.name, is_new=False)
+          )
 
       for c in total_challenges:
         await challenge_repo.add_video(c.id, job_meta.video_id)
@@ -83,5 +87,5 @@ class ChallengeProcessor(JobProcessor):
       await session.commit()
 
     return ChallengeProcessorResult(
-      challenges=[CreatedChallenge(id=c.id, name=c.name) for c in total_challenges]
+      challenges=total_challenges
     )
