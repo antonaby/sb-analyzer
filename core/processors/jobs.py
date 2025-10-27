@@ -8,8 +8,7 @@ from core.processors.scraper import ApidojoScraperRun
 from core.processors.video import ProcessedVideo
 from db.repositories.jobs import JobRepository, ApidojoPostProcessorJob, APIDOJO_POST_PROCESSOR_JOB_NAME, \
   ProcessVideoJob, PROCESS_VIDEO_JOB_NAME, CategorizationVideoJob, CATEGORIZATION_VIDEO_JOB_NAME, TranslationJob, \
-  CHALLENGE_TRANSLATION_JOB_NAME, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob
-from db.repositories.topics import TopicRepository
+  CHALLENGE_TRANSLATION_JOB_NAME
 
 
 async def create_apidojo_post_process_job(scraper_run: ApidojoScraperRun, db: async_sessionmaker[AsyncSession]) -> UUID:

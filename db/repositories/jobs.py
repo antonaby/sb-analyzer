@@ -32,7 +32,6 @@ class ChallengeGenJob(BaseModel):
   video_id: UUID
   pattern_group_id: UUID
 
-TOPIC_TRANSLATION_JOB_NAME = "topic.translation"
 CHALLENGE_TRANSLATION_JOB_NAME = "challenge.translation"
 class TranslationJob(BaseModel):
   target_id: UUID

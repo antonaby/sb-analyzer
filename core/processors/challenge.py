@@ -1,3 +1,4 @@
+from datetime import timezone, datetime
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -5,6 +6,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from core.agents.challenge import ChallengeGenAgent, ChallengeGenAgentRun, ChallengeGenAgentResponse
 from core.processors.common import JobProcessor
+from db.models import Video
 from db.repositories.challenges import ChallengeRepository
 from db.repositories.helpers import full_video_data, TextVideoData
 from db.repositories.jobs import CHALLENGE_GEN_JOB_NAME, ChallengeGenJob
@@ -33,22 +35,26 @@ class ChallengeProcessor(JobProcessor):
 
   async def run(self, job_id: UUID) -> ChallengeProcessorResult:
     job = await self.start_job(job_id, CHALLENGE_GEN_JOB_NAME)
+    job_meta: ChallengeGenJob | None = None
     try:
       job_meta = ChallengeGenJob(**job.meta)
-      video_data = await self._get_video_data(job_meta)
+      video, video_data = await self._get_video_data(job_meta)
 
       run_input = ChallengeGenAgentRun(video=video_data, pattern_group_id=job_meta.pattern_group_id)
       agent_response = await self._challenge_agent.run(run_input)
 
-      result = await self._save_challenges(job_meta, agent_response)
+      result = await self._save_challenges(video, job_meta, agent_response)
       await self.set_job_finished(job_id, False)
 
       return result
     except Exception as e:
+      if job_meta:
+        await self._set_challenges_creating_error(job_meta.video_id)
+
       await self.set_job_finished(job_id, True)
       raise e
 
-  async def _get_video_data(self, job_meta: ChallengeGenJob) -> TextVideoData:
+  async def _get_video_data(self, job_meta: ChallengeGenJob) -> tuple[Video, TextVideoData]:
 
     async with self._db() as session:
       video_repo = VideoRepository(session)
@@ -58,11 +64,21 @@ class ChallengeProcessor(JobProcessor):
       )
 
       video_data = full_video_data(video)
-      return video_data
+      return video, video_data
 
-  async def _save_challenges(self, job_meta: ChallengeGenJob, agent_response: ChallengeGenAgentResponse) -> ChallengeProcessorResult:
+  async def _set_challenges_creating_error(self, video_id: UUID):
+    async with self._db() as session:
+      video_repo = VideoRepository(session)
+      await video_repo.set_challenge_creating(video_id, True)
+      await session.commit()
+
+  async def _save_challenges(self, video: Video, job_meta: ChallengeGenJob, agent_response: ChallengeGenAgentResponse) -> ChallengeProcessorResult:
     total_challenges: list[ChallengeDetails] = []
     async with self._db() as session:
+      video = await session.merge(video, load=False)
+      video.challenges_created_at = datetime.now(timezone.utc)
+      video.challenges_creating_error = False
+
       challenge_repo = ChallengeRepository(session)
       await challenge_repo.unassign_videos(job_meta.pattern_group_id, job_meta.video_id)
 

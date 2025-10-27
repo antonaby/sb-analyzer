@@ -9,7 +9,7 @@ from core.agents.summary import SummaryAgent
 from core.agents.topic import TopicAgent
 from core.agents.translation import TranslationAgent
 from core.processors.challenge import ChallengeProcessor
-from core.processors.translations import ChallengeTranslationProcessor, TopicTranslationProcessor
+from core.processors.translations import ChallengeTranslationProcessor
 from core.processors.scraper import ApidojoScrapperProcessor, ApidojoPostProcessor
 from core.processors.video import VideoProcessor, TopicProcessor
 from core.transcribe import LemonfoxClient
@@ -46,6 +46,5 @@ apidojo_processor = ApidojoScrapperProcessor(apify_client, async_db)
 apidojo_post_processor = ApidojoPostProcessor(apify_client, async_db)
 challenge_processor = ChallengeProcessor(challenge_agent, async_db)
 challenge_translation_processor = ChallengeTranslationProcessor(translation_agent, async_db)
-topic_translation_processor = TopicTranslationProcessor(translation_agent, async_db)
 video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_db, "./videos")
 topic_processor = TopicProcessor(topic_agent, async_db)

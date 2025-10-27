@@ -48,6 +48,8 @@ class Video(Base):
   processing_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
   categorized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
   categorization_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+  challenges_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+  challenges_creating_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
   created_at: Mapped[datetime] = mapped_column(
     DateTime(timezone=True),

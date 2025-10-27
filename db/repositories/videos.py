@@ -208,6 +208,10 @@ class VideoRepository(BaseAsyncRepo):
     stmt = update(Video).where(Video.id == video_id).values(categorized_at=func.now(), categorization_error=with_error)
     await self._session.execute(stmt)
 
+  async def set_challenge_creating(self, video_id: UUID, with_error: bool):
+    stmt = update(Video).where(Video.id == video_id).values(challenges_created_at=func.now(), challenges_creating_error=with_error)
+    await self._session.execute(stmt)
+
   async def upsert_hashtag(self, name: str, source: VideoSource) -> Hashtag:
     stmt = (
       pg_insert(Hashtag)

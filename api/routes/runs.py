@@ -10,11 +10,10 @@ from api.deps import get_job_repo
 from apify.tiktok.apidojo import DateRange, SortType
 from db.repositories.jobs import JobRepository, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob, TranslationJob, \
   CHALLENGE_TRANSLATION_JOB_NAME, APIDOJO_SCRAPER_JOB_NAME, ApidojoScraperJob, PROCESS_VIDEO_JOB_NAME, ProcessVideoJob, \
-  CATEGORIZATION_VIDEO_JOB_NAME, CategorizationVideoJob, TOPIC_TRANSLATION_JOB_NAME
-from worker.tasks.challenges import generate_challenges_for_topic, produce_challenge_translations
+  CATEGORIZATION_VIDEO_JOB_NAME, CategorizationVideoJob
 from worker.tasks.apidojo import run_apidojo_scraper
-from worker.tasks.videos import process_video, categorize_video, translate_topic
-
+from worker.tasks.challenges import generate_challenges_for_topic, produce_challenge_translations
+from worker.tasks.videos import process_video, categorize_video
 
 router = APIRouter(
   prefix="/runs",
