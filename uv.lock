@@ -1282,6 +1282,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/4b/5f/0803848cc5ce524ff830e5f2a2f1400fd6ee72be705d87d0432cec42b1e4/logfire-4.13.2-py3-none-any.whl", hash = "sha256:887e99897a1818864aa5bfc595b02c93264ce23d1860866369eff6b6e2dde1c6", size = 228152, upload-time = "2025-10-13T16:17:50.641Z" },
 ]
 
+[package.optional-dependencies]
+celery = [
+    { name = "opentelemetry-instrumentation-celery" },
+]
+
 [[package]]
 name = "logfire-api"
 version = "4.13.2"
@@ -1700,6 +1705,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f6/36/7c307d9be8ce4ee7beb86d7f1d31027f2a6a89228240405a858d6e4d64f9/opentelemetry_instrumentation-0.58b0.tar.gz", hash = "sha256:df640f3ac715a3e05af145c18f527f4422c6ab6c467e40bd24d2ad75a00cb705", size = 31549, upload-time = "2025-09-11T11:42:14.084Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d4/db/5ff1cd6c5ca1d12ecf1b73be16fbb2a8af2114ee46d4b0e6d4b23f4f4db7/opentelemetry_instrumentation-0.58b0-py3-none-any.whl", hash = "sha256:50f97ac03100676c9f7fc28197f8240c7290ca1baa12da8bfbb9a1de4f34cc45", size = 33019, upload-time = "2025-09-11T11:41:00.624Z" },
+]
+
+[[package]]
+name = "opentelemetry-instrumentation-celery"
+version = "0.58b0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-instrumentation" },
+    { name = "opentelemetry-semantic-conventions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3b/57/eded8d4059e9a9e15c607fba4619df12b55693023d7ba41e39a451951e7c/opentelemetry_instrumentation_celery-0.58b0.tar.gz", hash = "sha256:1dc35c3a8b82649659da0057df57740a8b3656492ad915da68b8f5f1b7a208e9", size = 14768, upload-time = "2025-09-11T11:42:27.96Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9a/ad/7ac0da3ef9ae2239ae7a6bc586e25d359e29c4a7137491129e92135de589/opentelemetry_instrumentation_celery-0.58b0-py3-none-any.whl", hash = "sha256:e8be21bffadef30487fb351466e3b48c3aa0d45065af2e4515ab7d6f98bfda6e", size = 13806, upload-time = "2025-09-11T11:41:19.676Z" },
 ]
 
 [[package]]
@@ -2422,7 +2441,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "celery", extra = ["redis"] },
-    { name = "logfire" },
+    { name = "logfire", extra = ["celery"] },
     { name = "pydantic" },
     { name = "python-dotenv" },
 ]
@@ -2460,7 +2479,7 @@ worker = [
 [package.metadata]
 requires-dist = [
     { name = "celery", extras = ["redis"], specifier = ">=5.5.3" },
-    { name = "logfire", specifier = ">=4.13.2" },
+    { name = "logfire", extras = ["celery"], specifier = ">=4.13.2" },
     { name = "pydantic", specifier = ">=2.11.9" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
 ]
