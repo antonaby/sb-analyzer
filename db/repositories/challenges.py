@@ -71,5 +71,22 @@ class ChallengeRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one()
 
+  async def search_challenges(self, pattern_group: UUID, keywords: list[str]) -> Sequence[Challenge]:
+    split = [" & ".join(k.split()) for k in keywords]
+    query = " | ".join(split)
+
+    ts_query = func.plainto_tsquery("english", query)
+
+    stmt = (
+      select(Challenge).
+      where(
+        (Challenge.group_id == pattern_group) & Challenge.name_tsv.op("@@")(ts_query)
+      )
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalars().all()
+
+
   async def commit(self):
     await self._session.commit()

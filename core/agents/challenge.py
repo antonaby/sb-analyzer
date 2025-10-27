@@ -1,22 +1,51 @@
 import logging
+from dataclasses import dataclass
+from uuid import UUID
 
 from openai import BaseModel
-from pydantic_ai import Agent, ModelSettings
+from pydantic_ai import Agent, ModelSettings, RunContext
 from pydantic_ai.models import Model
+from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from core.agents.common import TemplateManager
+from db.repositories.challenges import ChallengeRepository
 from db.repositories.helpers import TextVideoData
+
+
+class ChallengeData(BaseModel):
+  id: UUID
+  name: str
+  pattern: str
+
+
+class ChallengeLoader:
+
+  def __init__(self, db: async_sessionmaker[AsyncSession]):
+    self._db = db
+
+  async def load_patterns(self, pattern_group_id: UUID) -> list[str]:
+    async with self._db() as session:
+      challenge_repo = ChallengeRepository(session)
+      patterns = await challenge_repo.get_challenge_patterns(pattern_group_id)
+      return [f"{p.value} {p.example}" for p in patterns]
+
+  async def search_challenges(self, pattern_group_id: UUID, keywords: list[str]) -> list[ChallengeData]:
+    async with self._db() as session:
+      challenge_repo = ChallengeRepository(session)
+      challenges = await challenge_repo.search_challenges(pattern_group_id, keywords)
+      return [ChallengeData(id=c.id, name=c.name, pattern=c.pattern_used) for c in challenges]
 
 
 class ChallengeGenAgentRun(BaseModel):
   video: TextVideoData
-  patterns: list[str]
+  pattern_group_id: UUID
 
   class Config:  # type: ignore
     extra = "forbid"
 
 
 class Challenge(BaseModel):
+  id: UUID | None
   name: str
   pattern: str
 
@@ -30,30 +59,52 @@ class ChallengeGenAgentResponse(BaseModel):
   class Config:  # type: ignore
     extra = "forbid"
 
+@dataclass
+class ChallengeAgentDeps:
+  pattern_group_id: UUID
+  challenge_loader: ChallengeLoader
+
 
 class ChallengeGenAgent:
 
-  def __init__(self, model: Model, model_settings: ModelSettings, tpl_mgr: TemplateManager):
+  def __init__(self, model: Model, model_settings: ModelSettings, challenge_loader: ChallengeLoader, tpl_mgr: TemplateManager):
     self._log = logging.getLogger("app.challenge_gen_agent")
     self._tpl_mgr = tpl_mgr
+    self._challenge_loader = challenge_loader
 
     agent = Agent(
       model,
       model_settings=model_settings,
       instructions=self._tpl_mgr.render("challenge_gen_system", {}),
-      output_type=ChallengeGenAgentResponse
+      output_type=ChallengeGenAgentResponse,
+      deps_type=ChallengeAgentDeps
     )
     self._agent = agent
 
+    @agent.tool
+    async def search_challenges(ctx: RunContext[ChallengeAgentDeps], keywords: list[str]) -> list[ChallengeData]:
+      """
+      Retrieves a list of existing challenges that contain the keywords in the name.
+
+      Args:
+        keywords (list[str]): a list of keywords to search.
+      """
+
+      result = await ctx.deps.challenge_loader.search_challenges(ctx.deps.pattern_group_id, keywords)
+      return result
+
   async def run(self, run: ChallengeGenAgentRun, temperature: float = 0.0) -> ChallengeGenAgentResponse:
+    patterns = await self._challenge_loader.load_patterns(run.pattern_group_id)
+
     user_prompt = self._tpl_mgr.render("challenge_gen_user", {
-      "patterns": run.patterns,
+      "patterns": patterns,
       "video": run.video.model_dump(mode="json")
     })
 
     res = await self._agent.run(
       user_prompt,
-      model_settings=ModelSettings(temperature=temperature)
+      model_settings=ModelSettings(temperature=temperature),
+      deps=ChallengeAgentDeps(pattern_group_id=run.pattern_group_id, challenge_loader=self._challenge_loader)
     )
 
     usage = res.usage()
