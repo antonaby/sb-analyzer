@@ -1,5 +1,4 @@
 import logging
-from uuid import UUID
 
 from openai import BaseModel
 from pydantic_ai import Agent, ModelSettings
@@ -10,33 +9,16 @@ from db.repositories.helpers import TextVideoData
 
 
 class ChallengeGenAgentRun(BaseModel):
-  topic: str
-  languages: list[str]
-  videos: list[TextVideoData]
-
-  class Config:  # type: ignore
-    extra = "forbid"
-
-
-class ChallengeName(BaseModel):
-  lang: str
-  name: str
-
-  class Config:  # type: ignore
-    extra = "forbid"
-
-
-class VideoChallenge(BaseModel):
-  id: UUID
-  reason: str
+  video: TextVideoData
+  patterns: list[str]
 
   class Config:  # type: ignore
     extra = "forbid"
 
 
 class Challenge(BaseModel):
-  translations: list[ChallengeName]
-  videos: list[VideoChallenge]
+  name: str
+  pattern: str
 
   class Config:  # type: ignore
     extra = "forbid"
@@ -64,7 +46,10 @@ class ChallengeGenAgent:
     self._agent = agent
 
   async def run(self, run: ChallengeGenAgentRun, temperature: float = 0.1) -> ChallengeGenAgentResponse:
-    user_prompt = self._tpl_mgr.render("only_input", {"input": run.model_dump(mode="json")})
+    user_prompt = self._tpl_mgr.render("challenge_gen_user", {
+      "patterns": run.patterns,
+      "video": run.video.model_dump(mode="json")
+    })
 
     res = await self._agent.run(
       user_prompt,
