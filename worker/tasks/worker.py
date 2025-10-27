@@ -1,4 +1,12 @@
-from celery.signals import worker_process_init, worker_shutting_down
+import logfire
+from celery.signals import worker_init, worker_process_init, worker_shutting_down
+
+
+@worker_init.connect()
+def init_worker(*args, **kwargs):
+  logfire.configure(service_name="worker")
+  logfire.instrument_celery()
+  logfire.instrument_pydantic_ai()
 
 
 @worker_process_init.connect
