@@ -3,7 +3,7 @@ import asyncio
 from dotenv import load_dotenv
 
 from apify.client import ApifyClient
-from core.agents.challenge import ChallengeGenAgent
+from core.agents.challenge import ChallengeGenAgent, ChallengeLoader
 from core.agents.common import TemplateManager, gpt_5_nano, medium_effort_gpt_5, gemini_2_5_flash_lite
 from core.agents.summary import SummaryAgent
 from core.agents.topic import TopicAgent
@@ -32,10 +32,11 @@ clip_tagger_client = ClipTaggerClient()
 lemonfox_client = LemonfoxClient()
 
 # Agents Common
+challenge_loader = ChallengeLoader(async_db)
 template_manager = TemplateManager()
 
 # Agents
-challenge_agent = ChallengeGenAgent(gpt_5_nano(), medium_effort_gpt_5(), template_manager)
+challenge_agent = ChallengeGenAgent(gpt_5_nano(), medium_effort_gpt_5(), challenge_loader, template_manager)
 translation_agent = TranslationAgent(gemini_2_5_flash_lite(), template_manager)
 summary_agent = SummaryAgent(gpt_5_nano(), template_manager)
 topic_agent = TopicAgent(gpt_5_nano(), medium_effort_gpt_5(), template_manager)

@@ -109,19 +109,6 @@ async def run_challenge_translation(
   )
 
 
-@router.post("/topic/translate")
-async def run_challenge_translation(
-    request: TranslationJob,
-    job_repo: JobRepository = Depends(get_job_repo)
-) -> JobRunDetails:
-  return await _run_job_by_id(
-    translate_topic, # type: ignore[attr-defined]
-    TOPIC_TRANSLATION_JOB_NAME,
-    request,
-    job_repo
-  )
-
-
 async def _run_job_by_id(delay_func: Task, job_name: str, meta: BaseModel, job_repo: JobRepository) -> JobRunDetails:
   job = await job_repo.create_job(job_name, meta)
   await job_repo.commit()
