@@ -1,12 +1,12 @@
 from typing import Sequence
 from uuid import UUID
 
-from sqlalchemy import insert, func, select
+from sqlalchemy import insert, func, select, delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, aliased
 
-from db.models import Challenge, ChallengeTranslation, ChallengeVideo, ChallengePattern
+from db.models import Challenge, ChallengeTranslation, ChallengeVideo, ChallengePattern, Video
 from db.repositories.common import BaseAsyncRepo, regconfig_for
 
 
@@ -21,7 +21,7 @@ class ChallengeRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalars().all()
 
-  async def get_challenge(self, challenge_id: UUID, with_translations: bool = True) -> Challenge | None:
+  async def get_challenge(self, challenge_id: UUID, with_translations: bool = False) -> Challenge | None:
     stmt = select(Challenge).where(Challenge.id == challenge_id)
 
     if with_translations:
@@ -30,10 +30,10 @@ class ChallengeRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.unique().scalar_one_or_none()
 
-  async def create_challenge(self, topic_id: UUID, name: str) -> Challenge:
+  async def create_challenge(self, group_id: UUID, name: str, pattern_used: str) -> Challenge:
     stmt = (
       insert(Challenge).
-      values(topic_id=topic_id, name=name).
+      values(group_id=group_id, name=name, pattern_used=pattern_used).
       returning(Challenge)
     )
 
@@ -54,6 +54,21 @@ class ChallengeRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalar_one()
+
+  async def unassign_videos(self, challenge_group_id: UUID, video_id: UUID):
+    cv = aliased(ChallengeVideo)
+    c = aliased(Challenge)
+    v = aliased(Video)
+
+    stmt = (
+      delete(cv).
+      where(cv.challenge_id == c.id).
+      where(cv.video_id == v.id).
+      where(
+        (c.group_id == challenge_group_id) & (v.id == video_id)
+      )
+    )
+    await self._session.execute(stmt)
 
   async def add_video(self, challenge_id: UUID, video_id: UUID) -> ChallengeVideo:
     stmt = (

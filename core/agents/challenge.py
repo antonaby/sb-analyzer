@@ -12,6 +12,31 @@ from db.repositories.challenges import ChallengeRepository
 from db.repositories.helpers import TextVideoData
 
 
+class ChallengeGenAgentRun(BaseModel):
+  video: TextVideoData
+  pattern_group_id: UUID
+
+  class Config:  # type: ignore
+    extra = "forbid"
+
+
+class ChallengeProposal(BaseModel):
+  id: UUID | None
+  name: str
+  pattern: str
+
+  class Config:  # type: ignore
+    extra = "forbid"
+
+
+class ChallengeGenAgentResponse(BaseModel):
+  existing: list[ChallengeProposal]
+  new: list[ChallengeProposal]
+
+  class Config:  # type: ignore
+    extra = "forbid"
+
+
 class ChallengeData(BaseModel):
   id: UUID
   name: str
@@ -35,29 +60,6 @@ class ChallengeLoader:
       challenges = await challenge_repo.search_challenges(pattern_group_id, keywords)
       return [ChallengeData(id=c.id, name=c.name, pattern=c.pattern_used) for c in challenges]
 
-
-class ChallengeGenAgentRun(BaseModel):
-  video: TextVideoData
-  pattern_group_id: UUID
-
-  class Config:  # type: ignore
-    extra = "forbid"
-
-
-class Challenge(BaseModel):
-  id: UUID | None
-  name: str
-  pattern: str
-
-  class Config:  # type: ignore
-    extra = "forbid"
-
-
-class ChallengeGenAgentResponse(BaseModel):
-  challenges: list[Challenge]
-
-  class Config:  # type: ignore
-    extra = "forbid"
 
 @dataclass
 class ChallengeAgentDeps:

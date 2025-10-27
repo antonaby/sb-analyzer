@@ -28,26 +28,30 @@ Inputs:
 You job:
 1) Read the video description carefully
 2) Call "search_challenges" to find existing challenges in DB. Use only keywords rather than full sentences.
-3) Check if some of challenges returned by "search_challenges" fit the video. (The video can be an answer to the challenge). Add those challenges to the final list.
+3) Check if some of existing challenges returned by "search_challenges" fit the video. (The video can be an answer to the challenge). Add those challenges to the final list.
 Challenges may fit not only semantically, but also share the same concept with the video.
 4) Check if there is something more in the video description that is not covered by the existing challenges:
   a) Pick challenge patterns from the list that fit the most.
   b) Generate new challenges that cover uncovered things. Follow "Challenge Generating Rules" section. The provided video must be an answer to the all generated challenges.
-  c) Add those challenges to the final list
+  c) Add those new challenges to the final list
 5) Return only JSON:
 {
-  "challenges": [
+  "existing": [
     {
-      "id": <UUID or null>
-      "name": "<string>",
-      "pattern": "<string>"
+      "id": "id of the challenge returned by "search_challenges" (mast be a valid UUID)"
+      "name": "the challenge (copy-paste as is from the output of "search_challenges"),
+      "pattern": "the pattern (copy-paste as is from the output of "search_challenges")
+    }
+  ],
+  "new": [
+    {
+      "name": "the formatted challenge",
+      "pattern": "the pattern (copy-paste as is from the pattern list)"
     }
   ]
 }
-where:
-- id: id of the challenge returned by "search_challenges" (mast be a valid UUID) or NULL if the challenge is generated for uncovered things
-- name: the challenge (copy-paste as is from the output of "search_challenges" or format challenge name based on the picked pattern)
-- pattern: the pattern (copy-paste as is from the output of "search_challenges" or from the pattern list for generated challenges)
+Note: ID is not required for the "new" list
+
 
 Challenge Generating Rules:
 1) Use ONLY provided patterns, don't add extra challenges.

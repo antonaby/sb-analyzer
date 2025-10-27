@@ -29,7 +29,8 @@ class CategorizationVideoJob(BaseModel):
 
 CHALLENGE_GEN_JOB_NAME = "challenge.gen"
 class ChallengeGenJob(BaseModel):
-  topic_id: UUID
+  video_id: UUID
+  pattern_group_id: UUID
 
 TOPIC_TRANSLATION_JOB_NAME = "topic.translation"
 CHALLENGE_TRANSLATION_JOB_NAME = "challenge.translation"
