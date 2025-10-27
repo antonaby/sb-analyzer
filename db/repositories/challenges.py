@@ -1,3 +1,4 @@
+from typing import Sequence
 from uuid import UUID
 
 from sqlalchemy import insert, func, select
@@ -5,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from db.models import Challenge, ChallengeTranslation, ChallengeVideo
+from db.models import Challenge, ChallengeTranslation, ChallengeVideo, ChallengePattern
 from db.repositories.common import BaseAsyncRepo, regconfig_for
 
 
@@ -13,6 +14,12 @@ class ChallengeRepository(BaseAsyncRepo):
 
   def __init__(self, session: AsyncSession):
     self._session = session
+
+  async def get_challenge_patterns(self, challenge_pattern_group_id: UUID) -> Sequence[ChallengePattern]:
+    stmt = select(ChallengePattern).where(ChallengePattern.group_id == challenge_pattern_group_id)
+
+    result = await self._session.execute(stmt)
+    return result.scalars().all()
 
   async def get_challenge(self, challenge_id: UUID, with_translations: bool = True) -> Challenge | None:
     stmt = select(Challenge).where(Challenge.id == challenge_id)

@@ -45,7 +45,7 @@ class ChallengeGenAgent:
     )
     self._agent = agent
 
-  async def run(self, run: ChallengeGenAgentRun, temperature: float = 0.1) -> ChallengeGenAgentResponse:
+  async def run(self, run: ChallengeGenAgentRun, temperature: float = 0.0) -> ChallengeGenAgentResponse:
     user_prompt = self._tpl_mgr.render("challenge_gen_user", {
       "patterns": run.patterns,
       "video": run.video.model_dump(mode="json")
