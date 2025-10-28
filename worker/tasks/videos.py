@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from worker.main import worker_app
-from worker.tasks.challenges import generate_challenges_for_topic
+from worker.tasks.challenges import generate_challenges_for_video
 
 
 @worker_app.task
@@ -16,7 +16,7 @@ def process_video(job_id: UUID):
   challenge_creating_job_id = loop.run_until_complete(
     create_challenge_creating_job(processed_video, UUID("249b2e88-b302-11f0-bc33-7f2eac94b24a"), async_db)
   )
-  generate_challenges_for_topic.delay(challenge_creating_job_id)
+  generate_challenges_for_video.delay(challenge_creating_job_id)
 
   return processed_video.model_dump(mode="json")
 

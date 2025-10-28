@@ -10,9 +10,9 @@ from api.deps import get_job_repo
 from apify.tiktok.apidojo import DateRange, SortType
 from db.repositories.jobs import JobRepository, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob, TranslationJob, \
   CHALLENGE_TRANSLATION_JOB_NAME, APIDOJO_SCRAPER_JOB_NAME, ApidojoScraperJob, PROCESS_VIDEO_JOB_NAME, ProcessVideoJob, \
-  VIDEO_CATEGORIZATION_JOB_NAME, VideoCategorizationJob
+  VIDEO_CATEGORIZATION_JOB_NAME, VideoCategorizationJob, ChallengeCategorizationJob, CHALLENGE_CATEGORIZATION_JOB_NAME
 from worker.tasks.apidojo import run_apidojo_scraper
-from worker.tasks.challenges import generate_challenges_for_topic, produce_challenge_translations
+from worker.tasks.challenges import generate_challenges_for_video, produce_challenge_translations, categorize_challenge
 from worker.tasks.videos import process_video, categorize_video
 
 router = APIRouter(
@@ -88,7 +88,7 @@ async def collect_videos(request: ApidojoCollectUrls, job_repo: JobRepository = 
 @router.post("/challenge/gen")
 async def run_challenge_gen(request: ChallengeGenJob, job_repo: JobRepository = Depends(get_job_repo)) -> JobRunDetails:
   return await _run_job_by_id(
-    generate_challenges_for_topic,  # type: ignore[attr-defined]
+    generate_challenges_for_video,  # type: ignore[attr-defined]
     CHALLENGE_GEN_JOB_NAME,
     request,
     job_repo
@@ -103,6 +103,19 @@ async def run_challenge_translation(
   return await _run_job_by_id(
     produce_challenge_translations, # type: ignore[attr-defined]
     CHALLENGE_TRANSLATION_JOB_NAME,
+    request,
+    job_repo
+  )
+
+
+@router.post("/challenge/categorize")
+async def run_challenge_translation(
+    request: ChallengeCategorizationJob,
+    job_repo: JobRepository = Depends(get_job_repo)
+) -> JobRunDetails:
+  return await _run_job_by_id(
+    categorize_challenge, # type: ignore[attr-defined]
+    CHALLENGE_CATEGORIZATION_JOB_NAME,
     request,
     job_repo
   )
