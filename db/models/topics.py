@@ -11,6 +11,7 @@ from db.conf import Base
 
 if TYPE_CHECKING:
   from .videos import Video
+  from .challenges import ChallengeTopic, Challenge
 
 
 class Topic(Base):
@@ -26,6 +27,16 @@ class Topic(Base):
     default=func.now(), nullable=False
   )
 
+  challenge_topics: Mapped[list["ChallengeTopic"]] = relationship(
+    back_populates="topic",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+  challenges: Mapped[list["Challenge"]] = relationship(
+    secondary="challenge_topics",
+    back_populates="topics",
+    viewonly=True,
+  )
   video_topics: Mapped[list["VideoTopic"]] = relationship(
     back_populates="topic",
     cascade="all, delete-orphan",

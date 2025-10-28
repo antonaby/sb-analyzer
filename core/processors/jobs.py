@@ -7,7 +7,7 @@ from core.processors.common import SavedPost
 from core.processors.scraper import ApidojoScraperRun
 from core.processors.video import ProcessedVideo
 from db.repositories.jobs import JobRepository, ApidojoPostProcessorJob, APIDOJO_POST_PROCESSOR_JOB_NAME, \
-  ProcessVideoJob, PROCESS_VIDEO_JOB_NAME, CategorizationVideoJob, CATEGORIZATION_VIDEO_JOB_NAME, TranslationJob, \
+  ProcessVideoJob, PROCESS_VIDEO_JOB_NAME, VideoCategorizationJob, VIDEO_CATEGORIZATION_JOB_NAME, TranslationJob, \
   CHALLENGE_TRANSLATION_JOB_NAME, ChallengeGenJob, CHALLENGE_GEN_JOB_NAME
 
 
@@ -40,10 +40,10 @@ async def create_video_processing_jobs(posts: list[SavedPost], db: async_session
 async def create_categorize_job(video: ProcessedVideo, db: async_sessionmaker[AsyncSession]) -> UUID:
   async with db() as session:
     job_repo = JobRepository(session)
-    meta = CategorizationVideoJob(
+    meta = VideoCategorizationJob(
       video_id=video.video_id
     )
-    post_process_job = await job_repo.create_job(CATEGORIZATION_VIDEO_JOB_NAME, meta)
+    post_process_job = await job_repo.create_job(VIDEO_CATEGORIZATION_JOB_NAME, meta)
     await session.commit()
     return post_process_job.id
 

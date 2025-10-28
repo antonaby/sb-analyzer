@@ -14,8 +14,8 @@ from core.transcribe import FileAudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, FileVideoData, Frame
 from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
 from db.repositories.helpers import full_video_data
-from db.repositories.jobs import PROCESS_VIDEO_JOB_NAME, ProcessVideoJob, CATEGORIZATION_VIDEO_JOB_NAME, \
-  CategorizationVideoJob
+from db.repositories.jobs import PROCESS_VIDEO_JOB_NAME, ProcessVideoJob, VIDEO_CATEGORIZATION_JOB_NAME, \
+  VideoCategorizationJob
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
 
@@ -324,10 +324,10 @@ class TopicProcessor(BaseVideoProcessor):
     self._topic_agent = topic_agent
 
   async def run(self, job_id: UUID) -> TopicProcessorResult:
-    job = await self.start_job(job_id, CATEGORIZATION_VIDEO_JOB_NAME)
-    job_meta: CategorizationVideoJob | None = None
+    job = await self.start_job(job_id, VIDEO_CATEGORIZATION_JOB_NAME)
+    job_meta: VideoCategorizationJob | None = None
     try:
-      job_meta = CategorizationVideoJob(**job.meta)
+      job_meta = VideoCategorizationJob(**job.meta)
       video = await self._find_video(job_meta.video_id, with_scraped_data=True, with_annotations=True, with_meta=True)
 
       if not video.processed_at or video.processing_error:

@@ -7,7 +7,7 @@ from sqlalchemy import (
   String,
   DateTime,
   func,
-  text, Integer, Computed, Index
+  text, Computed, Index, Float, Boolean
 )
 from sqlalchemy.dialects.postgresql import UUID, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -16,6 +16,7 @@ from db.conf import Base
 
 if TYPE_CHECKING:
   from .videos import Video
+  from .topics import Topic
 
 
 class ChallengePatternGroup(Base):
@@ -94,6 +95,9 @@ class Challenge(Base):
   )
   pattern_used: Mapped[str] = mapped_column(String(1024), nullable=False)
   translated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+  difficulty: Mapped[float] = mapped_column(Float, nullable=True)
+  categorized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+  categorization_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
   created_at: Mapped[datetime] = mapped_column(
     DateTime(timezone=True),
@@ -106,6 +110,16 @@ class Challenge(Base):
 
   group: Mapped["ChallengePatternGroup"] = relationship(back_populates="challenges")
 
+  challenge_topics: Mapped[list["ChallengeTopic"]] = relationship(
+    back_populates="challenge",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+  topics: Mapped[list["Topic"]] = relationship(
+    secondary="challenge_topics",
+    back_populates="challenges",
+    viewonly=True,
+  )
   translations: Mapped[list["ChallengeTranslation"]] = relationship(
     back_populates="challenge",
     cascade="all, delete-orphan",
@@ -174,3 +188,28 @@ class ChallengeVideo(Base):
 
   challenge: Mapped["Challenge"] = relationship(back_populates="challenge_videos")
   video: Mapped["Video"] = relationship(back_populates="challenge_videos")
+
+
+class ChallengeTopic(Base):
+  __tablename__ = "challenge_topics"
+
+  topic_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("topics.id", ondelete="CASCADE"),
+    nullable=False,
+    primary_key=True,
+  )
+  challenge_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("challenges.id", ondelete="CASCADE"),
+    nullable=False,
+    primary_key=True,
+  )
+
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
+
+  challenge: Mapped["Challenge"] = relationship(back_populates="challenge_topics")
+  topic: Mapped["Topic"] = relationship(back_populates="challenge_topics")

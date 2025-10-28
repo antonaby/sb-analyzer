@@ -23,14 +23,18 @@ class ProcessVideoJob(BaseModel):
   video_id: UUID
   delete_downloaded_files: bool
 
-CATEGORIZATION_VIDEO_JOB_NAME = "video.categorization"
-class CategorizationVideoJob(BaseModel):
+VIDEO_CATEGORIZATION_JOB_NAME = "video.categorization"
+class VideoCategorizationJob(BaseModel):
   video_id: UUID
 
 CHALLENGE_GEN_JOB_NAME = "challenge.gen"
 class ChallengeGenJob(BaseModel):
   video_id: UUID
   pattern_group_id: UUID
+
+CHALLENGE_CATEGORIZATION_JOB_NAME = "challenge.categorization"
+class ChallengeCategorizationJob(BaseModel):
+  challenge_id: UUID
 
 CHALLENGE_TRANSLATION_JOB_NAME = "challenge.translation"
 class TranslationJob(BaseModel):

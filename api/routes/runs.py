@@ -10,7 +10,7 @@ from api.deps import get_job_repo
 from apify.tiktok.apidojo import DateRange, SortType
 from db.repositories.jobs import JobRepository, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob, TranslationJob, \
   CHALLENGE_TRANSLATION_JOB_NAME, APIDOJO_SCRAPER_JOB_NAME, ApidojoScraperJob, PROCESS_VIDEO_JOB_NAME, ProcessVideoJob, \
-  CATEGORIZATION_VIDEO_JOB_NAME, CategorizationVideoJob
+  VIDEO_CATEGORIZATION_JOB_NAME, VideoCategorizationJob
 from worker.tasks.apidojo import run_apidojo_scraper
 from worker.tasks.challenges import generate_challenges_for_topic, produce_challenge_translations
 from worker.tasks.videos import process_video, categorize_video
@@ -59,8 +59,8 @@ async def run_process_video(request: ProcessVideoRequest, job_repo: JobRepositor
 async def run_categorize_video(request: ProcessVideoRequest, job_repo: JobRepository = Depends(get_job_repo)) -> JobRunDetails:
   return await _run_job_by_id(
     categorize_video,  # type: ignore[attr-defined]
-    CATEGORIZATION_VIDEO_JOB_NAME,
-    CategorizationVideoJob(video_id=request.video_id),
+    VIDEO_CATEGORIZATION_JOB_NAME,
+    VideoCategorizationJob(video_id=request.video_id),
     job_repo
   )
 

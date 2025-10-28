@@ -4,12 +4,16 @@ from uuid import UUID
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
-from core.agents.challenge import ChallengeGenAgent, ChallengeGenAgentRun, ChallengeGenAgentResponse
+from core.agents.challenge import ChallengeGenAgent, ChallengeGenAgentRun, ChallengeGenAgentResponse, \
+  ChallengeCategoryAgent, ChallengeCategoryAgentRun, ChallengeCategoryAgentResponse
+from core.agents.common import TopicName
 from core.processors.common import JobProcessor
-from db.models import Video
+from db.models import Video, Challenge
 from db.repositories.challenges import ChallengeRepository
 from db.repositories.helpers import full_video_data, TextVideoData
-from db.repositories.jobs import CHALLENGE_GEN_JOB_NAME, ChallengeGenJob
+from db.repositories.jobs import CHALLENGE_GEN_JOB_NAME, ChallengeGenJob, CHALLENGE_CATEGORIZATION_JOB_NAME, \
+  ChallengeCategorizationJob
+from db.repositories.topics import TopicRepository
 from db.repositories.videos import VideoRepository
 
 
@@ -105,3 +109,53 @@ class ChallengeProcessor(JobProcessor):
     return ChallengeProcessorResult(
       challenges=total_challenges
     )
+
+
+class ChallengeCategoryProcessor(JobProcessor):
+
+  def __init__(self, challenge_cat_agent: ChallengeCategoryAgent, session_maker: async_sessionmaker[AsyncSession]):
+    super().__init__(session_maker)
+    self._agent = challenge_cat_agent
+
+  async def run(self, job_id: UUID):
+    job = await self.start_job(job_id, CHALLENGE_CATEGORIZATION_JOB_NAME)
+    job_meta: ChallengeCategorizationJob | None = None
+
+    try:
+      job_meta = ChallengeCategorizationJob(**job.meta)
+      challenge, topics = await self._get_challenge(job_meta)
+
+      run_input = ChallengeCategoryAgentRun(challenge=challenge.name, topics=topics)
+      agent_response = await self._agent.run(run_input)
+
+      result = await self._save_categories(job_meta, agent_response)
+      await self.set_job_finished(job_id, False)
+
+      return result
+    except Exception as e:
+      if job_meta:
+        await self._set_challenges_categorization_error(job_meta.challenge_id)
+
+      await self.set_job_finished(job_id, True)
+      raise e
+
+  async def _set_challenges_categorization_error(self, challenge_id: UUID):
+    pass
+
+  async def _get_challenge(self, job_meta: ChallengeCategorizationJob) -> tuple[Challenge, list[TopicName]]:
+    async with self._db() as session:
+      challenge_repo = ChallengeRepository(session)
+      challenge = await challenge_repo.get_challenge(job_meta.challenge_id, with_translations=False)
+      if not challenge:
+        raise ChallengeProcessorError(f"Challenge {job_meta.challenge_id} not found")
+
+      topic_repo = TopicRepository(session)
+      all_topics = await topic_repo.get_all_topics()
+      topic_names = [TopicName(id=t.id, name=t.name) for t in all_topics]
+
+      return challenge, topic_names
+
+  async def _save_categories(self,
+                             job_meta: ChallengeCategorizationJob,
+                             agent_response: ChallengeCategoryAgentResponse):
+    pass
