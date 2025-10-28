@@ -1,3 +1,4 @@
+import logfire
 from fastapi import FastAPI
 
 from api.deps import *
@@ -6,6 +7,8 @@ from db.conf import test_db_conn
 
 
 app = FastAPI(title="SB VideoAnalyzer API", version="0.0.0")
+logfire.instrument_fastapi(app)
+
 app.include_router(authors.router)
 app.include_router(videos.router)
 app.include_router(jobs.router)

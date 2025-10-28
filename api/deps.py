@@ -1,3 +1,4 @@
+import logfire
 from dotenv import load_dotenv
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,8 +12,10 @@ from db.repositories.videos import VideoRepository
 
 
 load_dotenv()
+logfire.configure(service_name="api")
 
 db_engine = create_db_engine()
+logfire.instrument_sqlalchemy(engine=db_engine)
 AsyncSessionLocal = get_async_session(db_engine)
 
 async def get_async_db():

@@ -1,5 +1,6 @@
 import asyncio
 
+import logfire
 from dotenv import load_dotenv
 
 from apify.client import ApifyClient
@@ -24,6 +25,7 @@ loop = asyncio.new_event_loop()
 
 # Async DB
 engine = create_db_engine()
+logfire.instrument_sqlalchemy(engine=engine)
 async_db = get_async_session(engine)
 
 # Clients
