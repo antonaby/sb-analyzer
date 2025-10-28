@@ -6,11 +6,15 @@ from pydantic import BaseModel
 from sqlalchemy import insert, func, select, delete, update, and_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, aliased
+from sqlalchemy.orm import joinedload, aliased, selectinload, with_loader_criteria
 
-from db.models import Challenge, ChallengeTranslation, ChallengeVideo, ChallengePattern, Video, VideoTopic, \
-  ChallengeTopic, Topic
+from db.models import Challenge, ChallengeTranslation, ChallengeVideo, ChallengePattern, Video, ChallengeTopic, Topic
 from db.repositories.common import BaseAsyncRepo, regconfig_for
+
+
+class TranslationOnlyValue(BaseModel):
+  lang: str
+  value: str
 
 
 class ChallengeWithTopic(BaseModel):
@@ -20,6 +24,7 @@ class ChallengeWithTopic(BaseModel):
   difficulty: float
   topic_id: UUID
   topic_name: str
+  translations: list[TranslationOnlyValue]
 
 
 class ChallengeRepository(BaseAsyncRepo):
@@ -146,6 +151,7 @@ class ChallengeRepository(BaseAsyncRepo):
                                      topic_ids: list[UUID],
                                      min_difficulty: float | None = None,
                                      max_difficulty: float | None = None,
+                                     langs: list[str] | None = None,
                                      only_valid: bool = True) -> list[ChallengeWithTopic]:
     conditions = [
       Topic.id.in_(topic_ids)
@@ -169,32 +175,37 @@ class ChallengeRepository(BaseAsyncRepo):
       )
 
     stmt = (
-      select(
-        Challenge.id,
-        Challenge.name,
-        Challenge.created_at,
-        Challenge.difficulty,
-        Topic.id.label("topic_id"),
-        Topic.name.label("topic_name")
-      ).
+      select(Challenge, Topic).
       join(ChallengeTopic, ChallengeTopic.challenge_id == Challenge.id).
       join(Topic, ChallengeTopic.topic_id == Topic.id).
       where(*conditions).
       order_by(Challenge.created_at.desc())
     )
 
-    result = await self._session.execute(stmt)
-    return [
-      ChallengeWithTopic(
-        id=row.id,
-        name=row.name,
-        created_at=row.created_at,
-        difficulty=row.difficulty,
-        topic_id=row.topic_id,
-        topic_name=row.topic_name
+    if langs:
+      stmt = stmt.options(
+        selectinload(Challenge.translations),
+        with_loader_criteria(ChallengeTranslation, ChallengeTranslation.lang.in_(langs))
       )
-      for row in result
-    ]
+
+    result = await self._session.execute(stmt)
+    challenges: list[ChallengeWithTopic] = []
+    for challenge, topic in result.all():
+      translations: list[ChallengeTranslation] = challenge.translations if langs else []
+
+      challenges.append(
+        ChallengeWithTopic(
+          id=challenge.id,
+          name=challenge.name,
+          created_at=challenge.created_at,
+          difficulty=challenge.difficulty,
+          topic_id=topic.id,
+          topic_name=topic.name,
+          translations=[TranslationOnlyValue(lang=t.lang, value=t.value) for t in translations]
+        )
+      )
+
+    return challenges
 
   async def commit(self):
     await self._session.commit()
