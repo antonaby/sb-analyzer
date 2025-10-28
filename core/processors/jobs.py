@@ -1,11 +1,13 @@
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from core.processors.challenge import ChallengeDetails
 from core.processors.common import SavedPost
 from core.processors.scraper import ApidojoScraperRun
 from core.processors.video import ProcessedVideo
+from db.models import Challenge
 from db.repositories.jobs import JobRepository, ApidojoPostProcessorJob, APIDOJO_POST_PROCESSOR_JOB_NAME, \
   ProcessVideoJob, PROCESS_VIDEO_JOB_NAME, VideoCategorizationJob, VIDEO_CATEGORIZATION_JOB_NAME, TranslationJob, \
   CHALLENGE_TRANSLATION_JOB_NAME, ChallengeGenJob, CHALLENGE_GEN_JOB_NAME, ChallengeCategorizationJob, \
@@ -86,6 +88,27 @@ async def create_challenge_categorization_jobs(challenges: list[ChallengeDetails
         job_meta = ChallengeCategorizationJob(challenge_id=challenge.id)
         job = await job_repo.create_job(CHALLENGE_CATEGORIZATION_JOB_NAME, job_meta)
         job_ids.append(job.id)
+
+    await session.commit()
+    return job_ids
+
+
+async def adhoc_create_categorize_all_challenges_jobs(db: async_sessionmaker[AsyncSession]) -> list[UUID]:
+  async with db() as session:
+    job_repo = JobRepository(session)
+
+    stmt = select(Challenge).where(
+      Challenge.categorized_at.is_(None) | Challenge.categorization_error.is_(True)
+    )
+
+    rows = await session.execute(stmt)
+    challenges = rows.scalars().all()
+
+    job_ids: list[UUID] = []
+    for challenge in challenges:
+      job_meta = ChallengeCategorizationJob(challenge_id=challenge.id)
+      job = await job_repo.create_job(CHALLENGE_CATEGORIZATION_JOB_NAME, job_meta)
+      job_ids.append(job.id)
 
     await session.commit()
     return job_ids

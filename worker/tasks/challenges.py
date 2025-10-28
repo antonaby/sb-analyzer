@@ -43,3 +43,18 @@ def categorize_challenge(job_id: UUID) -> dict:
   result = loop.run_until_complete(challenge_category_processor.run(job_id))
   return result.model_dump(mode="json")
 
+
+@worker_app.task
+def adhoc_categorize_all_challenges() -> dict:
+  from worker.tasks.deps import loop, async_db
+  from core.processors.jobs import adhoc_create_categorize_all_challenges_jobs
+
+  job_ids = loop.run_until_complete(adhoc_create_categorize_all_challenges_jobs(async_db))
+  if len(job_ids) > 0:
+    tasks = [categorize_challenge.s(job_id) for job_id in job_ids]
+    c_processing_job = group(tasks)
+    c_processing_job.apply_async()
+
+  return {
+    "total_jobs": len(job_ids)
+  }

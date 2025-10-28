@@ -12,7 +12,7 @@ from db.repositories.jobs import JobRepository, CHALLENGE_GEN_JOB_NAME, Challeng
   CHALLENGE_TRANSLATION_JOB_NAME, APIDOJO_SCRAPER_JOB_NAME, ApidojoScraperJob, PROCESS_VIDEO_JOB_NAME, ProcessVideoJob, \
   VIDEO_CATEGORIZATION_JOB_NAME, VideoCategorizationJob, ChallengeCategorizationJob, CHALLENGE_CATEGORIZATION_JOB_NAME
 from worker.tasks.apidojo import run_apidojo_scraper
-from worker.tasks.challenges import generate_challenges_for_video, produce_challenge_translations, categorize_challenge
+from worker.tasks.challenges import generate_challenges_for_video, produce_challenge_translations, categorize_challenge, adhoc_categorize_all_challenges
 from worker.tasks.videos import process_video, categorize_video
 
 router = APIRouter(
@@ -119,6 +119,16 @@ async def run_challenge_translation(
     request,
     job_repo
   )
+
+
+@router.post("/adhoc/categorize-challenges")
+def adhoc_categorize_challenges():
+  job = adhoc_categorize_all_challenges.delay()
+
+  return {
+    "celery_job_id": job.id,
+    "celery_job_status": job.status
+  }
 
 
 async def _run_job_by_id(delay_func: Task, job_name: str, meta: BaseModel, job_repo: JobRepository) -> JobRunDetails:
