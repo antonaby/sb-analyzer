@@ -111,13 +111,18 @@ class ChallengeProcessor(JobProcessor):
     )
 
 
+class ChallengeCategoryProcessorResult(BaseModel):
+  topics: list[TopicName]
+  difficulty: float
+
+
 class ChallengeCategoryProcessor(JobProcessor):
 
   def __init__(self, challenge_cat_agent: ChallengeCategoryAgent, session_maker: async_sessionmaker[AsyncSession]):
     super().__init__(session_maker)
     self._agent = challenge_cat_agent
 
-  async def run(self, job_id: UUID):
+  async def run(self, job_id: UUID) -> ChallengeCategoryProcessorResult:
     job = await self.start_job(job_id, CHALLENGE_CATEGORIZATION_JOB_NAME)
     job_meta: ChallengeCategorizationJob | None = None
 
@@ -128,7 +133,7 @@ class ChallengeCategoryProcessor(JobProcessor):
       run_input = ChallengeCategoryAgentRun(challenge=challenge.name, topics=topics)
       agent_response = await self._agent.run(run_input)
 
-      result = await self._save_categories(job_meta, agent_response)
+      result = await self._save_categories(challenge, agent_response)
       await self.set_job_finished(job_id, False)
 
       return result
@@ -140,7 +145,10 @@ class ChallengeCategoryProcessor(JobProcessor):
       raise e
 
   async def _set_challenges_categorization_error(self, challenge_id: UUID):
-    pass
+    async with self._db() as session:
+      challenge_repo = ChallengeRepository(session)
+      await challenge_repo.set_challenge_categorization(challenge_id, True)
+      await session.commit()
 
   async def _get_challenge(self, job_meta: ChallengeCategorizationJob) -> tuple[Challenge, list[TopicName]]:
     async with self._db() as session:
@@ -156,6 +164,21 @@ class ChallengeCategoryProcessor(JobProcessor):
       return challenge, topic_names
 
   async def _save_categories(self,
-                             job_meta: ChallengeCategorizationJob,
-                             agent_response: ChallengeCategoryAgentResponse):
-    pass
+                             challenge: Challenge,
+                             agent_response: ChallengeCategoryAgentResponse) -> ChallengeCategoryProcessorResult:
+    async with self._db() as session:
+      challenge = await session.merge(challenge, load=False)
+      challenge.categorization_error = False
+      challenge.categorized_at = datetime.now(timezone.utc)
+      challenge.difficulty = agent_response.difficulty.total
+
+      challenge_repo = ChallengeRepository(session)
+      for topic in agent_response.topics:
+        await challenge_repo.add_topic(challenge.id, topic.id)
+
+      await session.commit()
+
+    return ChallengeCategoryProcessorResult(
+      topics=agent_response.topics,
+      difficulty=agent_response.difficulty.total
+    )

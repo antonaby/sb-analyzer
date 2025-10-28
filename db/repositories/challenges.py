@@ -3,12 +3,13 @@ from typing import Sequence
 from uuid import UUID
 
 from pydantic import BaseModel
-from sqlalchemy import insert, func, select, delete
+from sqlalchemy import insert, func, select, delete, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, aliased
 
-from db.models import Challenge, ChallengeTranslation, ChallengeVideo, ChallengePattern, Video, VideoTopic
+from db.models import Challenge, ChallengeTranslation, ChallengeVideo, ChallengePattern, Video, VideoTopic, \
+  ChallengeTopic
 from db.repositories.common import BaseAsyncRepo, regconfig_for
 
 
@@ -95,6 +96,26 @@ class ChallengeRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalar_one()
+
+  async def add_topic(self, challenge_id: UUID, topic_id: UUID) -> ChallengeTopic:
+    stmt = (
+      pg_insert(ChallengeTopic).
+      values(challenge_id=challenge_id, topic_id=topic_id).
+      on_conflict_do_update(  # type: ignore
+        index_elements=[ChallengeTopic.topic_id, ChallengeTopic.challenge_id],
+        set_={
+          "created_at": func.now()
+        }
+      ).
+      returning(ChallengeTopic)
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one()
+
+  async def set_challenge_categorization(self, challenge_id: UUID, with_error: bool):
+    stmt = update(Challenge).where(Challenge.id == challenge_id).values(categorized_at=func.now(), categorization_error=with_error)
+    await self._session.execute(stmt)
 
   async def search_challenges(self, pattern_group: UUID, keywords: list[str]) -> Sequence[Challenge]:
     split = [" & ".join(k.split()) for k in keywords]
