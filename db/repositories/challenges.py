@@ -17,6 +17,7 @@ class TranslatedChallenge(BaseModel):
   id: UUID
   name: str
   created_at: datetime
+  difficulty: float
   lang: str
   value: str
 
@@ -147,14 +148,14 @@ class ChallengeRepository(BaseAsyncRepo):
         Challenge.id,
         Challenge.name,
         Challenge.created_at,
+        Challenge.difficulty,
         ChallengeTranslation.lang,
         ChallengeTranslation.value,
       ).
       join(ChallengeTranslation, ChallengeTranslation.challenge_id == Challenge.id).
-      join(ChallengeVideo, ChallengeVideo.challenge_id == Challenge.id).
-      join(VideoTopic, VideoTopic.video_id == ChallengeVideo.video_id).
+      join(ChallengeTopic, ChallengeTopic.challenge_id == Challenge.id).
       where(
-        VideoTopic.topic_id.in_(topic_ids),
+        ChallengeTopic.topic_id.in_(topic_ids),
         ChallengeTranslation.lang == lang
       ).
       group_by(Challenge.id, ChallengeTranslation.id).
@@ -163,7 +164,14 @@ class ChallengeRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return [
-      TranslatedChallenge(id=row.id, name=row.name, created_at=row.created_at, lang=row.lang, value=row.value)
+      TranslatedChallenge(
+        id=row.id,
+        name=row.name,
+        created_at=row.created_at,
+        difficulty=row.difficulty,
+        lang=row.lang,
+        value=row.value
+      )
       for row in result
     ]
 
