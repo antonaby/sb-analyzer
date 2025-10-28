@@ -3,23 +3,23 @@ from typing import Sequence
 from uuid import UUID
 
 from pydantic import BaseModel
-from sqlalchemy import insert, func, select, delete, update
+from sqlalchemy import insert, func, select, delete, update, and_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, aliased
 
 from db.models import Challenge, ChallengeTranslation, ChallengeVideo, ChallengePattern, Video, VideoTopic, \
-  ChallengeTopic
+  ChallengeTopic, Topic
 from db.repositories.common import BaseAsyncRepo, regconfig_for
 
 
-class TranslatedChallenge(BaseModel):
+class ChallengeWithTopic(BaseModel):
   id: UUID
   name: str
   created_at: datetime
   difficulty: float
-  lang: str
-  value: str
+  topic_id: UUID
+  topic_name: str
 
 
 class ChallengeRepository(BaseAsyncRepo):
@@ -142,35 +142,56 @@ class ChallengeRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalars().all()
 
-  async def get_challenges_by_topics(self, topic_ids: list[UUID], lang: str) -> list[TranslatedChallenge]:
+  async def get_challenges_by_topics(self,
+                                     topic_ids: list[UUID],
+                                     min_difficulty: float | None = None,
+                                     max_difficulty: float | None = None,
+                                     only_valid: bool = True) -> list[ChallengeWithTopic]:
+    conditions = [
+      Topic.id.in_(topic_ids)
+    ]
+
+    if only_valid:
+      conditions.append(
+        and_(
+          Challenge.translated_at.isnot(None), Challenge.categorization_error.is_(False)
+        )
+      )
+
+    if min_difficulty:
+      conditions.append(
+        Challenge.difficulty >= min_difficulty
+      )
+
+    if max_difficulty:
+      conditions.append(
+        Challenge.difficulty <= max_difficulty
+      )
+
     stmt = (
       select(
         Challenge.id,
         Challenge.name,
         Challenge.created_at,
         Challenge.difficulty,
-        ChallengeTranslation.lang,
-        ChallengeTranslation.value,
+        Topic.id.label("topic_id"),
+        Topic.name.label("topic_name")
       ).
-      join(ChallengeTranslation, ChallengeTranslation.challenge_id == Challenge.id).
       join(ChallengeTopic, ChallengeTopic.challenge_id == Challenge.id).
-      where(
-        ChallengeTopic.topic_id.in_(topic_ids),
-        ChallengeTranslation.lang == lang
-      ).
-      group_by(Challenge.id, ChallengeTranslation.id).
+      join(Topic, ChallengeTopic.topic_id == Topic.id).
+      where(*conditions).
       order_by(Challenge.created_at.desc())
     )
 
     result = await self._session.execute(stmt)
     return [
-      TranslatedChallenge(
+      ChallengeWithTopic(
         id=row.id,
         name=row.name,
         created_at=row.created_at,
         difficulty=row.difficulty,
-        lang=row.lang,
-        value=row.value
+        topic_id=row.topic_id,
+        topic_name=row.topic_name
       )
       for row in result
     ]
