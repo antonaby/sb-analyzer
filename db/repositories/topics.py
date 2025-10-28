@@ -2,12 +2,12 @@ from typing import Sequence
 from uuid import UUID
 
 from pydantic import BaseModel
-from sqlalchemy import insert, select, text, func, delete, Select, Result
+from sqlalchemy import insert, select, text, func, delete, Select, Result, desc
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from db.models import Topic, Video, VideoTopic, TopicTranslation
+from db.models import Topic, Video, VideoTopic, TopicTranslation, ChallengeTopic
 from db.repositories.common import BaseAsyncRepo, regconfig_for
 
 TOPIC_LOCK_KEY: int = 1
@@ -16,7 +16,8 @@ TOPIC_LOCK_KEY: int = 1
 class TopicWithVideoCount(BaseModel):
   id: UUID
   name: str
-  total_videos: int
+  videos: int
+  challenges: int
 
 
 class TopicRepository(BaseAsyncRepo):
@@ -91,30 +92,46 @@ class TopicRepository(BaseAsyncRepo):
       stmt = stmt.where(Video.author_id == author_id)
 
     if min_videos:
-      stmt = stmt.having(func.count(Video.id) >= min_videos)
+      stmt = stmt.having(func.count(VideoTopic.video_id) >= min_videos)
 
     result = await self._session.execute(stmt)
     return self._parse_total_videos_result(result)
 
   @staticmethod
   def _base_total_videos_query() -> Select:
+    video_counts = (
+      select(VideoTopic.topic_id, func.count().label("total_videos")).
+      group_by(VideoTopic.topic_id).
+      subquery()
+    )
+
+    challenge_counts = (
+      select(ChallengeTopic.topic_id, func.count().label("total_challenges")).
+      group_by(ChallengeTopic.topic_id).
+      subquery()
+    )
+
     return (
       select(
-          Topic.id,
-          Topic.name,
-          func.count(Video.id).label("total_videos")
+        Topic.id,
+        Topic.name,
+        video_counts.c.total_videos,
+        challenge_counts.c.total_challenges,
       ).
-      select_from(Topic).
-      join(VideoTopic, Topic.id == VideoTopic.topic_id, isouter=True).
-      join(Video, Video.id == VideoTopic.video_id, isouter=True).
-      group_by(Topic.id).
-      order_by(func.count(Video.id).desc())
+      join(video_counts, video_counts.c.topic_id == Topic.id, isouter=True).
+      join(challenge_counts, challenge_counts.c.topic_id == Topic.id, isouter=True).
+      order_by(video_counts.c.total_videos.desc().nullslast())
     )
 
   @staticmethod
   def _parse_total_videos_result(result: Result) -> list[TopicWithVideoCount]:
     return [
-      TopicWithVideoCount(id=row.id, name=row.name, total_videos=row.total_videos)
+      TopicWithVideoCount(
+        id=row.id,
+        name=row.name,
+        videos=row.total_videos if row.total_videos else 0,
+        challenges=row.total_challenges if row.total_challenges else 0
+      )
       for row in result
     ]
   

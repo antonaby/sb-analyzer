@@ -3,6 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from db.models import VideoSource
+from db.repositories.topics import TopicWithVideoCount
 
 
 class CreateTopicRequest(BaseModel):
@@ -37,15 +38,9 @@ class UnprocessedVideos(BaseModel):
   videos: list[VideoProcessingStatus]
   
 
-class TopicsShort(BaseModel):
-  id: UUID
-  name: str
-  total_videos: int
-  
-
 class TotalTopics(BaseModel):
   total: int
-  topics: list[TopicsShort]
+  topics: list[TopicWithVideoCount]
 
 
 class VideoShort(BaseModel):
@@ -73,4 +68,4 @@ class AuthorDetails(BaseModel):
   created_at: datetime
   updated_at: datetime
   videos: list[VideoShort]
-  topics: list[TopicsShort]
+  topics: list[TopicWithVideoCount]

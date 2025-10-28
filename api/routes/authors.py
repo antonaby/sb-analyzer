@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from api.deps import *
 from api.models import AuthorDetails
-from api.routes.common import to_topic_shorts, to_video_shorts
+from api.routes.common import to_video_shorts
 from db.models import Author, AnnotationKind, MetaSource
 
 router = APIRouter(
@@ -54,7 +54,7 @@ async def get_author(
 
   author_details = to_author_details(author)
   author_details.videos = to_video_shorts(list(videos))
-  author_details.topics = to_topic_shorts(topics)
+  author_details.topics = topics
 
   return author_details
 
