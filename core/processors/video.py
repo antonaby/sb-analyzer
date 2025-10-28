@@ -6,7 +6,8 @@ from openai import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from core.agents.summary import SummaryAgent, VideoSummary
-from core.agents.topic import TopicAgent, MainTopic, TopicName
+from core.agents.topic import TopicAgent, MainTopic
+from core.agents.common import TopicName
 from core.file import AudioFile, UrlVideoSource, VideoFile, VideoSource
 from core.processors.common import JobProcessor, PostDetails
 from core.transcribe import FileAudioData, LemonfoxClient, Transcription

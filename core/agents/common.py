@@ -1,6 +1,8 @@
 import os
+from uuid import UUID
 
 from jinja2 import Environment, FileSystemLoader, Template
+from pydantic import BaseModel
 from pydantic_ai.models import Model
 from pydantic_ai.models.google import GoogleModel, GoogleModelSettings
 from pydantic_ai.models.openai import OpenAIResponsesModel, OpenAIResponsesModelSettings
@@ -72,3 +74,8 @@ class TemplateManager:
   def render(self, name: str, context: dict) -> str:
     tpl = self.get_template(name)
     return tpl.render(context)
+
+
+class TopicName(BaseModel):
+  id: UUID
+  name: str

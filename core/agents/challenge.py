@@ -7,7 +7,7 @@ from pydantic_ai import Agent, ModelSettings, RunContext
 from pydantic_ai.models import Model
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
-from core.agents.common import TemplateManager
+from core.agents.common import TemplateManager, TopicName
 from db.repositories.challenges import ChallengeRepository
 from db.repositories.helpers import TextVideoData
 
@@ -107,6 +107,71 @@ class ChallengeGenAgent:
       user_prompt,
       model_settings=ModelSettings(temperature=temperature),
       deps=ChallengeAgentDeps(pattern_group_id=run.pattern_group_id, challenge_loader=self._challenge_loader)
+    )
+
+    usage = res.usage()
+    self._log.debug(
+      f"Finish: summary request, input_tokens={usage.input_tokens}, output_tokens={usage.output_tokens}"
+    )
+
+    return res.output
+
+
+class ChallengeDifficultyPart(BaseModel):
+  name: str
+  value: float
+
+  class Config:  # type: ignore
+    extra = "forbid"
+
+
+class ChallengeDifficulty(BaseModel):
+  total: float
+  parts: list[ChallengeDifficultyPart]
+
+  class Config:  # type: ignore
+    extra = "forbid"
+
+
+class ChallengeCategoryAgentResponse(BaseModel):
+  topics: list[TopicName]
+  difficulty: ChallengeDifficulty
+
+  class Config:  # type: ignore
+    extra = "forbid"
+
+
+class ChallengeCategoryAgentRun(BaseModel):
+  challenge: str
+  topics: list[TopicName]
+
+  class Config:  # type: ignore
+    extra = "forbid"
+
+
+class ChallengeCategoryAgent:
+
+  def __init__(self, model: Model, model_settings: ModelSettings, tpl_mgr: TemplateManager):
+    self._log = logging.getLogger("app.challenge_category_agent")
+    self._tpl_mgr = tpl_mgr
+
+    agent = Agent(
+      model,
+      model_settings=model_settings,
+      instructions=self._tpl_mgr.render("challenge_category_system", {}),
+      output_type=ChallengeCategoryAgentResponse,
+    )
+    self._agent = agent
+
+  async def run(self, run: ChallengeCategoryAgentRun, temperature: float = 0.0) -> ChallengeCategoryAgentResponse:
+    user_prompt = self._tpl_mgr.render("challenge_category_user", {
+      "challenge": run.challenge,
+      "topics": [t.model_dump(mode="json") for t in run.topics],
+    })
+
+    res = await self._agent.run(
+      user_prompt,
+      model_settings=ModelSettings(temperature=temperature),
     )
 
     usage = res.usage()

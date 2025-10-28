@@ -5,13 +5,8 @@ from pydantic import BaseModel
 from pydantic_ai import Agent, ModelSettings
 from pydantic_ai.models import Model
 
-from core.agents.common import TemplateManager
+from core.agents.common import TemplateManager, TopicName
 from db.repositories.helpers import TextVideoData
-
-
-class TopicName(BaseModel):
-  id: UUID
-  name: str
 
 
 class MainTopic(BaseModel):
