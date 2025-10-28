@@ -153,7 +153,7 @@ class ChallengeCategoryProcessor(JobProcessor):
   async def _get_challenge(self, job_meta: ChallengeCategorizationJob) -> tuple[Challenge, list[TopicName]]:
     async with self._db() as session:
       challenge_repo = ChallengeRepository(session)
-      challenge = await challenge_repo.get_challenge(job_meta.challenge_id, with_translations=False)
+      challenge = await challenge_repo.get_challenge(job_meta.challenge_id)
       if not challenge:
         raise ChallengeProcessorError(f"Challenge {job_meta.challenge_id} not found")
 

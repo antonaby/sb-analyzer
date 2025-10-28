@@ -35,3 +35,10 @@ async def get_challenges_by_topic(
     total=len(challenges),
     challenges=challenges
   )
+
+
+@router.get("/{challenge_id}")
+async def get_challenge(challenge_id: UUID, challenge_repo: ChallengeRepository = Depends(get_challenge_repo)):
+  challenge = await challenge_repo.get_challenge(challenge_id, with_translations=True, with_videos=True)
+
+  return challenge

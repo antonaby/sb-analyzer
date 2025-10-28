@@ -8,7 +8,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, aliased, selectinload, with_loader_criteria
 
-from db.models import Challenge, ChallengeTranslation, ChallengeVideo, ChallengePattern, Video, ChallengeTopic, Topic
+from db.models import Challenge, ChallengeTranslation, ChallengeVideo, ChallengePattern, Video, ChallengeTopic, Topic, \
+  VideoTopic
 from db.repositories.common import BaseAsyncRepo, regconfig_for
 
 
@@ -22,6 +23,7 @@ class ChallengeWithTopic(BaseModel):
   name: str
   created_at: datetime
   difficulty: float
+  total_videos: int
   topic_id: UUID
   topic_name: str
   translations: list[TranslationOnlyValue]
@@ -38,11 +40,17 @@ class ChallengeRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalars().all()
 
-  async def get_challenge(self, challenge_id: UUID, with_translations: bool = False) -> Challenge | None:
+  async def get_challenge(self,
+                          challenge_id: UUID,
+                          with_translations: bool = False,
+                          with_videos: bool = False,
+                          ) -> Challenge | None:
     stmt = select(Challenge).where(Challenge.id == challenge_id)
 
     if with_translations:
       stmt = stmt.options(joinedload(Challenge.translations))
+    if with_videos:
+      stmt = stmt.options(selectinload(Challenge.videos))
 
     result = await self._session.execute(stmt)
     return result.unique().scalar_one_or_none()
@@ -151,18 +159,13 @@ class ChallengeRepository(BaseAsyncRepo):
                                      topic_ids: list[UUID],
                                      min_difficulty: float | None = None,
                                      max_difficulty: float | None = None,
-                                     langs: list[str] | None = None,
-                                     only_valid: bool = True) -> list[ChallengeWithTopic]:
+                                     langs: list[str] | None = None) -> list[ChallengeWithTopic]:
     conditions = [
-      Topic.id.in_(topic_ids)
-    ]
-
-    if only_valid:
-      conditions.append(
-        and_(
-          Challenge.translated_at.isnot(None), Challenge.categorization_error.is_(False)
-        )
+      Topic.id.in_(topic_ids),
+      and_(
+        Challenge.translated_at.isnot(None), Challenge.categorization_error.is_(False)
       )
+    ]
 
     if min_difficulty:
       conditions.append(
@@ -174,10 +177,19 @@ class ChallengeRepository(BaseAsyncRepo):
         Challenge.difficulty <= max_difficulty
       )
 
+    video_counts = (
+      select(ChallengeTopic.challenge_id, func.count(ChallengeVideo.video_id).label("total_videos")).
+      join(ChallengeVideo, ChallengeVideo.challenge_id == ChallengeTopic.challenge_id).
+      where(ChallengeTopic.topic_id.in_(topic_ids)).
+      group_by(ChallengeTopic.challenge_id).
+      subquery()
+    )
+
     stmt = (
-      select(Challenge, Topic).
+      select(Challenge, Topic, video_counts.c.total_videos).
       join(ChallengeTopic, ChallengeTopic.challenge_id == Challenge.id).
       join(Topic, ChallengeTopic.topic_id == Topic.id).
+      join(video_counts, video_counts.c.challenge_id == Challenge.id, isouter=True).
       where(*conditions).
       order_by(Challenge.created_at.desc())
     )
@@ -190,7 +202,7 @@ class ChallengeRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     challenges: list[ChallengeWithTopic] = []
-    for challenge, topic in result.all():
+    for challenge, topic, total_videos in result.all():
       translations: list[ChallengeTranslation] = challenge.translations if langs else []
 
       challenges.append(
@@ -199,6 +211,7 @@ class ChallengeRepository(BaseAsyncRepo):
           name=challenge.name,
           created_at=challenge.created_at,
           difficulty=challenge.difficulty,
+          total_videos=total_videos if total_videos else 0,
           topic_id=topic.id,
           topic_name=topic.name,
           translations=[TranslationOnlyValue(lang=t.lang, value=t.value) for t in translations]
