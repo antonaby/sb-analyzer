@@ -66,6 +66,14 @@ class ChallengeRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one()
 
+  async def delete_old_translations(self, challenge_id: UUID):
+    stmt = delete(ChallengeTranslation).where(ChallengeTranslation.challenge_id == challenge_id)
+    await self._session.execute(stmt)
+
+  async def delete_old_topics(self, challenge_id: UUID):
+    stmt = delete(ChallengeTopic).where(ChallengeTopic.challenge_id == challenge_id)
+    await self._session.execute(stmt)
+
   async def unassign_videos(self, challenge_group_id: UUID, video_id: UUID):
     cv = aliased(ChallengeVideo)
     c = aliased(Challenge)

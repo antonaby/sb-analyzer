@@ -74,6 +74,7 @@ class ChallengeTranslationProcessor(JobProcessor):
       challenge.translated_at = datetime.now(timezone.utc)
 
       challenge_repo = ChallengeRepository(session)
+      await challenge_repo.delete_old_translations(challenge.id)
 
       for t in agent_response.translations:
         t_model = await challenge_repo.create_translation(challenge.id, t.lang, t.text)

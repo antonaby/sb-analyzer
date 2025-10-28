@@ -173,6 +173,8 @@ class ChallengeCategoryProcessor(JobProcessor):
       challenge.difficulty = agent_response.difficulty.total
 
       challenge_repo = ChallengeRepository(session)
+      await challenge_repo.delete_old_topics(challenge.id)
+
       for topic in agent_response.topics:
         await challenge_repo.add_topic(challenge.id, topic.id)
 
