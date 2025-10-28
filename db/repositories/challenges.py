@@ -1,13 +1,23 @@
+from datetime import datetime
 from typing import Sequence
 from uuid import UUID
 
+from pydantic import BaseModel
 from sqlalchemy import insert, func, select, delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, aliased
 
-from db.models import Challenge, ChallengeTranslation, ChallengeVideo, ChallengePattern, Video
+from db.models import Challenge, ChallengeTranslation, ChallengeVideo, ChallengePattern, Video, VideoTopic
 from db.repositories.common import BaseAsyncRepo, regconfig_for
+
+
+class TranslatedChallenge(BaseModel):
+  id: UUID
+  name: str
+  created_at: datetime
+  lang: str
+  value: str
 
 
 class ChallengeRepository(BaseAsyncRepo):
@@ -101,6 +111,32 @@ class ChallengeRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalars().all()
+
+  async def get_challenges_by_topics(self, topic_ids: list[UUID], lang: str) -> list[TranslatedChallenge]:
+    stmt = (
+      select(
+        Challenge.id,
+        Challenge.name,
+        Challenge.created_at,
+        ChallengeTranslation.lang,
+        ChallengeTranslation.value,
+      ).
+      join(ChallengeTranslation, ChallengeTranslation.challenge_id == Challenge.id).
+      join(ChallengeVideo, ChallengeVideo.challenge_id == Challenge.id).
+      join(VideoTopic, VideoTopic.video_id == ChallengeVideo.video_id).
+      where(
+        VideoTopic.topic_id.in_(topic_ids),
+        ChallengeTranslation.lang == lang
+      ).
+      group_by(Challenge.id, ChallengeTranslation.id).
+      order_by(Challenge.created_at.desc())
+    )
+
+    result = await self._session.execute(stmt)
+    return [
+      TranslatedChallenge(id=row.id, name=row.name, created_at=row.created_at, lang=row.lang, value=row.value)
+      for row in result
+    ]
 
   async def commit(self):
     await self._session.commit()

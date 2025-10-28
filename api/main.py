@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from api.deps import *
-from api.routes import videos, jobs, queue, topics, authors, runs
+from api.routes import videos, jobs, queue, topics, authors, runs, challenges
 from db.conf import test_db_conn
 
 
@@ -12,7 +12,7 @@ app.include_router(jobs.router)
 app.include_router(queue.router)
 app.include_router(topics.router)
 app.include_router(runs.router)
-
+app.include_router(challenges.router)
 
 @app.get("/health")
 async def health(db: AsyncSession = Depends(get_async_db)):
