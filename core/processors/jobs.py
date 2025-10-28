@@ -8,7 +8,8 @@ from core.processors.scraper import ApidojoScraperRun
 from core.processors.video import ProcessedVideo
 from db.repositories.jobs import JobRepository, ApidojoPostProcessorJob, APIDOJO_POST_PROCESSOR_JOB_NAME, \
   ProcessVideoJob, PROCESS_VIDEO_JOB_NAME, VideoCategorizationJob, VIDEO_CATEGORIZATION_JOB_NAME, TranslationJob, \
-  CHALLENGE_TRANSLATION_JOB_NAME, ChallengeGenJob, CHALLENGE_GEN_JOB_NAME
+  CHALLENGE_TRANSLATION_JOB_NAME, ChallengeGenJob, CHALLENGE_GEN_JOB_NAME, ChallengeCategorizationJob, \
+  CHALLENGE_CATEGORIZATION_JOB_NAME
 
 
 async def create_apidojo_post_process_job(scraper_run: ApidojoScraperRun, db: async_sessionmaker[AsyncSession]) -> UUID:
@@ -66,9 +67,25 @@ async def create_challenge_translation_jobs(challenges: list[ChallengeDetails], 
     job_ids: list[UUID] = []
 
     for challenge in challenges:
-      job_meta = TranslationJob(target_id=challenge.id, langs=["ru", "fr", "de"])
-      job = await job_repo.create_job(CHALLENGE_TRANSLATION_JOB_NAME, job_meta)
-      job_ids.append(job.id)
+      if challenge.is_new:
+        job_meta = TranslationJob(target_id=challenge.id, langs=["ru", "fr", "de"])
+        job = await job_repo.create_job(CHALLENGE_TRANSLATION_JOB_NAME, job_meta)
+        job_ids.append(job.id)
+
+    await session.commit()
+    return job_ids
+
+
+async def create_challenge_categorization_jobs(challenges: list[ChallengeDetails], db: async_sessionmaker[AsyncSession]) -> list[UUID]:
+  async with db() as session:
+    job_repo = JobRepository(session)
+    job_ids: list[UUID] = []
+
+    for challenge in challenges:
+      if challenge.is_new:
+        job_meta = ChallengeCategorizationJob(challenge_id=challenge.id)
+        job = await job_repo.create_job(CHALLENGE_CATEGORIZATION_JOB_NAME, job_meta)
+        job_ids.append(job.id)
 
     await session.commit()
     return job_ids
