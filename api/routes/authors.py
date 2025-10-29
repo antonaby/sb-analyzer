@@ -5,8 +5,8 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from api.deps import *
-from api.routes.common import to_video_shorts, VideoShort
-from db.models import Author, AnnotationKind, MetaSource, VideoSource
+from db.models import Author, AnnotationKind, MetaSource
+from db.repositories.helpers import TextVideoData, full_video_data
 from db.repositories.topics import TopicWithVideoCount
 
 router = APIRouter(
@@ -25,8 +25,7 @@ class AuthorDetails(BaseModel):
   is_reviewed: bool
   created_at: datetime
   updated_at: datetime
-  videos: list[VideoShort] | None = Field(None)
-  topics: list[TopicWithVideoCount] | None = Field(None)
+  videos: list[TextVideoData] | None = Field(None)
 
 
 def to_author_details(author: Author) -> AuthorDetails:
@@ -71,7 +70,7 @@ async def get_authors(
   )
 
 
-@router.get("/{author_id}")
+@router.get("/{author_id}", response_model_exclude_none=True)
 async def get_author(
     author_id: UUID,
     max_videos: int = Query(20, description="Return N latest videos"),
@@ -88,15 +87,12 @@ async def get_author(
     load_annotations=True,
     annotations_to_load=[AnnotationKind.label, AnnotationKind.synopsis],
     load_meta=True,
-    meta_to_load=[MetaSource.title, MetaSource.hashtag],
+    meta_to_load=[MetaSource.title, MetaSource.description, MetaSource.hashtag],
     max_videos=max_videos
   )
 
-  topics = await topic_repo.get_total_videos_per_topic(author.id)
-
   author_details = to_author_details(author)
-  author_details.videos = to_video_shorts(list(videos))
-  author_details.topics = topics
+  author_details.videos = [full_video_data(v, include_processing_data=True) for v in videos]
 
   return author_details
 

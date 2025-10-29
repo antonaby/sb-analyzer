@@ -43,7 +43,7 @@ class TopicAgent:
   async def run(self, video: TextVideoData, topics: list[TopicName], temperature: float = 0) -> TopicAgentResponse:
     user_prompt = self._tpl_mgr.render("topic_user", {
       "topics": [t.model_dump(mode="json") for t in topics],
-      "video": video.model_dump(mode="json")
+      "video": video.model_dump(mode="json", exclude_none=True)
     })
 
     res = await self._agent.run(

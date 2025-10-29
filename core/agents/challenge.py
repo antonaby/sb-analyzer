@@ -100,7 +100,7 @@ class ChallengeGenAgent:
 
     user_prompt = self._tpl_mgr.render("challenge_gen_user", {
       "patterns": patterns,
-      "video": run.video.model_dump(mode="json")
+      "video": run.video.model_dump(mode="json", exclude_none=True)
     })
 
     res = await self._agent.run(
