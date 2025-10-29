@@ -1,6 +1,8 @@
 import os
 from urllib.parse import urlparse
 
+import logfire
+
 
 def var_or_exception(key: str) -> str:
   key_value = os.getenv(key)
@@ -13,6 +15,11 @@ def var_or_exception(key: str) -> str:
 def enable_logfire(default: bool = False):
   value = os.getenv("ENABLE_LOGFIRE", str(default))
   return value.strip().lower() in ("1", "true", "t", "yes", "y")
+
+
+def configure_logfire(service_name: str):
+  if enable_logfire():
+    logfire.configure(service_name=service_name)
 
 
 def is_url(s: str) -> bool:
