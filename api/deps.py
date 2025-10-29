@@ -9,10 +9,11 @@ from db.repositories.challenges import ChallengeRepository
 from db.repositories.jobs import JobRepository
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import VideoRepository
-
+from utils.common import enable_logfire
 
 load_dotenv()
-logfire.configure(service_name="api")
+if enable_logfire():
+  logfire.configure(service_name="api")
 
 db_engine = create_db_engine()
 logfire.instrument_sqlalchemy(engine=db_engine)

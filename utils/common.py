@@ -10,6 +10,11 @@ def var_or_exception(key: str) -> str:
   return key_value
 
 
+def enable_logfire(default: bool = False):
+  value = os.getenv("ENABLE_LOGFIRE", str(default))
+  return value.strip().lower() in ("1", "true", "t", "yes", "y")
+
+
 def is_url(s: str) -> bool:
   if not str or not s.strip():
     return False
