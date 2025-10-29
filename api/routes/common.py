@@ -9,6 +9,11 @@ class OkResponse(BaseModel):
   msg: str
 
 
+class CeleryJobDetails(BaseModel):
+  celery_job_id: str
+  celery_job_status: str
+
+
 def to_video_short(video: Video) -> VideoShort:
   title = "no title"
   label = "no label"

@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from core.processors.challenge import ChallengeDetails
-from core.processors.common import SavedPost
+from core.processors.common import SavedPost, JobProcessorError
 from core.processors.scraper import ApidojoScraperRun
 from core.processors.video import ProcessedVideo
 from db.models import Challenge, Job
@@ -47,6 +47,23 @@ class ScraperJobProcessor:
       scraper_job.last_job_id = exec_job.id
 
     return exec_jobs
+
+
+async def create_exec_job_for_scraper_job(scarper_job_id: UUID, db: async_sessionmaker[AsyncSession]) -> tuple[str, UUID]:
+  async with db() as session:
+    job_repo = JobRepository(session)
+    scraper_job = await job_repo.get_scraper_job(scarper_job_id)
+    if not scraper_job:
+      raise JobProcessorError(f"Scarper job {scarper_job_id} not found")
+
+    if scraper_job.scraper == APIDOJO_SCRAPER_NAME:
+      exec_job = await job_repo.create_job(APIDOJO_SCRAPER_JOB_NAME, scraper_job.meta)
+      scraper_job.last_job_id = exec_job.id
+      await session.commit()
+      return APIDOJO_SCRAPER_NAME, exec_job.id
+
+    raise JobProcessorError(f"Unknown scraper for job {scarper_job_id}")
+
 
 
 async def create_apidojo_post_process_job(scraper_run: ApidojoScraperRun, db: async_sessionmaker[AsyncSession]) -> UUID:

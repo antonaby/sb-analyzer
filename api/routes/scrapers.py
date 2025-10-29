@@ -5,10 +5,12 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel, Field
 
 from api.deps import get_job_repo
-from api.routes.common import OkResponse
+from api.routes.common import OkResponse, CeleryJobDetails
 from db.models import ScraperJob
 from db.repositories.jobs import ApidojoScrapperRun, JobRepository, ApidojoCollectUrls, APIDOJO_SCRAPER_NAME, \
   ApidojoScraperJob, JobRepositoryError
+from worker.tasks.scrapers import run_scraper
+
 
 router = APIRouter(
   prefix="/scrapers",
@@ -91,6 +93,16 @@ async def get_scraper_job(job_id: UUID, job_repo: JobRepository = Depends(get_jo
     raise HTTPException(404, f"Job {job_id} not found")
 
   return to_scraper_job_details(job)
+
+
+@router.post("/jobs/{job_id}/run")
+async def run_scraper_job(job_id: UUID, job_repo: JobRepository = Depends(get_job_repo)) -> CeleryJobDetails:
+  scraper_job = await job_repo.get_scraper_job(job_id)
+  if not scraper_job:
+    raise HTTPException(404, f"Job {job_id} not found")
+
+  job = run_scraper.delay(scraper_job.id)
+  return CeleryJobDetails(celery_job_id=job.id, celery_job_status=job.status)
 
 
 class ScraperJobUpdateRequest(BaseModel):
