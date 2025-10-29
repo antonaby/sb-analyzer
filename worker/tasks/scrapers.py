@@ -20,8 +20,9 @@ def run_scrapers() -> dict:
       for job in jobs:
         tasks.append(run_apidojo_scraper.si(job))
 
-  scraper_job = group(tasks)
-  scraper_job.apply_async()
+  if len(tasks) > 0:
+    scraper_job = group(tasks)
+    scraper_job.apply_async()
 
   return processor_result.model_dump(mode="json")
 

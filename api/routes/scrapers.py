@@ -24,6 +24,7 @@ class ScraperJobId(BaseModel):
 
 class ScraperJobDetails(BaseModel):
   id: UUID
+  enabled: bool
   scraper: str
   created_at: datetime
   updated_at: datetime
@@ -39,6 +40,7 @@ class ScraperJobs(BaseModel):
 def to_scraper_job_details(job: ScraperJob) -> ScraperJobDetails:
   return ScraperJobDetails(
     id=job.id,
+    enabled=job.enabled,
     scraper=job.scraper,
     created_at=job.created_at,
     updated_at=job.updated_at,
@@ -52,7 +54,7 @@ async def create_apidojo_search_scraper_job(
     request: ApidojoScrapperRun, job_repo: JobRepository = Depends(get_job_repo)
 ) -> ScraperJobId:
   scraper_job = await job_repo.create_scraper_job(
-    APIDOJO_SCRAPER_NAME, ApidojoScraperJob(func="search", args=request)
+    APIDOJO_SCRAPER_NAME, ApidojoScraperJob(func="search", args=request), enabled=True
   )
   await job_repo.commit()
 
@@ -64,7 +66,7 @@ async def create_apidojo_collect_scraper_job(
     request: ApidojoCollectUrls, job_repo: JobRepository = Depends(get_job_repo)
 ) -> ScraperJobId:
   scraper_job = await job_repo.create_scraper_job(
-    APIDOJO_SCRAPER_NAME, ApidojoScraperJob(func="collect_videos_by_urls", args=request)
+    APIDOJO_SCRAPER_NAME, ApidojoScraperJob(func="collect_videos_by_urls", args=request), enabled=True
   )
   await job_repo.commit()
 
@@ -108,6 +110,7 @@ async def run_scraper_job(job_id: UUID, job_repo: JobRepository = Depends(get_jo
 class ScraperJobUpdateRequest(BaseModel):
   scraper: str | None = Field(None, description="Scraper name")
   meta: ApidojoScraperJob | None = Field(None, description="Scraper job meta")
+  enabled: bool | None = Field(None, description="Enable or disable job")
 
 
 @router.put("/jobs/{job_id}")
@@ -117,7 +120,7 @@ async def update_scraper_job(
     job_repo: JobRepository = Depends(get_job_repo)
 ) -> ScraperJobDetails:
   try:
-    job = await job_repo.update_scraper_job(job_id, request.scraper, request.meta)
+    job = await job_repo.update_scraper_job(job_id, request.scraper, request.meta, request.enabled)
   except JobRepositoryError as e:
     raise HTTPException(400, f"At least some of fields must be provided")
 

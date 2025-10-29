@@ -78,11 +78,11 @@ class JobRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one()
 
-  async def create_scraper_job(self, scraper_name: str, meta: BaseModel | dict) -> ScraperJob:
+  async def create_scraper_job(self, scraper_name: str, meta: BaseModel | dict, enabled: bool = False) -> ScraperJob:
     if isinstance(meta, BaseModel):
       meta = meta.model_dump(mode="json")
 
-    stmt = insert(ScraperJob).values(scraper=scraper_name, meta=meta).returning(ScraperJob)
+    stmt = insert(ScraperJob).values(scraper=scraper_name, meta=meta, enabled=enabled).returning(ScraperJob)
 
     result = await self._session.execute(stmt)
     return result.scalar_one()
@@ -99,7 +99,11 @@ class JobRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one_or_none()
 
-  async def update_scraper_job(self, job_id: UUID, scraper_name: str | None, meta: BaseModel | dict | None) -> ScraperJob | None:
+  async def update_scraper_job(self,
+                               job_id: UUID,
+                               scraper_name: str | None,
+                               meta: BaseModel | dict | None,
+                               enabled: bool | None) -> ScraperJob | None:
     values = {}
     if scraper_name:
       values["scraper"] = scraper_name
@@ -109,6 +113,9 @@ class JobRepository(BaseAsyncRepo):
         meta = meta.model_dump(mode="json")
 
       values["meta"] = meta
+
+    if enabled is not None:
+      values["enabled"] = enabled
 
     if len(values) == 0:
       raise JobRepositoryError(f"Nonthing to update for scraper job {job_id}")
