@@ -10,6 +10,7 @@ from core.agents.summary import SummaryAgent
 from core.agents.topic import TopicAgent
 from core.agents.translation import TranslationAgent
 from core.processors.challenge import ChallengeProcessor, ChallengeCategoryProcessor
+from core.processors.jobs import ScraperJobProcessor
 from core.processors.translations import ChallengeTranslationProcessor
 from core.processors.scraper import ApidojoScrapperProcessor, ApidojoPostProcessor
 from core.processors.video import VideoProcessor, TopicProcessor
@@ -52,3 +53,4 @@ challenge_translation_processor = ChallengeTranslationProcessor(translation_agen
 challenge_category_processor = ChallengeCategoryProcessor(challenge_category_agent, async_db)
 video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_db, "./videos")
 topic_processor = TopicProcessor(topic_agent, async_db)
+scraper_job_processor = ScraperJobProcessor(async_db)

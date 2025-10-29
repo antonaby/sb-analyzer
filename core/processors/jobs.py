@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
@@ -7,11 +8,44 @@ from core.processors.challenge import ChallengeDetails
 from core.processors.common import SavedPost
 from core.processors.scraper import ApidojoScraperRun
 from core.processors.video import ProcessedVideo
-from db.models import Challenge
+from db.models import Challenge, Job
 from db.repositories.jobs import JobRepository, ApidojoPostProcessorJob, APIDOJO_POST_PROCESSOR_JOB_NAME, \
   ProcessVideoJob, PROCESS_VIDEO_JOB_NAME, VideoCategorizationJob, VIDEO_CATEGORIZATION_JOB_NAME, TranslationJob, \
   CHALLENGE_TRANSLATION_JOB_NAME, ChallengeGenJob, CHALLENGE_GEN_JOB_NAME, ChallengeCategorizationJob, \
-  CHALLENGE_CATEGORIZATION_JOB_NAME
+  CHALLENGE_CATEGORIZATION_JOB_NAME, APIDOJO_SCRAPER_NAME, APIDOJO_SCRAPER_JOB_NAME
+
+
+class ScraperJobProcessorResult(BaseModel):
+  jobs: dict[str, list[UUID]]
+
+
+class ScraperJobProcessor:
+
+  def __init__(self, session_maker: async_sessionmaker[AsyncSession]):
+    self._db = session_maker
+
+  async def run(self) -> ScraperJobProcessorResult:
+    jobs: dict[str, list[UUID]] = {}
+
+    async with self._db() as session:
+      job_repo = JobRepository(session)
+      apidojo_jobs = await self._process_apidojo_jobs(job_repo)
+      jobs[APIDOJO_SCRAPER_NAME] = [j.id for j in apidojo_jobs]
+
+      await job_repo.commit()
+
+    return ScraperJobProcessorResult(jobs=jobs)
+
+  @staticmethod
+  async def _process_apidojo_jobs(repo: JobRepository) -> list[Job]:
+    scraper_jobs = await repo.get_scraper_jobs(APIDOJO_SCRAPER_NAME)
+    exec_jobs: list[Job] = []
+
+    for scraper_job in scraper_jobs:
+      exec_job = await repo.create_job(APIDOJO_SCRAPER_JOB_NAME, scraper_job.meta)
+      exec_jobs.append(exec_job)
+
+    return exec_jobs
 
 
 async def create_apidojo_post_process_job(scraper_run: ApidojoScraperRun, db: async_sessionmaker[AsyncSession]) -> UUID:

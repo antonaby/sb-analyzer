@@ -1,1 +1,1 @@
-from . import worker, challenges, apidojo, videos
+from . import worker, challenges, apidojo, videos, scrapers

@@ -1,3 +1,4 @@
+from typing import Sequence
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -8,6 +9,8 @@ from db.models import Job, ScraperJob
 from db.repositories.common import BaseAsyncRepo
 from sqlalchemy.ext.asyncio import AsyncSession
 
+
+APIDOJO_SCRAPER_NAME = "apidojo"
 
 class ApidojoScrapperRun(BaseModel):
   keywords: list[str] = Field(min_length=1, description="At least one keyword")
@@ -70,7 +73,7 @@ class JobRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalar_one()
-  
+
   async def create_scraper_job(self, scraper_name: str, meta: BaseModel | dict) -> ScraperJob:
     if isinstance(meta, BaseModel):
       meta = meta.model_dump(mode="json")
@@ -79,6 +82,12 @@ class JobRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalar_one()
+
+  async def get_scraper_jobs(self, scraper_name: str) -> Sequence[ScraperJob]:
+    stmt = select(ScraperJob).where(ScraperJob.scraper == scraper_name)
+
+    result = await self._session.execute(stmt)
+    return result.scalars().all()
 
   async def get_job(self, job_id: UUID) -> Job | None:
     return await self._session.get(Job, job_id)

@@ -15,6 +15,7 @@ from worker.tasks.apidojo import run_apidojo_scraper
 from worker.tasks.challenges import generate_challenges_for_video, produce_challenge_translations, categorize_challenge, \
   adhoc_categorize_all_challenges
 from worker.tasks.videos import process_video, categorize_video
+from worker.tasks.scrapers import run_scrapers
 
 router = APIRouter(
   prefix="/runs",
@@ -112,6 +113,16 @@ async def run_challenge_translation(
 @router.post("/adhoc/categorize-challenges")
 def adhoc_categorize_challenges():
   job = adhoc_categorize_all_challenges.delay()
+
+  return {
+    "celery_job_id": job.id,
+    "celery_job_status": job.status
+  }
+
+
+@router.post("/scrapers")
+def run_scrapers_jobs():
+  job = run_scrapers.delay()
 
   return {
     "celery_job_id": job.id,
