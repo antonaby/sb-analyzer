@@ -1,11 +1,13 @@
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from api.deps import *
-from api.models import AuthorDetails
-from api.routes.common import to_video_shorts
-from db.models import Author, AnnotationKind, MetaSource
+from api.routes.common import to_video_shorts, VideoShort
+from db.models import Author, AnnotationKind, MetaSource, VideoSource
+from db.repositories.topics import TopicWithVideoCount
 
 router = APIRouter(
   prefix="/authors",
@@ -13,19 +15,48 @@ router = APIRouter(
 )
 
 
+class AuthorDetails(BaseModel):
+  id: UUID
+  url: str
+  source: str
+  verified: bool | None
+  followers: int | None
+  total_videos: int | None
+  is_reviewed: bool
+  created_at: datetime
+  updated_at: datetime
+  videos: list[VideoShort] | None = Field(None)
+  topics: list[TopicWithVideoCount] | None = Field(None)
+
+
 def to_author_details(author: Author) -> AuthorDetails:
   return AuthorDetails(
     id=author.id,
     url=author.url,
-    source=author.source,
+    source=author.source.value,
     verified=author.verified,
     followers=author.followers,
     total_videos=author.total_videos,
     is_reviewed=author.is_reviewed,
     created_at=author.created_at,
     updated_at=author.updated_at,
-    videos=[],
-    topics=[],
+    videos=None,
+    topics=None,
+  )
+
+
+class Authors(BaseModel):
+  total: int
+  authors: list[AuthorDetails]
+
+
+@router.get("/", response_model_exclude_none=True)
+async def get_authors(author_repo: AuthorRepository = Depends(get_author_repo)) -> Authors:
+  authors = await author_repo.get_authors()
+
+  return Authors(
+    total=len(authors),
+    authors=[to_author_details(a) for a in authors]
   )
 
 

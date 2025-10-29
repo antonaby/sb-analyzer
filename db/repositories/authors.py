@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Sequence
 from uuid import UUID
 
 from sqlalchemy import select, update, func, literal_column
@@ -50,6 +50,12 @@ class AuthorRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalar_one_or_none()
+
+  async def get_authors(self) -> Sequence[Author]:
+    stmt = select(Author)
+
+    result = await self._session.execute(stmt)
+    return result.scalars().all()
 
   async def set_author_reviewed_status(self, author_id: UUID, is_reviewed: bool) -> Author | None:
     stmt = (

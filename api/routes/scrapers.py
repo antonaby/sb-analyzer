@@ -121,7 +121,7 @@ async def update_scraper_job(
 ) -> ScraperJobDetails:
   try:
     job = await job_repo.update_scraper_job(job_id, request.scraper, request.meta, request.enabled)
-  except JobRepositoryError as e:
+  except JobRepositoryError:
     raise HTTPException(400, f"At least some of fields must be provided")
 
   if not job:

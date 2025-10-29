@@ -1,8 +1,8 @@
 from datetime import datetime
 from uuid import UUID
+
 from pydantic import BaseModel, Field
 
-from db.models import VideoSource
 from db.repositories.topics import TopicWithVideoCount
 
 
@@ -42,30 +42,3 @@ class TotalTopics(BaseModel):
   total: int
   topics: list[TopicWithVideoCount]
 
-
-class VideoShort(BaseModel):
-  id: UUID
-  url: str
-  source: VideoSource
-  title: str | None
-  uploaded_at: datetime | None
-  likes: int | None
-  views: int | None
-  comments: int | None
-  hashtags: list[str]
-  label: str | None
-  synopsis: str | None
-
-
-class AuthorDetails(BaseModel):
-  id: UUID
-  url: str
-  source: VideoSource
-  verified: bool | None
-  followers: int | None
-  total_videos: int | None
-  is_reviewed: bool
-  created_at: datetime
-  updated_at: datetime
-  videos: list[VideoShort]
-  topics: list[TopicWithVideoCount]

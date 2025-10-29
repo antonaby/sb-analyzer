@@ -2,15 +2,13 @@ from typing import Sequence
 from uuid import UUID
 
 from pydantic import BaseModel
-from sqlalchemy import insert, select, text, func, delete, Select, Result, desc
+from sqlalchemy import insert, select, func, delete, Select, Result
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from db.models import Topic, Video, VideoTopic, TopicTranslation, ChallengeTopic
 from db.repositories.common import BaseAsyncRepo, regconfig_for
-
-TOPIC_LOCK_KEY: int = 1
 
 
 class TopicWithVideoCount(BaseModel):
@@ -24,10 +22,7 @@ class TopicRepository(BaseAsyncRepo):
   
   def __init__(self, session: AsyncSession):
     self._session = session
-  
-  async def topic_lock(self):
-    await self._session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": TOPIC_LOCK_KEY})
-    
+
   async def create_topic(self, name: str) -> Topic:
     stmt = insert(Topic).values(name=name).returning(Topic)
     result = await self._session.execute(stmt)

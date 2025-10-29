@@ -1,6 +1,9 @@
+from datetime import datetime
+from uuid import UUID
+
 from pydantic import BaseModel
 
-from api.models import VideoShort
+from core.file import VideoSource
 from db.models import Video, AnnotationKind, MetaSource
 
 
@@ -12,6 +15,20 @@ class OkResponse(BaseModel):
 class CeleryJobDetails(BaseModel):
   celery_job_id: str
   celery_job_status: str
+
+
+class VideoShort(BaseModel):
+  id: UUID
+  url: str
+  source: str
+  title: str | None
+  uploaded_at: datetime | None
+  likes: int | None
+  views: int | None
+  comments: int | None
+  hashtags: list[str]
+  label: str | None
+  synopsis: str | None
 
 
 def to_video_short(video: Video) -> VideoShort:
@@ -35,7 +52,7 @@ def to_video_short(video: Video) -> VideoShort:
   return VideoShort(
     id=video.id,
     url=video.url,
-    source=video.source,
+    source=video.source.value,
     title=title,
     uploaded_at=video.uploaded_at,
     likes=video.likes,
