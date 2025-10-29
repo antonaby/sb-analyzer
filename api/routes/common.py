@@ -1,5 +1,12 @@
+from pydantic import BaseModel
+
 from api.models import VideoShort
 from db.models import Video, AnnotationKind, MetaSource
+
+
+class OkResponse(BaseModel):
+  result: bool
+  msg: str
 
 
 def to_video_short(video: Video) -> VideoShort:

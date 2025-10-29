@@ -44,6 +44,7 @@ class ScraperJobProcessor:
     for scraper_job in scraper_jobs:
       exec_job = await repo.create_job(APIDOJO_SCRAPER_JOB_NAME, scraper_job.meta)
       exec_jobs.append(exec_job)
+      scraper_job.last_job_id = exec_job.id
 
     return exec_jobs
 

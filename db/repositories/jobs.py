@@ -2,9 +2,9 @@ from typing import Sequence
 from uuid import UUID
 
 from pydantic import BaseModel, Field
-from sqlalchemy import insert, update, func, select
+from sqlalchemy import insert, update, func, select, delete
 
-from apify.tiktok.apidojo import DateRange, SortType
+from apify.tiktok.apidojo import DateRange, SortType, ApidojoFunc
 from db.models import Job, ScraperJob
 from db.repositories.common import BaseAsyncRepo
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +27,7 @@ class ApidojoCollectUrls(BaseModel):
 
 APIDOJO_SCRAPER_JOB_NAME = "apidojo.scraper"
 class ApidojoScraperJob(BaseModel):
-  func: str
+  func: ApidojoFunc
   args: ApidojoScrapperRun | ApidojoCollectUrls
 
 APIDOJO_POST_PROCESSOR_JOB_NAME = "apidojo.postprocessor"
@@ -60,6 +60,10 @@ class TranslationJob(BaseModel):
   append: bool
 
 
+class JobRepositoryError(Exception):
+  pass
+
+
 class JobRepository(BaseAsyncRepo):
 
   def __init__(self, session: AsyncSession):
@@ -88,6 +92,42 @@ class JobRepository(BaseAsyncRepo):
 
     result = await self._session.execute(stmt)
     return result.scalars().all()
+
+  async def get_scraper_job(self, job_id: UUID) -> ScraperJob | None:
+    stmt = select(ScraperJob).where(ScraperJob.id == job_id)
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one_or_none()
+
+  async def update_scraper_job(self, job_id: UUID, scraper_name: str | None, meta: BaseModel | dict | None) -> ScraperJob | None:
+    values = {}
+    if scraper_name:
+      values["scraper"] = scraper_name
+
+    if meta:
+      if isinstance(meta, BaseModel):
+        meta = meta.model_dump(mode="json")
+
+      values["meta"] = meta
+
+    if len(values) == 0:
+      raise JobRepositoryError(f"Nonthing to update for scraper job {job_id}")
+
+    stmt = (
+      update(ScraperJob).
+      where(ScraperJob.id == job_id).
+      values(**values).
+      returning(ScraperJob)
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one_or_none()
+
+  async def delete_scraper_job(self, job_id: UUID) -> bool:
+    stmt = delete(ScraperJob).where(ScraperJob.id == job_id)
+    result = await self._session.execute(stmt)
+
+    return result.rowcount == 1
 
   async def get_job(self, job_id: UUID) -> Job | None:
     return await self._session.get(Job, job_id)
