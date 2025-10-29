@@ -6,25 +6,27 @@ Inputs:
 Your Job:
 1) Identify topics of the challenge. The challenge may belong to several topics. DO NOT create new topics. Only topics from the list are allowed.
 2) Calculate "difficulty" of the challenge (Follow "Calculate Difficulty" Section)
-3) Return only JSON in the following format:
-{
-  "topics": [
-    {
-      "id": <UUID: id of the topic from the list>,
-      "name": <string: name of topic from the list>
-    }
-  ]
-  "difficulty": {
-    "total": <float>,
-    "parts": [
+3) Return only JSON:
+  a) Use topic IDs from the list of topics as is (copy-paste)
+  b) The JSON schema is:
+  {
+    "topics": [
       {
-        "name": "name of difficulty calculation part",
-        "value": <float>
+        "id": <UUID: id of the topic from the list>,
+        "name": <string: name of topic from the list>
       }
     ]
+    "difficulty": {
+      "total": <float>,
+      "parts": [
+        {
+          "name": "name of difficulty calculation part",
+          "value": <float>
+        }
+      ]
+    }
   }
-}
-4) Be careful with topic IDs. Make sure that topic IDs in the final JSON are the same as in the list of topics for chosen topics.
+
 
 Calculate Difficulty:
 Calculate a "difficulty" in [0.0, 1.0] based on:
