@@ -9,7 +9,7 @@ from sqlalchemy import (
   String,
   DateTime,
   func,
-  text
+  text, Index, desc
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -50,4 +50,8 @@ class Author(Base):
     back_populates="author",
     cascade="all, delete-orphan",
     passive_deletes=True,
+  )
+
+  __table_args__ = (
+    Index("ix_authors_created_at_desc", desc(created_at)),
   )

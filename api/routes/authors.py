@@ -47,15 +47,26 @@ def to_author_details(author: Author) -> AuthorDetails:
 
 class Authors(BaseModel):
   total: int
+  page: int
+  per_page: int
+  total_pages: int
   authors: list[AuthorDetails]
 
 
 @router.get("/", response_model_exclude_none=True)
-async def get_authors(author_repo: AuthorRepository = Depends(get_author_repo)) -> Authors:
-  authors = await author_repo.get_authors()
+async def get_authors(
+    page: int = Query(description="Num of page"),
+    per_page: int = Query(20, description="Num of items on page"),
+    is_reviewed: bool | None = Query(None, description="Return only reviewed or not authors"),
+    author_repo: AuthorRepository = Depends(get_author_repo)
+) -> Authors:
+  total, authors = await author_repo.get_authors(page, per_page, is_reviewed=is_reviewed)
 
   return Authors(
-    total=len(authors),
+    total=total,
+    page=page,
+    per_page=per_page,
+    total_pages=(total + per_page - 1) // per_page,
     authors=[to_author_details(a) for a in authors]
   )
 

@@ -51,11 +51,35 @@ class AuthorRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one_or_none()
 
-  async def get_authors(self) -> Sequence[Author]:
-    stmt = select(Author)
+  async def get_authors(self,
+                        page: int,
+                        per_page: int,
+                        is_reviewed: bool | None = None
+                        ) -> tuple[int, Sequence[Author]]:
+    page = max(page, 1)
+    per_page = max(per_page, 1)
 
-    result = await self._session.execute(stmt)
-    return result.scalars().all()
+    conditions = []
+    if is_reviewed is not None:
+      conditions.append(Author.is_reviewed == is_reviewed)
+
+    stmt = (
+      select(Author).
+      where(*conditions).
+      order_by(Author.created_at.desc()).
+      limit(per_page).
+      offset((page - 1) * per_page)
+    )
+
+    items_result = await self._session.execute(stmt)
+    items_value = items_result.scalars().all()
+
+    total_result = await self._session.execute(
+      select(func.count()).select_from(Author).where(*conditions)
+    )
+    total_value = total_result.scalar_one()
+
+    return total_value, items_value
 
   async def set_author_reviewed_status(self, author_id: UUID, is_reviewed: bool) -> Author | None:
     stmt = (
