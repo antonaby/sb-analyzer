@@ -42,7 +42,7 @@ class ApidojoScrapperProcessor(JobProcessor):
 
   async def _run_scraper(self, job: Job) -> tuple[Search, ActorRun]:
     job_meta = ApidojoScraperJob(**job.meta)
-    search = await self._new_search("apidojo", job_meta.func, job_meta.args)
+    search = await self._new_search("apidojo", job_meta.func, job_meta.args.model_dump(mode="json"))
 
     apidojo_client = self._apify_client.apidojo_tiktok_scrapper()
     func = getattr(apidojo_client, job_meta.func)
@@ -51,7 +51,7 @@ class ApidojoScrapperProcessor(JobProcessor):
     posts: list[TikTokPost]
 
     try:
-      actor_run = await func(**job_meta.args)
+      actor_run = await func(**job_meta.args.model_dump())
       posts: list[TikTokPost] = await self._apify_client.get_dataset(actor_run["defaultDatasetId"])
     except Exception as e:
       await self._update_search(search.id, -1)

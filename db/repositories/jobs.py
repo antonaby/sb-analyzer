@@ -1,17 +1,31 @@
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import insert, update, func, select
 
-from db.models import Job
+from apify.tiktok.apidojo import DateRange, SortType
+from db.models import Job, ScraperJob
 from db.repositories.common import BaseAsyncRepo
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+class ApidojoScrapperRun(BaseModel):
+  keywords: list[str] = Field(min_length=1, description="At least one keyword")
+  date_range: DateRange
+  sort_type: SortType
+  location: str
+  max_items: int
+
+
+class ApidojoCollectUrls(BaseModel):
+  urls: list[str] = Field(min_length=1, description="At least one url")
+  max_items: int
 
 
 APIDOJO_SCRAPER_JOB_NAME = "apidojo.scraper"
 class ApidojoScraperJob(BaseModel):
   func: str
-  args: dict
+  args: ApidojoScrapperRun | ApidojoCollectUrls
 
 APIDOJO_POST_PROCESSOR_JOB_NAME = "apidojo.postprocessor"
 class ApidojoPostProcessorJob(BaseModel):
@@ -53,6 +67,15 @@ class JobRepository(BaseAsyncRepo):
       meta = meta.model_dump(mode="json")
 
     stmt = insert(Job).values(name=name, meta=meta).returning(Job)
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one()
+  
+  async def create_scraper_job(self, scraper_name: str, meta: BaseModel | dict) -> ScraperJob:
+    if isinstance(meta, BaseModel):
+      meta = meta.model_dump(mode="json")
+
+    stmt = insert(ScraperJob).values(scraper=scraper_name, meta=meta).returning(ScraperJob)
 
     result = await self._session.execute(stmt)
     return result.scalar_one()

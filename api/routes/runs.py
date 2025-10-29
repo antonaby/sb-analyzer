@@ -4,15 +4,16 @@ from uuid import UUID
 from celery import Task
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from api.deps import get_job_repo
-from apify.tiktok.apidojo import DateRange, SortType
 from db.repositories.jobs import JobRepository, CHALLENGE_GEN_JOB_NAME, ChallengeGenJob, TranslationJob, \
   CHALLENGE_TRANSLATION_JOB_NAME, APIDOJO_SCRAPER_JOB_NAME, ApidojoScraperJob, PROCESS_VIDEO_JOB_NAME, ProcessVideoJob, \
-  VIDEO_CATEGORIZATION_JOB_NAME, VideoCategorizationJob, ChallengeCategorizationJob, CHALLENGE_CATEGORIZATION_JOB_NAME
+  VIDEO_CATEGORIZATION_JOB_NAME, VideoCategorizationJob, ChallengeCategorizationJob, CHALLENGE_CATEGORIZATION_JOB_NAME, \
+  ApidojoScrapperRun, ApidojoCollectUrls
 from worker.tasks.apidojo import run_apidojo_scraper
-from worker.tasks.challenges import generate_challenges_for_video, produce_challenge_translations, categorize_challenge, adhoc_categorize_all_challenges
+from worker.tasks.challenges import generate_challenges_for_video, produce_challenge_translations, categorize_challenge, \
+  adhoc_categorize_all_challenges
 from worker.tasks.videos import process_video, categorize_video
 
 router = APIRouter(
@@ -26,19 +27,6 @@ class JobRunDetails(BaseModel):
   created_at: datetime
   celery_job_id: str
   celery_job_status: str
-
-
-class ApidojoScrapperRun(BaseModel):
-  keywords: list[str] = Field(min_length=1, description="At least one keyword")
-  date_range: DateRange
-  sort_type: SortType
-  location: str
-  max_items: int
-
-
-class ApidojoCollectUrls(BaseModel):
-  urls: list[str] = Field(min_length=1, description="At least one url")
-  max_items: int
 
 
 class ProcessVideoRequest(BaseModel):
