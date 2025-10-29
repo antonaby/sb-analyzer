@@ -70,7 +70,7 @@ async def create_challenge_translation_jobs(challenges: list[ChallengeDetails], 
 
     for challenge in challenges:
       if challenge.is_new:
-        job_meta = TranslationJob(target_id=challenge.id, langs=["ru", "fr", "de"])
+        job_meta = TranslationJob(target_id=challenge.id, langs=["ru", "fr", "de"], append=True)
         job = await job_repo.create_job(CHALLENGE_TRANSLATION_JOB_NAME, job_meta)
         job_ids.append(job.id)
 

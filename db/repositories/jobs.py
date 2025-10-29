@@ -40,6 +40,7 @@ CHALLENGE_TRANSLATION_JOB_NAME = "challenge.translation"
 class TranslationJob(BaseModel):
   target_id: UUID
   langs: list[str]
+  append: bool
 
 
 class JobRepository(BaseAsyncRepo):
