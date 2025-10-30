@@ -8,7 +8,8 @@ from api.deps import get_job_repo
 from api.routes.common import OkResponse, CeleryJobDetails
 from db.models import ScraperJob
 from db.repositories.jobs import ApidojoScrapperRun, JobRepository, ApidojoCollectUrls, APIDOJO_SCRAPER_NAME, \
-  ApidojoScraperJob, JobRepositoryError
+  ApidojoScraperJob
+from db.repositories.common import BadDataRepositoryError
 from worker.tasks.scrapers import run_scraper
 
 
@@ -121,7 +122,7 @@ async def update_scraper_job(
 ) -> ScraperJobDetails:
   try:
     job = await job_repo.update_scraper_job(job_id, request.scraper, request.meta, request.enabled)
-  except JobRepositoryError:
+  except BadDataRepositoryError:
     raise HTTPException(400, f"At least some of fields must be provided")
 
   if not job:

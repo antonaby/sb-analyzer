@@ -2,6 +2,10 @@ from abc import ABC, abstractmethod
 from typing import Final
 
 
+class BadDataRepositoryError(Exception):
+  pass
+
+
 class BaseAsyncRepo(ABC):
   
   @abstractmethod

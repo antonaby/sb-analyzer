@@ -6,7 +6,7 @@ from sqlalchemy import insert, update, func, select, delete
 
 from apify.tiktok.apidojo import DateRange, SortType, ApidojoFunc
 from db.models import Job, ScraperJob
-from db.repositories.common import BaseAsyncRepo
+from db.repositories.common import BaseAsyncRepo, BadDataRepositoryError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -58,10 +58,6 @@ class TranslationJob(BaseModel):
   target_id: UUID
   langs: list[str]
   append: bool
-
-
-class JobRepositoryError(Exception):
-  pass
 
 
 class JobRepository(BaseAsyncRepo):
@@ -118,7 +114,7 @@ class JobRepository(BaseAsyncRepo):
       values["enabled"] = enabled
 
     if len(values) == 0:
-      raise JobRepositoryError(f"Nonthing to update for scraper job {job_id}")
+      raise BadDataRepositoryError(f"Nonthing to update for scraper job {job_id}")
 
     stmt = (
       update(ScraperJob).

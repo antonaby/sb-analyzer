@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import Author, VideoSource
-from db.repositories.common import BaseAsyncRepo
+from db.repositories.common import BaseAsyncRepo, BadDataRepositoryError
 
 
 class AuthorRepository(BaseAsyncRepo):
@@ -81,16 +81,24 @@ class AuthorRepository(BaseAsyncRepo):
 
     return total_value, items_value
 
-  async def set_author_reviewed_status(self, author_id: UUID, is_reviewed: bool) -> Author | None:
+  async def update_author(self, author_id: UUID, is_reviewed: bool | None) -> Author | None:
+    values = {}
+    if is_reviewed is not None:
+      values["is_reviewed"] = is_reviewed
+
+    if len(values) == 0:
+      raise BadDataRepositoryError(f"Nonthing to update for author {author_id}")
+
     stmt = (
       update(Author).
       where(Author.id == author_id).
-      values(is_reviewed=is_reviewed).
+      values(**values).
       returning(Author)
     )
 
     result = await self._session.execute(stmt)
     return result.scalar_one_or_none()
+
 
   async def commit(self):
     await self._session.commit()
