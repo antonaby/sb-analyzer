@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from api.deps import *
-from api.routes import videos, jobs, queue, topics, authors, runs, challenges, scrapers
+from api.routes import videos, jobs, queue, topics, authors, runs, challenges, scrapers, workflows
 from db.conf import test_db_conn
 
 app = FastAPI(title="SB VideoAnalyzer API", version="0.0.0")
@@ -15,6 +15,7 @@ app.include_router(topics.router)
 app.include_router(runs.router)
 app.include_router(challenges.router)
 app.include_router(scrapers.router)
+app.include_router(workflows.router)
 
 @app.get("/health")
 async def health(db: AsyncSession = Depends(get_async_db)):
