@@ -1,4 +1,4 @@
-from models.apidojo import ApidojoPostProcessorSpec
+from models.apidojo import ApidojoActorSpec, ApidojoPostProcessorSpec
 from worker.main import worker_app
 
 
@@ -14,7 +14,6 @@ def post_process_apidojo_dataset(spec: dict) -> dict:
 @worker_app.task
 def run_apidojo_actor(spec: dict) -> dict:
   from worker.tasks.deps import loop, apidojo_processor
-  from models.apidojo import ApidojoActorSpec
 
   apidojo_spec = ApidojoActorSpec(**spec)
   result = loop.run_until_complete(apidojo_processor.run(apidojo_spec))

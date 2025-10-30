@@ -5,19 +5,20 @@ from uuid import UUID
 from openai import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from core.agents.common import TopicName
 from core.agents.summary import SummaryAgent, VideoSummary
 from core.agents.topic import TopicAgent, MainTopic
-from core.agents.common import TopicName
 from core.file import AudioFile, UrlVideoSource, VideoFile, VideoSource
 from core.processors.common import JobProcessor, PostDetails
 from core.transcribe import FileAudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, FileVideoData, Frame
 from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
 from db.repositories.helpers import full_video_data
-from db.repositories.jobs import PROCESS_VIDEO_JOB_NAME, ProcessVideoJob, VIDEO_CATEGORIZATION_JOB_NAME, \
+from db.repositories.jobs import VIDEO_CATEGORIZATION_JOB_NAME, \
   VideoCategorizationJob
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
+from models.videos import VideoProcessingSpec
 
 
 class VideoProcessorError(Exception):
@@ -68,19 +69,15 @@ class VideoProcessor(BaseVideoProcessor):
     self._agent = agent
     self._tmp_dir = tmp_dir
     
-  async def run(self, job_id: UUID) -> ProcessedVideo:
-    job = await self.start_job(job_id, PROCESS_VIDEO_JOB_NAME)
-
+  async def run(self, spec: VideoProcessingSpec) -> ProcessedVideo:
     video_file: VideoFile | None = None
     video_source: VideoSource | None  = None
-    job_meta: ProcessVideoJob | None = None
 
     try:
-      job_meta = ProcessVideoJob(**job.meta)
-      video = await self._find_video(job_meta.video_id, with_scraped_data=True)
+      video = await self._find_video(spec.video_id, with_scraped_data=True)
 
       if len(video.scraped_data) == 0:
-        raise VideoProcessorError(f"Video {job_meta.video_id} has no scraped data")
+        raise VideoProcessorError(f"Video {spec.video_id} has no scraped data")
 
       last_scraped_data = max(video.scraped_data, key=lambda d: d.created_at)
       post_data = PostDetails(**last_scraped_data.data)
@@ -95,20 +92,16 @@ class VideoProcessor(BaseVideoProcessor):
       summary = await self._agent.run(post_data, video_data, audio_data)
 
       video = await self._save_video_details(video, post_data, video_data, audio_data, summary)
-      await self.set_job_finished(job_id, False)
 
       return ProcessedVideo(video_id=video.id)
     except Exception as e:
-      if job_meta:
-        await self._set_processing_error(job_meta.video_id)
-
-      await self.set_job_finished(job_id, True)
+      await self._set_processing_error(spec.video_id)
       raise e
     finally:
       try:
         if video_file is not None:
           video_file.close()
-        if video_source and job_meta and job_meta.delete_downloaded_files:
+        if video_source and spec.delete_downloaded_files:
           video_source.delete()
       except Exception as e:
         self._log.exception(e)
