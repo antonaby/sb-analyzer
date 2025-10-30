@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from models.videos import VideoProcessingSpec, VideoCategorizationSpec
 from worker.main import worker_app
 

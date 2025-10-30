@@ -4,7 +4,7 @@ from celery import group
 
 from db.repositories.jobs import APIDOJO_SCRAPER_NAME
 from worker.main import worker_app
-from worker.tasks.apidojo import run_apidojo_actor
+from worker.tasks.workflows import run_apidojo_workflow
 
 
 @worker_app.task
@@ -12,13 +12,13 @@ def run_scrapers() -> dict:
   from db.repositories.jobs import APIDOJO_SCRAPER_NAME
   from worker.tasks.deps import loop, scraper_job_processor
 
-  processor_result = loop.run_until_complete(scraper_job_processor.run())
+  processor_result = loop.run_until_complete(scraper_job_processor.run_all())
 
   tasks = []
   for scraper, jobs in processor_result.jobs.items():
     if scraper == APIDOJO_SCRAPER_NAME:
       for job in jobs:
-        tasks.append(run_apidojo_actor.si(job))
+        tasks.append(run_apidojo_workflow.si(job))
 
   if len(tasks) > 0:
     scraper_job = group(tasks)
@@ -29,17 +29,11 @@ def run_scrapers() -> dict:
 
 @worker_app.task
 def run_scraper(scraper_job_id: UUID) -> dict:
-  from worker.tasks.deps import loop, async_db
-  from core.processors.jobs import create_exec_job_for_scraper_job
+  from worker.tasks.deps import loop, scraper_job_processor
 
-  scraper, job_id = loop.run_until_complete(create_exec_job_for_scraper_job(scraper_job_id, async_db))
-  if scraper == APIDOJO_SCRAPER_NAME:
-    run_apidojo_actor.delay(job_id)
-    return {
-      "result": True,
-      "job_id": job_id
-    }
+  processor_result = loop.run_until_complete(scraper_job_processor.run(scraper_job_id))
+  if processor_result.name == APIDOJO_SCRAPER_NAME:
+    run_apidojo_workflow.delay(processor_result.spec)
+    return processor_result.model_dump(mode="json")
 
-  return {
-    "result": False
-  }
+  raise ValueError("Unknow Scarper")

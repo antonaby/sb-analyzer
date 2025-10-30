@@ -10,7 +10,7 @@ from db.models import ScraperJob
 from db.repositories.jobs import JobRepository, APIDOJO_SCRAPER_NAME
 from models.apidojo import ApidojoSearch, ApidojoCollectUrls, ApidojoActorSpec
 from db.repositories.common import BadDataRepositoryError
-from worker.tasks.scrapers import run_scraper
+from worker.tasks.scrapers import run_scraper, run_scrapers
 
 
 router = APIRouter(
@@ -29,7 +29,6 @@ class ScraperJobDetails(BaseModel):
   scraper: str
   created_at: datetime
   updated_at: datetime
-  last_job_id: UUID | None
   meta: dict
 
 
@@ -45,7 +44,6 @@ def to_scraper_job_details(job: ScraperJob) -> ScraperJobDetails:
     scraper=job.scraper,
     created_at=job.created_at,
     updated_at=job.updated_at,
-    last_job_id=job.last_job_id,
     meta=job.meta
   )
 
@@ -87,6 +85,12 @@ async def get_scraper_jobs(
       for j in jobs
     ]
   )
+
+
+@router.post("/jobs/run")
+def run_all_scraper_jobs():
+  job = run_scrapers.delay()
+  return CeleryJobDetails(celery_job_id=job.id, celery_job_status=job.status)
 
 
 @router.get("/jobs/{job_id}")

@@ -17,5 +17,5 @@ __all__ = [
   "ChallengePatternGroup", "ChallengePattern", "Challenge", "ChallengeTranslation", "ChallengeVideo", "ChallengeTopic",
   "Hashtag", "VideoHashtag",
   "Search", "VideoSearch",
-  "Job", "ScraperJob"
+  "ScraperJob"
 ]
