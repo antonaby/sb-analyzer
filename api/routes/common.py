@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 class OkResponse(BaseModel):
@@ -9,3 +11,4 @@ class OkResponse(BaseModel):
 class CeleryJobDetails(BaseModel):
   celery_job_id: str
   celery_job_status: str
+  result: Any | None = Field(None)

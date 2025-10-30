@@ -1,8 +1,9 @@
 from fastapi import APIRouter
 from fastapi.params import Query
+from pydantic import BaseModel, Field
 
 from api.deps import *
-from api.models import CreateTopicRequest, TotalTopics
+from db.repositories.topics import TopicWithVideoCount
 
 router = APIRouter(
   prefix="/topics",
@@ -10,11 +11,20 @@ router = APIRouter(
 )
 
 
+class CreateTopicRequest(BaseModel):
+  name: str = Field(min_length=3, description="Topic name")
+
+
 @router.post("/")
 async def new_topic(request: CreateTopicRequest, topic_repo: TopicRepository = Depends(get_topic_repo)):
   topic = await topic_repo.create_topic(request.name)
   await topic_repo.commit()
   return topic
+
+
+class TotalTopics(BaseModel):
+  total: int
+  topics: list[TopicWithVideoCount]
 
 
 @router.get("/")
