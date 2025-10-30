@@ -41,6 +41,15 @@ db_url = var_or_exception('DATABASE_URL')
 config.set_main_option("sqlalchemy.url", db_url)
 
 
+EXCLUDE_TABLES = {"celery_taskmeta", "celery_tasksetmeta"}
+
+def include_object(object, name, type_, reflected, compare_to):
+    # skip if table name is in excluded list
+    if type_ == "table" and name in EXCLUDE_TABLES:
+        return False
+    return True
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -57,6 +66,7 @@ def run_migrations_offline() -> None:
     context.configure(
         url=url,
         target_metadata=target_metadata,
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -66,7 +76,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object
+    )
 
     with context.begin_transaction():
         context.run_migrations()

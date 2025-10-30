@@ -14,8 +14,8 @@ if TYPE_CHECKING:
   from .challenges import ChallengeTopic, Challenge
 
 
-class Topic(Base):
-  __tablename__ = "topics"
+class TopicGroup(Base):
+  __tablename__ = "topic_groups"
 
   id: Mapped[uuid.UUID] = mapped_column(
     UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
@@ -26,6 +26,42 @@ class Topic(Base):
     DateTime(timezone=True),
     default=func.now(), nullable=False
   )
+  updated_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), onupdate=func.now(), nullable=False
+  )
+
+  topics: Mapped[list["Topic"]] = relationship(
+    back_populates="group",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+
+
+class Topic(Base):
+  __tablename__ = "topics"
+
+  id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True), primary_key=True, server_default=text("uuid_generate_v1mc()")
+  )
+  group_id: Mapped[uuid.UUID] = mapped_column(
+    UUID(as_uuid=True),
+    ForeignKey("topic_groups.id", ondelete="CASCADE"),
+    nullable=False,
+    index=True,
+  )
+  name: Mapped[str] = mapped_column(String(512), nullable=False)
+
+  created_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), nullable=False
+  )
+  updated_at: Mapped[datetime] = mapped_column(
+    DateTime(timezone=True),
+    default=func.now(), onupdate=func.now(), nullable=False
+  )
+
+  group: Mapped["TopicGroup"] = relationship(back_populates="topics")
 
   challenge_topics: Mapped[list["ChallengeTopic"]] = relationship(
     back_populates="topic",
