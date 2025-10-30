@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from db.models import Topic, Video, VideoTopic, TopicTranslation, ChallengeTopic
+from db.models import Topic, Video, VideoTopic, TopicTranslation, ChallengeTopic, TopicGroup
 from db.repositories.common import BaseAsyncRepo, regconfig_for
 
 
@@ -23,8 +23,14 @@ class TopicRepository(BaseAsyncRepo):
   def __init__(self, session: AsyncSession):
     self._session = session
 
-  async def create_topic(self, name: str) -> Topic:
-    stmt = insert(Topic).values(name=name).returning(Topic)
+  async def create_topic_group(self, name: str) -> TopicGroup:
+    stmt = insert(TopicGroup).values(name=name).returning(TopicGroup)
+    result = await self._session.execute(stmt)
+
+    return result.scalar_one()
+
+  async def create_topic(self, name: str, group_id: UUID) -> Topic:
+    stmt = insert(Topic).values(name=name, group_id=group_id).returning(Topic)
     result = await self._session.execute(stmt)
     
     return result.scalar_one()

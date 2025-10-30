@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter
 from fastapi.params import Query
 from pydantic import BaseModel, Field
@@ -11,13 +13,25 @@ router = APIRouter(
 )
 
 
+class CreateTopicGroupRequest(BaseModel):
+  name: str = Field(min_length=3, description="Topic Group name")
+
+
+@router.post("/groups")
+async def new_topic(request: CreateTopicGroupRequest, topic_repo: TopicRepository = Depends(get_topic_repo)):
+  topic = await topic_repo.create_topic_group(name=request.name)
+  await topic_repo.commit()
+  return topic
+
+
 class CreateTopicRequest(BaseModel):
+  group_id: UUID
   name: str = Field(min_length=3, description="Topic name")
 
 
 @router.post("/")
 async def new_topic(request: CreateTopicRequest, topic_repo: TopicRepository = Depends(get_topic_repo)):
-  topic = await topic_repo.create_topic(request.name)
+  topic = await topic_repo.create_topic(name=request.name, group_id=request.group_id)
   await topic_repo.commit()
   return topic
 
