@@ -38,6 +38,7 @@ class ApidojoPostProcessorSpec(BaseModel):
 class ApidojoWorkflow(BaseModel):
   actor_spec: ApidojoActorSpec
   delete_downloaded_files: bool
+  topic_group_id: UUID
   pattern_group_id: UUID
   langs: list[str]
   append: bool

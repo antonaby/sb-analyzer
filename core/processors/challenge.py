@@ -115,7 +115,7 @@ class ChallengeCategoryProcessor(JobProcessor):
 
   async def run(self, spec: ChallengeCategorizationSpec) -> ChallengeCategoryProcessorResult:
     try:
-      challenge, topics = await self._get_challenge(spec.challenge_id)
+      challenge, topics = await self._get_challenge(spec.challenge_id, spec.topic_group_id)
 
       run_input = ChallengeCategoryAgentRun(challenge=challenge.name, topics=topics)
       agent_response = await self._agent.run(run_input)
@@ -133,7 +133,7 @@ class ChallengeCategoryProcessor(JobProcessor):
       await challenge_repo.set_challenge_categorization(challenge_id, True)
       await session.commit()
 
-  async def _get_challenge(self, challenge_id: UUID) -> tuple[Challenge, list[TopicName]]:
+  async def _get_challenge(self, challenge_id: UUID, topic_group_id: UUID) -> tuple[Challenge, list[TopicName]]:
     async with self._db() as session:
       challenge_repo = ChallengeRepository(session)
       challenge = await challenge_repo.get_challenge(challenge_id)
@@ -141,7 +141,7 @@ class ChallengeCategoryProcessor(JobProcessor):
         raise ChallengeProcessorError(f"Challenge {challenge_id} not found")
 
       topic_repo = TopicRepository(session)
-      all_topics = await topic_repo.get_all_topics()
+      all_topics = await topic_repo.get_all_topics(topic_group_id)
       topic_names = [TopicName(id=t.id, name=t.name) for t in all_topics]
 
       return challenge, topic_names

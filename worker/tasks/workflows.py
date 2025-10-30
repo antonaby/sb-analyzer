@@ -12,7 +12,7 @@ from worker.tasks.apidojo import run_apidojo_actor, post_process_apidojo_dataset
 
 
 @worker_app.task
-def create_challenge_processing_group(challenges: dict, langs: list[str], append: bool):
+def create_challenge_processing_group(challenges: dict, topic_group_id: UUID, langs: list[str], append: bool):
   from core.processors.challenge import ChallengeProcessorResult
 
   challenge_gen_result = ChallengeProcessorResult(**challenges)
@@ -20,7 +20,7 @@ def create_challenge_processing_group(challenges: dict, langs: list[str], append
   tasks = []
   for challenge in challenge_gen_result.challenges:
     if challenge.is_new:
-      categorize_spec = ChallengeCategorizationSpec(challenge_id=challenge.id)
+      categorize_spec = ChallengeCategorizationSpec(challenge_id=challenge.id, topic_group_id=topic_group_id)
       translate_challenge = ChallengeTranslationSpec(
         challenge_id=challenge.id,
         langs=langs,
@@ -38,11 +38,11 @@ def create_challenge_processing_group(challenges: dict, langs: list[str], append
 
 
 @worker_app.task
-def create_challenge_sub_workflow(video_id: UUID, pattern_group_id: UUID, langs: list[str], append: bool):
+def create_challenge_sub_workflow(video_id: UUID, pattern_group_id: UUID, topic_group_id: UUID, langs: list[str], append: bool):
   gen_spec = ChallengeGenSpec(video_id=video_id, pattern_group_id=pattern_group_id)
   return chain(
     generate_challenges_for_video.si(gen_spec.model_dump(mode="json")),
-    create_challenge_processing_group.s(langs, append)
+    create_challenge_processing_group.s(topic_group_id, langs, append)
   )()
 
 
@@ -51,17 +51,18 @@ def create_video_processing_sub_workflow(
     video_id: UUID,
     delete_downloaded_files: bool,
     pattern_group_id: UUID,
+    topic_group_id: UUID,
     langs: list[str],
     append: bool
 ):
   processing_spec = VideoProcessingSpec(video_id=video_id, delete_downloaded_files=delete_downloaded_files)
-  categorization_spec = VideoCategorizationSpec(video_id=video_id)
+  categorization_spec = VideoCategorizationSpec(video_id=video_id, topic_group_id=topic_group_id)
 
   video_processing_chain = chain(
     process_video.si(processing_spec.model_dump(mode="json")),
     group(
       categorize_video.si(categorization_spec.model_dump(mode="json")),
-      create_challenge_sub_workflow.si(video_id, pattern_group_id, langs, append)
+      create_challenge_sub_workflow.si(video_id, pattern_group_id, topic_group_id, langs, append)
     )
   )
 
@@ -73,6 +74,7 @@ def create_video_processing_group(
     posts: dict,
     delete_downloaded_files: bool,
     pattern_group_id: UUID,
+    topic_group_id: UUID,
     langs: list[str],
     append: bool
 ):
@@ -83,7 +85,7 @@ def create_video_processing_group(
   for post in post_process_result.posts:
     if post.new_video:
       tasks.append(
-        create_video_processing_sub_workflow.si(post.video_id, delete_downloaded_files, pattern_group_id, langs, append)
+        create_video_processing_sub_workflow.si(post.video_id, delete_downloaded_files, pattern_group_id, topic_group_id, langs, append)
       )
 
   return group(tasks)()
@@ -110,6 +112,7 @@ def run_apidojo_workflow(apidojo_workflow: dict):
     create_video_processing_group.s(
       apidojo_workflow.delete_downloaded_files,
       apidojo_workflow.pattern_group_id,
+      apidojo_workflow.topic_group_id,
       apidojo_workflow.langs,
       apidojo_workflow.append
     )

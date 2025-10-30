@@ -44,12 +44,27 @@ class TopicRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.unique().scalar_one_or_none()
 
-  async def get_all_topics(self) -> Sequence[Topic]:
-    result = await self._session.execute(select(Topic))
+  async def get_all_topics(self, group_id: UUID) -> Sequence[Topic]:
+    stmt = select(Topic).where(Topic.group_id == group_id)
+
+    result = await self._session.execute(stmt)
     return result.scalars().all()
 
-  async def unassign_all_topics(self, video_id: UUID):
-    stmt = delete(VideoTopic).where(VideoTopic.video_id == video_id)
+  async def unassign_all_topics(self, video_id: UUID, topic_group_id: UUID):
+    sub_query = (
+      select(Topic.id)
+      .where(Topic.group_id == topic_group_id)
+      .scalar_subquery()
+    )
+
+    stmt = (
+      delete(VideoTopic)
+      .where(
+        VideoTopic.video_id == video_id,
+        VideoTopic.topic_id.in_(sub_query)
+      )
+    )
+
     await self._session.execute(stmt)
   
   async def assign_topic(self, topic_id: UUID, video_id: UUID, confidence: float) -> VideoTopic:

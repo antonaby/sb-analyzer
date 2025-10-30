@@ -10,6 +10,7 @@ class VideoProcessingSpec(BaseModel):
 
 class VideoCategorizationSpec(BaseModel):
   video_id: UUID
+  topic_group_id: UUID
 
 
 class ChallengeGenSpec(BaseModel):
@@ -19,6 +20,7 @@ class ChallengeGenSpec(BaseModel):
 
 class ChallengeCategorizationSpec(BaseModel):
   challenge_id: UUID
+  topic_group_id: UUID
 
 
 class ChallengeTranslationSpec(BaseModel):

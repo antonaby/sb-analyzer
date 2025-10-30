@@ -322,20 +322,20 @@ class TopicProcessor(BaseVideoProcessor):
         raise VideoProcessorError(f"Video {spec.video_id} unprocessed")
 
       video_data = full_video_data(video)
-      topics_names = await self._find_topics()
+      topics_names = await self._find_topics(spec.topic_group_id)
       agent_response = await self._topic_agent.run(video_data, topics_names)
 
-      result = await self._save_topics(video, agent_response.topics)
+      result = await self._save_topics(video, spec.topic_group_id, agent_response.topics)
 
       return result
     except Exception as e:
       await self._set_categorization_error(spec.video_id)
       raise e
 
-  async def _find_topics(self) -> list[TopicName]:
+  async def _find_topics(self, topic_group_id: UUID) -> list[TopicName]:
     async with self._db() as session:
       topic_repo = TopicRepository(session)
-      all_topics = await topic_repo.get_all_topics()
+      all_topics = await topic_repo.get_all_topics(topic_group_id)
       return [TopicName(id=t.id, name=t.name) for t in all_topics]
 
   async def _set_categorization_error(self, video_id: UUID):
@@ -344,14 +344,14 @@ class TopicProcessor(BaseVideoProcessor):
       await video_repo.set_video_categorization(video_id, True)
       await session.commit()
 
-  async def _save_topics(self, video: Video, topics: list[MainTopic]) -> TopicProcessorResult:
+  async def _save_topics(self, video: Video, topic_group_id: UUID, topics: list[MainTopic]) -> TopicProcessorResult:
     async with self._db() as session:
       video = await session.merge(video, load=False)
       video.categorization_error = False
       video.categorized_at = datetime.now(timezone.utc)
 
       topic_repo = TopicRepository(session)
-      await topic_repo.unassign_all_topics(video.id)
+      await topic_repo.unassign_all_topics(video.id, topic_group_id)
 
       assigned_topics: list[AssignedTopic] = []
       for t in topics:
