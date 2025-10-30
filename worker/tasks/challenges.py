@@ -2,7 +2,7 @@ from uuid import UUID
 
 from celery import group
 
-from models.videos import ChallengeGenSpec, ChallengeCategorizationSpec
+from models.videos import ChallengeGenSpec, ChallengeCategorizationSpec, ChallengeTranslationSpec
 from worker.main import worker_app
 
 
@@ -25,19 +25,13 @@ def categorize_challenge(spec: dict) -> dict:
   return result.model_dump(mode="json")
 
 
-
-
-
-
 @worker_app.task
-def produce_challenge_translations(job_id: UUID) -> dict:
+def produce_challenge_translations(spec: dict) -> dict:
   from worker.tasks.deps import loop, challenge_translation_processor
 
-  result = loop.run_until_complete(challenge_translation_processor.run(job_id))
+  challenge_translation_spec = ChallengeTranslationSpec(**spec)
+  result = loop.run_until_complete(challenge_translation_processor.run(challenge_translation_spec))
   return result.model_dump(mode="json")
-
-
-
 
 
 @worker_app.task

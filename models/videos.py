@@ -19,3 +19,9 @@ class ChallengeGenSpec(BaseModel):
 
 class ChallengeCategorizationSpec(BaseModel):
   challenge_id: UUID
+
+
+class ChallengeTranslationSpec(BaseModel):
+  challenge_id: UUID
+  langs: list[str]
+  append: bool

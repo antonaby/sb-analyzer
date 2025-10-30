@@ -14,8 +14,6 @@ from core.transcribe import FileAudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, FileVideoData, Frame
 from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
 from db.repositories.helpers import full_video_data
-from db.repositories.jobs import VIDEO_CATEGORIZATION_JOB_NAME, \
-  VideoCategorizationJob
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
 from models.videos import VideoProcessingSpec, VideoCategorizationSpec
