@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "celery[redis]>=5.5.3",
+    "celery[redis,sqlalchemy]>=5.5.3",
     "logfire[celery,fastapi,sqlalchemy]>=4.13.2",
     "pydantic>=2.11.9",
     "python-dotenv>=1.1.1",
@@ -28,6 +28,7 @@ api = [
 ]
 db = [
     "asyncpg>=0.30.0",
+    "psycopg[binary]>=3.2.12",
     "sqlalchemy[asyncio]>=2.0.43",
 ]
 migrations = [
