@@ -18,7 +18,7 @@ from db.repositories.jobs import VIDEO_CATEGORIZATION_JOB_NAME, \
   VideoCategorizationJob
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
-from models.videos import VideoProcessingSpec
+from models.videos import VideoProcessingSpec, VideoCategorizationSpec
 
 
 class VideoProcessorError(Exception):
@@ -316,29 +316,22 @@ class TopicProcessor(BaseVideoProcessor):
     super().__init__(async_session)
     self._topic_agent = topic_agent
 
-  async def run(self, job_id: UUID) -> TopicProcessorResult:
-    job = await self.start_job(job_id, VIDEO_CATEGORIZATION_JOB_NAME)
-    job_meta: VideoCategorizationJob | None = None
+  async def run(self, spec: VideoCategorizationSpec) -> TopicProcessorResult:
     try:
-      job_meta = VideoCategorizationJob(**job.meta)
-      video = await self._find_video(job_meta.video_id, with_scraped_data=True, with_annotations=True, with_meta=True)
+      video = await self._find_video(spec.video_id, with_scraped_data=True, with_annotations=True, with_meta=True)
 
       if not video.processed_at or video.processing_error:
-        raise VideoProcessorError(f"Video {job_meta.video_id} unprocessed")
+        raise VideoProcessorError(f"Video {spec.video_id} unprocessed")
 
       video_data = full_video_data(video)
       topics_names = await self._find_topics()
       agent_response = await self._topic_agent.run(video_data, topics_names)
 
       result = await self._save_topics(video, agent_response.topics)
-      await self.set_job_finished(job_id, False)
 
       return result
     except Exception as e:
-      if job_meta:
-        await self._set_categorization_error(job_meta.video_id)
-
-      await self.set_job_finished(job_id, True)
+      await self._set_categorization_error(spec.video_id)
       raise e
 
   async def _find_topics(self) -> list[TopicName]:

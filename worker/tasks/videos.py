@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from models.videos import VideoProcessingSpec
+from models.videos import VideoProcessingSpec, VideoCategorizationSpec
 from worker.main import worker_app
 
 
@@ -15,9 +15,10 @@ def process_video(spec: dict):
 
 
 @worker_app.task
-def categorize_video(job_id: UUID):
+def categorize_video(spec: dict):
   from worker.tasks.deps import loop, topic_processor
 
-  result = loop.run_until_complete(topic_processor.run(job_id))
+  topic_spec = VideoCategorizationSpec(**spec)
+  result = loop.run_until_complete(topic_processor.run(topic_spec))
 
   return result.model_dump(mode="json")
