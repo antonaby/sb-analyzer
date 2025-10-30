@@ -43,7 +43,7 @@ def create_challenge_sub_workflow(video_id: UUID, pattern_group_id: UUID, langs:
   return chain(
     generate_challenges_for_video.si(gen_spec.model_dump(mode="json")),
     create_challenge_processing_group.s(langs, append)
-  )
+  )()
 
 
 @worker_app.task
