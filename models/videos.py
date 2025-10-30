@@ -27,3 +27,12 @@ class ChallengeTranslationSpec(BaseModel):
   challenge_id: UUID
   langs: list[str]
   append: bool
+
+
+class VideoProcessingWorkflow(BaseModel):
+  video_id: UUID
+  delete_downloaded_files: bool
+  pattern_group_id: UUID
+  topic_group_id: UUID
+  langs: list[str]
+  append: bool

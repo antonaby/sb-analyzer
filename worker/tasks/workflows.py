@@ -4,7 +4,7 @@ from celery import chain, group
 
 from models.apidojo import ApidojoWorkflow
 from models.videos import VideoProcessingSpec, VideoCategorizationSpec, ChallengeGenSpec, ChallengeCategorizationSpec, \
-  ChallengeTranslationSpec
+  ChallengeTranslationSpec, VideoProcessingWorkflow
 from worker.main import worker_app
 from worker.tasks.videos import process_video, categorize_video
 from worker.tasks.challenges import generate_challenges_for_video, categorize_challenge, produce_challenge_translations
@@ -38,31 +38,41 @@ def create_challenge_processing_group(challenges: dict, topic_group_id: UUID, la
 
 
 @worker_app.task
-def create_challenge_sub_workflow(video_id: UUID, pattern_group_id: UUID, topic_group_id: UUID, langs: list[str], append: bool):
-  gen_spec = ChallengeGenSpec(video_id=video_id, pattern_group_id=pattern_group_id)
+def create_challenge_sub_workflow(workflow: dict):
+  video_workflow = VideoProcessingWorkflow(**workflow)
+
+  gen_spec = ChallengeGenSpec(
+    video_id=video_workflow.video_id,
+    pattern_group_id=video_workflow.pattern_group_id
+  )
   return chain(
     generate_challenges_for_video.si(gen_spec.model_dump(mode="json")),
-    create_challenge_processing_group.s(topic_group_id, langs, append)
+    create_challenge_processing_group.s(
+      video_workflow.topic_group_id,
+      video_workflow.langs,
+      video_workflow.append
+    )
   )()
 
 
 @worker_app.task
-def create_video_processing_sub_workflow(
-    video_id: UUID,
-    delete_downloaded_files: bool,
-    pattern_group_id: UUID,
-    topic_group_id: UUID,
-    langs: list[str],
-    append: bool
-):
-  processing_spec = VideoProcessingSpec(video_id=video_id, delete_downloaded_files=delete_downloaded_files)
-  categorization_spec = VideoCategorizationSpec(video_id=video_id, topic_group_id=topic_group_id)
+def run_video_processing_workflow(workflow: dict):
+  video_workflow = VideoProcessingWorkflow(**workflow)
+
+  processing_spec = VideoProcessingSpec(
+    video_id=video_workflow.video_id,
+    delete_downloaded_files=video_workflow.delete_downloaded_files
+  )
+  categorization_spec = VideoCategorizationSpec(
+    video_id=video_workflow.video_id,
+    topic_group_id=video_workflow.topic_group_id
+  )
 
   video_processing_chain = chain(
     process_video.si(processing_spec.model_dump(mode="json")),
     group(
       categorize_video.si(categorization_spec.model_dump(mode="json")),
-      create_challenge_sub_workflow.si(video_id, pattern_group_id, topic_group_id, langs, append)
+      create_challenge_sub_workflow.si(workflow)
     )
   )
 
@@ -70,22 +80,29 @@ def create_video_processing_sub_workflow(
 
 
 @worker_app.task
-def create_video_processing_group(
+def create_apidojo_video_processing_group(
     posts: dict,
-    delete_downloaded_files: bool,
-    pattern_group_id: UUID,
-    topic_group_id: UUID,
-    langs: list[str],
-    append: bool
+    workflow: dict
 ):
   from core.processors.scraper import ApidojoPostProcessResult
 
   post_process_result = ApidojoPostProcessResult(**posts)
+  apidojo_workflow = ApidojoWorkflow(**workflow)
+
   tasks = []
   for post in post_process_result.posts:
     if post.new_video:
+      video_workflow = VideoProcessingWorkflow(
+        video_id=post.video_id,
+        delete_downloaded_files=apidojo_workflow.delete_downloaded_files,
+        pattern_group_id=apidojo_workflow.pattern_group_id,
+        topic_group_id=apidojo_workflow.topic_group_id,
+        langs=apidojo_workflow.langs,
+        append=apidojo_workflow.append
+      )
+
       tasks.append(
-        create_video_processing_sub_workflow.si(post.video_id, delete_downloaded_files, pattern_group_id, topic_group_id, langs, append)
+        run_video_processing_workflow.si(video_workflow.model_dump(mode="json"))
       )
 
   return group(tasks)()
@@ -102,20 +119,14 @@ def transform_apidojo_actor_run(actor_run: dict) -> dict:
 
 
 @worker_app.task
-def run_apidojo_workflow(apidojo_workflow: dict):
-  apidojo_workflow = ApidojoWorkflow(**apidojo_workflow)
+def run_apidojo_workflow(workflow: dict):
+  apidojo_workflow = ApidojoWorkflow(**workflow)
 
   workflow = chain(
     run_apidojo_actor.s(apidojo_workflow.actor_spec.model_dump(mode="json")),
     transform_apidojo_actor_run.s(),
     post_process_apidojo_dataset.s(),
-    create_video_processing_group.s(
-      apidojo_workflow.delete_downloaded_files,
-      apidojo_workflow.pattern_group_id,
-      apidojo_workflow.topic_group_id,
-      apidojo_workflow.langs,
-      apidojo_workflow.append
-    )
+    create_apidojo_video_processing_group.s(workflow)
   )
 
   return workflow()
