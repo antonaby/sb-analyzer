@@ -2,30 +2,31 @@ from uuid import UUID
 
 from celery import group
 
+from models.videos import ChallengeGenSpec, ChallengeCategorizationSpec
 from worker.main import worker_app
 
 
 @worker_app.task
-def generate_challenges_for_video(job_id: UUID) -> dict:
-  from worker.tasks.deps import loop, challenge_processor, async_db
-  from core.processors.jobs import create_challenge_translation_jobs, create_challenge_categorization_jobs
+def generate_challenges_for_video(spec: dict) -> dict:
+  from worker.tasks.deps import loop, challenge_processor
 
-  result = loop.run_until_complete(challenge_processor.run(job_id))
-  job_ids = loop.run_until_complete(create_challenge_translation_jobs(result.challenges, async_db))
-
-  if len(job_ids) > 0:
-    tasks = [produce_challenge_translations.s(job_id) for job_id in job_ids]
-    t_processing_job = group(tasks)
-    t_processing_job.apply_async()
-
-  job_ids = loop.run_until_complete(create_challenge_categorization_jobs(result.challenges, async_db))
-
-  if len(job_ids) > 0:
-    tasks = [categorize_challenge.s(job_id) for job_id in job_ids]
-    c_processing_job = group(tasks)
-    c_processing_job.apply_async()
+  challenge_gen_spec = ChallengeGenSpec(**spec)
+  result = loop.run_until_complete(challenge_processor.run(challenge_gen_spec))
 
   return result.model_dump(mode="json")
+
+
+@worker_app.task
+def categorize_challenge(spec: dict) -> dict:
+  from worker.tasks.deps import loop, challenge_category_processor
+
+  challenge_category_spec = ChallengeCategorizationSpec(**spec)
+  result = loop.run_until_complete(challenge_category_processor.run(challenge_category_spec))
+  return result.model_dump(mode="json")
+
+
+
+
 
 
 @worker_app.task
@@ -36,12 +37,7 @@ def produce_challenge_translations(job_id: UUID) -> dict:
   return result.model_dump(mode="json")
 
 
-@worker_app.task
-def categorize_challenge(job_id: UUID) -> dict:
-  from worker.tasks.deps import loop, challenge_category_processor
 
-  result = loop.run_until_complete(challenge_category_processor.run(job_id))
-  return result.model_dump(mode="json")
 
 
 @worker_app.task
