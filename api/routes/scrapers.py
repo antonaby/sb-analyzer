@@ -7,11 +7,10 @@ from pydantic import BaseModel, Field
 from api.deps import get_job_repo
 from api.routes.common import OkResponse, CeleryJobDetails
 from db.models import ScraperJob
-from db.repositories.jobs import JobRepository, APIDOJO_SCRAPER_NAME
-from models.apidojo import ApidojoSearch, ApidojoCollectUrls, ApidojoActorSpec
 from db.repositories.common import BadDataRepositoryError
+from db.repositories.jobs import JobRepository, APIDOJO_SCRAPER_NAME
+from models.apidojo import ApidojoActorSpec, ApidojoWorkflow
 from worker.tasks.scrapers import run_scraper, run_scrapers
-
 
 router = APIRouter(
   prefix="/scrapers",
@@ -48,24 +47,14 @@ def to_scraper_job_details(job: ScraperJob) -> ScraperJobDetails:
   )
 
 
-@router.post("/apidojo/search")
-async def create_apidojo_search_scraper_job(
-    request: ApidojoSearch, job_repo: JobRepository = Depends(get_job_repo)
+@router.post("/apidojo")
+async def create_apidojo_workflow_scraper_job(
+    workflow: ApidojoWorkflow,
+    enabled: bool = Query(True, description="Enable newly created scraper job"),
+    job_repo: JobRepository = Depends(get_job_repo)
 ) -> ScraperJobId:
   scraper_job = await job_repo.create_scraper_job(
-    APIDOJO_SCRAPER_NAME, ApidojoActorSpec(func="search", args=request), enabled=True
-  )
-  await job_repo.commit()
-
-  return ScraperJobId(job_id=scraper_job.id)
-
-
-@router.post("/apidojo/collect")
-async def create_apidojo_collect_scraper_job(
-    request: ApidojoCollectUrls, job_repo: JobRepository = Depends(get_job_repo)
-) -> ScraperJobId:
-  scraper_job = await job_repo.create_scraper_job(
-    APIDOJO_SCRAPER_NAME, ApidojoActorSpec(func="collect_videos_by_urls", args=request), enabled=True
+    APIDOJO_SCRAPER_NAME, workflow, enabled=enabled
   )
   await job_repo.commit()
 

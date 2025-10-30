@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from core.processors.common import JobProcessor, JobProcessorError
 from db.repositories.jobs import JobRepository, APIDOJO_SCRAPER_NAME
-from models.apidojo import ApidojoActorSpec
+from models.apidojo import ApidojoWorkflow
 
 
 class ScraperJobAllProcessorResult(BaseModel):
@@ -41,18 +41,18 @@ class ScraperJobProcessor(JobProcessor):
         raise JobProcessorError(f"Scraper job {job_id} not found")
 
       if job.scraper == APIDOJO_SCRAPER_NAME:
-        spec = ApidojoActorSpec(**job.meta)
+        spec = ApidojoWorkflow(**job.meta)
         return ScraperJobProcessorResult(name=APIDOJO_SCRAPER_NAME, spec=spec.model_dump(mode="json"))
 
       raise JobProcessorError(f"Unknown scraper for job {job_id} not found")
 
   @staticmethod
-  async def _process_apidojo_jobs(repo: JobRepository) -> list[ApidojoActorSpec]:
+  async def _process_apidojo_jobs(repo: JobRepository) -> list[ApidojoWorkflow]:
     scraper_jobs = await repo.get_scraper_jobs(APIDOJO_SCRAPER_NAME)
-    specs: list[ApidojoActorSpec] = []
+    specs: list[ApidojoWorkflow] = []
 
     for scraper_job in scraper_jobs:
       if scraper_job.enabled:
-        specs.append(ApidojoActorSpec(**scraper_job.meta))
+        specs.append(ApidojoWorkflow(**scraper_job.meta))
 
     return specs

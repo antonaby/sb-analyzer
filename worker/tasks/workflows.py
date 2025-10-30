@@ -2,22 +2,13 @@ from uuid import UUID
 
 from celery import chain, group
 
+from models.apidojo import ApidojoWorkflow
 from models.videos import VideoProcessingSpec, VideoCategorizationSpec, ChallengeGenSpec, ChallengeCategorizationSpec, \
   ChallengeTranslationSpec
 from worker.main import worker_app
 from worker.tasks.videos import process_video, categorize_video
 from worker.tasks.challenges import generate_challenges_for_video, categorize_challenge, produce_challenge_translations
 from worker.tasks.apidojo import run_apidojo_actor, post_process_apidojo_dataset
-
-
-@worker_app.task
-def transform_apidojo_actor_run(actor_run: dict) -> dict:
-  from core.processors.scraper import ApidojoScraperRun
-  from models.apidojo import ApidojoPostProcessorSpec
-
-  actor_result = ApidojoScraperRun(**actor_run)
-  post_processor_spec = ApidojoPostProcessorSpec(search_id=actor_result.search_id, actor_run=actor_result.run)
-  return post_processor_spec.model_dump(mode="json")
 
 
 @worker_app.task
@@ -56,7 +47,13 @@ def create_challenge_sub_workflow(video_id: UUID, pattern_group_id: UUID, langs:
 
 
 @worker_app.task
-def create_video_processing_sub_workflow(video_id: UUID, delete_downloaded_files: bool, pattern_group_id: UUID, langs: list[str], append: bool):
+def create_video_processing_sub_workflow(
+    video_id: UUID,
+    delete_downloaded_files: bool,
+    pattern_group_id: UUID,
+    langs: list[str],
+    append: bool
+):
   processing_spec = VideoProcessingSpec(video_id=video_id, delete_downloaded_files=delete_downloaded_files)
   categorization_spec = VideoCategorizationSpec(video_id=video_id)
 
@@ -64,7 +61,7 @@ def create_video_processing_sub_workflow(video_id: UUID, delete_downloaded_files
     process_video.si(processing_spec.model_dump(mode="json")),
     group(
       categorize_video.si(categorization_spec.model_dump(mode="json")),
-      create_challenge_sub_workflow(video_id, pattern_group_id, langs, append)
+      create_challenge_sub_workflow.si(video_id, pattern_group_id, langs, append)
     )
   )
 
@@ -72,7 +69,13 @@ def create_video_processing_sub_workflow(video_id: UUID, delete_downloaded_files
 
 
 @worker_app.task
-def create_video_processing_group(posts: dict, delete_downloaded_files: bool, pattern_group_id: UUID, langs: list[str], append: bool):
+def create_video_processing_group(
+    posts: dict,
+    delete_downloaded_files: bool,
+    pattern_group_id: UUID,
+    langs: list[str],
+    append: bool
+):
   from core.processors.scraper import ApidojoPostProcessResult
 
   post_process_result = ApidojoPostProcessResult(**posts)
@@ -87,12 +90,29 @@ def create_video_processing_group(posts: dict, delete_downloaded_files: bool, pa
 
 
 @worker_app.task
-def run_apidojo_workflow(apidojo_spec: dict):
+def transform_apidojo_actor_run(actor_run: dict) -> dict:
+  from core.processors.scraper import ApidojoScraperRun
+  from models.apidojo import ApidojoPostProcessorSpec
+
+  actor_result = ApidojoScraperRun(**actor_run)
+  post_processor_spec = ApidojoPostProcessorSpec(search_id=actor_result.search_id, actor_run=actor_result.run)
+  return post_processor_spec.model_dump(mode="json")
+
+
+@worker_app.task
+def run_apidojo_workflow(apidojo_workflow: dict):
+  apidojo_workflow = ApidojoWorkflow(**apidojo_workflow)
+
   workflow = chain(
-    run_apidojo_actor.s(apidojo_spec),
+    run_apidojo_actor.s(apidojo_workflow.actor_spec.model_dump(mode="json")),
     transform_apidojo_actor_run.s(),
     post_process_apidojo_dataset.s(),
-    create_video_processing_group.s(True, UUID("249b2e88-b302-11f0-bc33-7f2eac94b24a"), ["ru", "fr", "de"], False)
+    create_video_processing_group.s(
+      apidojo_workflow.delete_downloaded_files,
+      apidojo_workflow.pattern_group_id,
+      apidojo_workflow.langs,
+      apidojo_workflow.append
+    )
   )
 
   return workflow()

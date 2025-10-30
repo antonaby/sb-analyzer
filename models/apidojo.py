@@ -33,3 +33,11 @@ class ApidojoActorSpec(BaseModel):
 class ApidojoPostProcessorSpec(BaseModel):
   search_id: UUID
   actor_run: ActorRun
+
+
+class ApidojoWorkflow(BaseModel):
+  actor_spec: ApidojoActorSpec
+  delete_downloaded_files: bool
+  pattern_group_id: UUID
+  langs: list[str]
+  append: bool
