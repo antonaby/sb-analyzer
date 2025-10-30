@@ -2,9 +2,10 @@ from uuid import UUID
 
 from fastapi import APIRouter
 from fastapi.params import Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, constr
 
 from api.deps import *
+from api.routes.common import OkResponse
 from db.repositories.topics import TopicWithVideoCount
 
 router = APIRouter(
@@ -27,6 +28,21 @@ async def new_topic(request: CreateTopicGroupRequest, topic_repo: TopicRepositor
 class CreateTopicRequest(BaseModel):
   group_id: UUID
   name: str = Field(min_length=3, description="Topic name")
+
+
+TopicStr = constr(min_length=3)
+class CreateTopicBatchRequest(BaseModel):
+  group_id: UUID
+  topics: list[TopicStr] =  Field(min_length=1)
+
+
+@router.post("/batch")
+async def new_topic(request: CreateTopicBatchRequest, topic_repo: TopicRepository = Depends(get_topic_repo)) -> OkResponse:
+  for topic in request.topics:
+    topic = await topic_repo.create_topic(name=topic, group_id=request.group_id)
+
+  await topic_repo.commit()
+  return OkResponse(result=True, msg=f"{len(request.topics)} topics created")
 
 
 @router.post("/")
