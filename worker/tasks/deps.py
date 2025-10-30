@@ -12,7 +12,7 @@ from core.agents.translation import TranslationAgent
 from core.processors.challenge import ChallengeProcessor, ChallengeCategoryProcessor
 from core.processors.jobs import ScraperJobProcessor
 from core.processors.translations import ChallengeTranslationProcessor
-from core.processors.scraper import ApidojoScrapperProcessor, ApidojoPostProcessor
+from core.processors.scraper import ApidojoActorProcessor, ApidojoPostProcessor
 from core.processors.video import VideoProcessor, TopicProcessor
 from core.transcribe import LemonfoxClient
 from core.video import ClipTaggerClient
@@ -46,7 +46,7 @@ summary_agent = SummaryAgent(gpt_5_nano(), template_manager)
 topic_agent = TopicAgent(gpt_5_nano(), medium_effort_gpt_5(), template_manager)
 
 #Processors
-apidojo_processor = ApidojoScrapperProcessor(apify_client, async_db)
+apidojo_processor = ApidojoActorProcessor(apify_client, async_db)
 apidojo_post_processor = ApidojoPostProcessor(apify_client, async_db)
 challenge_processor = ChallengeProcessor(challenge_agent, async_db)
 challenge_translation_processor = ChallengeTranslationProcessor(translation_agent, async_db)

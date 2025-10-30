@@ -9,12 +9,12 @@ dependencies = [
     "logfire[celery,fastapi,sqlalchemy]>=4.13.2",
     "pydantic>=2.11.9",
     "python-dotenv>=1.1.1",
+    "apify-client>=2.1.0",
 ]
 
 [dependency-groups]
 ai = [
     "aiohttp>=3.13.0",
-    "apify-client>=2.1.0",
     "jinja2>=3.1.6",
     "openai>=1.109.1",
     "opencv-contrib-python>=4.12.0.88",

@@ -93,12 +93,6 @@ DateRange = Literal[
 ]
 
 
-ApidojoFunc = Literal[
-  "search",
-  "collect_videos_by_urls"
-]
-
-
 class ApidojoTikTokScrapperError(Exception):
   pass
 

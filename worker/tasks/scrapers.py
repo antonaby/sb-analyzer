@@ -4,7 +4,7 @@ from celery import group
 
 from db.repositories.jobs import APIDOJO_SCRAPER_NAME
 from worker.main import worker_app
-from worker.tasks.apidojo import run_apidojo_scraper
+from worker.tasks.apidojo import run_apidojo_actor
 
 
 @worker_app.task
@@ -18,7 +18,7 @@ def run_scrapers() -> dict:
   for scraper, jobs in processor_result.jobs.items():
     if scraper == APIDOJO_SCRAPER_NAME:
       for job in jobs:
-        tasks.append(run_apidojo_scraper.si(job))
+        tasks.append(run_apidojo_actor.si(job))
 
   if len(tasks) > 0:
     scraper_job = group(tasks)
@@ -34,7 +34,7 @@ def run_scraper(scraper_job_id: UUID) -> dict:
 
   scraper, job_id = loop.run_until_complete(create_exec_job_for_scraper_job(scraper_job_id, async_db))
   if scraper == APIDOJO_SCRAPER_NAME:
-    run_apidojo_scraper.delay(job_id)
+    run_apidojo_actor.delay(job_id)
     return {
       "result": True,
       "job_id": job_id

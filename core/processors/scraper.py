@@ -9,12 +9,11 @@ from apify.actor import ActorRun
 from apify.client import ApifyClient
 from apify.tiktok.apidojo import TikTokPost
 from core.processors.common import JobProcessor, AuthorDetails, PostDetails, ScrapedVideo, SavedPost
-from db.models import VideoSource, Job, Search
+from db.models import VideoSource, Search
 from db.repositories.authors import AuthorRepository
-from db.repositories.jobs import APIDOJO_SCRAPER_JOB_NAME, ApidojoScraperJob, APIDOJO_POST_PROCESSOR_JOB_NAME, \
-  ApidojoPostProcessorJob
 from db.repositories.searches import SearchRepository
 from db.repositories.videos import VideoRepository
+from models.apidojo import ApidojoActorSpec, ApidojoPostProcessorSpec
 from utils.common import is_url
 
 
@@ -23,35 +22,27 @@ class ApidojoScraperRun(BaseModel):
   run: ActorRun
 
 
-class ApidojoScrapperProcessor(JobProcessor):
+class ApidojoActorProcessor(JobProcessor):
 
   def __init__(self, apify_client: ApifyClient, session_maker: async_sessionmaker[AsyncSession]):
     super().__init__(session_maker)
     self._apify_client = apify_client
 
-  async def run(self, job_id: UUID) -> ApidojoScraperRun:
-    job = await self.start_job(job_id, APIDOJO_SCRAPER_JOB_NAME)
-    try:
-      search, run = await self._run_scraper(job)
-      await self.set_job_finished(job_id, False)
+  async def run(self, spec: ApidojoActorSpec) -> ApidojoScraperRun:
+    search, run = await self._run_scraper(spec)
+    return ApidojoScraperRun(search_id=search.id, run=run)
 
-      return ApidojoScraperRun(search_id=search.id, run=run)
-    except Exception as e:
-      await self.set_job_finished(job_id, True)
-      raise e
-
-  async def _run_scraper(self, job: Job) -> tuple[Search, ActorRun]:
-    job_meta = ApidojoScraperJob(**job.meta)
-    search = await self._new_search("apidojo", job_meta.func, job_meta.args.model_dump(mode="json"))
+  async def _run_scraper(self, spec: ApidojoActorSpec) -> tuple[Search, ActorRun]:
+    search = await self._new_search("apidojo", spec.func, spec.args.model_dump(mode="json"))
 
     apidojo_client = self._apify_client.apidojo_tiktok_scrapper()
-    func = getattr(apidojo_client, job_meta.func)
+    func = getattr(apidojo_client, spec.func)
 
     actor_run: ActorRun
     posts: list[TikTokPost]
 
     try:
-      actor_run = await func(**job_meta.args.model_dump())
+      actor_run = await func(**spec.args.model_dump())
       posts: list[TikTokPost] = await self._apify_client.get_dataset(actor_run["defaultDatasetId"])
     except Exception as e:
       await self._update_search(search.id, -1)
@@ -85,21 +76,13 @@ class ApidojoPostProcessor(JobProcessor):
     super().__init__(session_maker)
     self._apify_client = apify_client
     
-  async def run(self, job_id: UUID) -> ApidojoPostProcessResult:
-    job = await self.start_job(job_id, APIDOJO_POST_PROCESSOR_JOB_NAME)
-    try:
-      job_meta = ApidojoPostProcessorJob(**job.meta)
-      dataset = await self._get_dataset(job_meta)
-      result = await self._process_posts(dataset)
-      await self.set_job_finished(job_id, False)
+  async def run(self, spec: ApidojoPostProcessorSpec) -> ApidojoPostProcessResult:
+    dataset = await self._get_dataset(spec.search_id, spec.actor_run)
+    result = await self._process_posts(dataset)
+    return ApidojoPostProcessResult(posts=result)
 
-      return ApidojoPostProcessResult(posts=result)
-    except Exception as e:
-      await self.set_job_finished(job_id, True)
-      raise e
-
-  async def _get_dataset(self, job_meta: ApidojoPostProcessorJob) -> list[ScrapedVideo]:
-    posts: list[TikTokPost] = await self._apify_client.get_dataset(job_meta.default_dataset_id)
+  async def _get_dataset(self, search_id: UUID, actor_run: ActorRun) -> list[ScrapedVideo]:
+    posts: list[TikTokPost] = await self._apify_client.get_dataset(actor_run["defaultDatasetId"])
     videos: list[ScrapedVideo] = []
 
     for post in posts:
@@ -121,7 +104,7 @@ class ApidojoPostProcessor(JobProcessor):
         )
 
         post_details = PostDetails(
-          search_id=job_meta.search_id,
+          search_id=search_id,
           url=video_url,
           download_url=download_url,
           post_from=VideoSource.tiktok,

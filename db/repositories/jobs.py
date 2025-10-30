@@ -1,10 +1,9 @@
 from typing import Sequence
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import insert, update, func, select, delete
 
-from apify.tiktok.apidojo import DateRange, SortType, ApidojoFunc
 from db.models import Job, ScraperJob
 from db.repositories.common import BaseAsyncRepo, BadDataRepositoryError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,23 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 APIDOJO_SCRAPER_NAME = "apidojo"
 
-class ApidojoScrapperRun(BaseModel):
-  keywords: list[str] = Field(min_length=1, description="At least one keyword")
-  date_range: DateRange
-  sort_type: SortType
-  location: str
-  max_items: int
-
-
-class ApidojoCollectUrls(BaseModel):
-  urls: list[str] = Field(min_length=1, description="At least one url")
-  max_items: int
-
-
 APIDOJO_SCRAPER_JOB_NAME = "apidojo.scraper"
-class ApidojoScraperJob(BaseModel):
-  func: ApidojoFunc
-  args: ApidojoScrapperRun | ApidojoCollectUrls
 
 APIDOJO_POST_PROCESSOR_JOB_NAME = "apidojo.postprocessor"
 class ApidojoPostProcessorJob(BaseModel):
