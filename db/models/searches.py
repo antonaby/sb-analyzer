@@ -29,7 +29,6 @@ class Search(Base):
   scraper: Mapped[str] = mapped_column(String(128), nullable=False)
   kind: Mapped[str] = mapped_column(String(128), nullable=False)
   search_data: Mapped[dict] = mapped_column(JSONB, default={}, nullable=False)
-  total_videos: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
 
   created_at: Mapped[datetime] = mapped_column(
     DateTime(timezone=True),

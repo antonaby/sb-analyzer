@@ -187,4 +187,3 @@ def batch_process_videos(spec: dict):
 
   group_task = group(tasks)
   return group_task()
-

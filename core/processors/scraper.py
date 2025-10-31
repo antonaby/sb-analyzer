@@ -43,12 +43,10 @@ class ApidojoActorProcessor(JobProcessor):
 
     try:
       actor_run = await func(**spec.args.model_dump())
-      posts: list[TikTokPost] = await self._apify_client.get_dataset(actor_run["defaultDatasetId"])
     except Exception as e:
-      await self._update_search(search.id, -1)
       raise e
 
-    search = await self._update_search(search.id, len(posts))
+    search = await self._update_search(search.id)
     return search, actor_run
 
   async def _new_search(self, scraper: str, kind: str, search_data: dict) -> Search:
@@ -58,10 +56,10 @@ class ApidojoActorProcessor(JobProcessor):
       await session.commit()
       return search
 
-  async def _update_search(self, search_id: UUID, total_videos: int) -> Search:
+  async def _update_search(self, search_id: UUID) -> Search:
     async with self._db() as session:
       search_repo = SearchRepository(session)
-      updated_search = await search_repo.update_search(search_id, total_videos)
+      updated_search = await search_repo.update_search(search_id)
       await session.commit()
       return updated_search
 

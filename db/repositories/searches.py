@@ -22,11 +22,11 @@ class SearchRepository(BaseAsyncRepo):
 
     return result.scalar_one()
 
-  async def update_search(self, search_id: UUID, total_videos: int) -> Search:
+  async def update_search(self, search_id: UUID) -> Search:
     stmt = (
       update(Search).
       where(Search.id == search_id).
-      values(total_videos=total_videos, ran_at=func.now()).
+      values(ran_at=func.now()).
       returning(Search)
     )
     result = await self._session.execute(stmt)
