@@ -12,6 +12,11 @@ class VideoProcessingSpec(BaseModel):
   delete_downloaded_files: bool
 
 
+class VideoBatchProcessingSpec(BaseModel):
+  limit: int
+  delete_downloaded_files: bool
+
+
 class VideoCategorizationSpec(BaseModel):
   video_id: UUID
   topic_group_id: UUID

@@ -445,3 +445,11 @@ class TopicProcessor(BaseVideoProcessor):
 
       await session.commit()
       return TopicProcessorResult(video_id=video.id, topics=assigned_topics)
+
+
+async def find_unprocessed_videos(db: async_sessionmaker[AsyncSession], limit: int | None = 100) -> list[UUID]:
+  async with db() as session:
+    repo = VideoRepository(session)
+
+    videos = await repo.find_unprocessed_videos(limit)
+    return [v.id for v in videos]

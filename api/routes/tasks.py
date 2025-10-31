@@ -2,9 +2,9 @@ from celery.result import AsyncResult
 from fastapi import APIRouter
 
 from api.routes.common import CeleryJobDetails
-from models.videos import VideoDownloadSpec
+from models.videos import VideoDownloadSpec, VideoBatchProcessingSpec
 from worker.main import worker_app
-from worker.tasks.videos import download_video
+from worker.tasks.videos import download_video, batch_process_videos
 
 
 router = APIRouter(
@@ -18,7 +18,14 @@ def get_task(task_id: str) -> CeleryJobDetails:
   job = AsyncResult(task_id, app=worker_app)
   return CeleryJobDetails(celery_job_id=job.id, celery_job_status=job.status, result=job.result)
 
+
 @router.post("/download-video")
 def run_download_video_task(spec: VideoDownloadSpec) -> CeleryJobDetails:
   job = download_video.delay(spec.model_dump(mode="json"))
+  return CeleryJobDetails(celery_job_id=job.id, celery_job_status=job.status, result=job.result)
+
+
+@router.post("/batch-process-videos")
+def run_batch_process_videos_task(spec: VideoBatchProcessingSpec) -> CeleryJobDetails:
+  job = batch_process_videos.delay(spec.model_dump(mode="json"))
   return CeleryJobDetails(celery_job_id=job.id, celery_job_status=job.status, result=job.result)
