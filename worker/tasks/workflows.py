@@ -94,13 +94,9 @@ def create_apidojo_video_processing_group(
   apidojo_workflow = ApidojoWorkflow(**workflow)
 
   result = loop.run_until_complete(
-    workflow_processor.run(
-      topic_group_id=apidojo_workflow.topic_group_id,
-      pattern_group_id=apidojo_workflow.pattern_group_id,
+    workflow_processor.process_posts(
       posts=post_process_result.posts,
-      delete_downloaded_files=apidojo_workflow.delete_downloaded_files,
-      langs=apidojo_workflow.langs,
-      append=apidojo_workflow.append,
+      workflow_spec=apidojo_workflow,
       only_new=True
     )
   )
@@ -170,25 +166,17 @@ def run_apidojo_download_workflow(workflow: dict):
 
 @worker_app.task
 def batch_process_videos(spec: dict):
-  from worker.tasks.deps import loop, async_db
-  from core.processors.video import find_unprocessed_videos
+  from worker.tasks.deps import loop, workflow_processor
 
   processor_spec = VideoBatchProcessingSpec(**spec)
-  video_ids = loop.run_until_complete(find_unprocessed_videos(async_db, processor_spec.limit))
+  result = loop.run_until_complete(
+    workflow_processor.process_unprocessed_videos(processor_spec.limit, processor_spec)
+  )
 
-  tasks = []
-  for video_id in video_ids:
-    video_spec = VideoProcessingWorkflow(
-      video_id=video_id,
-      delete_downloaded_files=processor_spec.delete_downloaded_files,
-      pattern_group_id=processor_spec.pattern_group_id,
-      topic_group_id=processor_spec.topic_group_id,
-      langs=processor_spec.langs,
-      append=processor_spec.append
-    )
-    tasks.append(
-      run_video_processing_workflow.si(video_spec.model_dump(mode="json"))
-    )
+  tasks = [
+    run_video_processing_workflow.si(video_workflow.model_dump(mode="json"))
+    for video_workflow in result.video_processing_workflows
+  ]
 
   group_task = group(tasks)
   return group_task()

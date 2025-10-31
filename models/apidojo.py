@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from apify.actor import ActorRun
 from apify.tiktok.apidojo import DateRange, SortType
+from models.common import BaseWorkflowSpec
 
 ApidojoFunc = Literal[
   "search",
@@ -35,13 +36,8 @@ class ApidojoPostProcessorSpec(BaseModel):
   actor_run: ActorRun
 
 
-class ApidojoWorkflow(BaseModel):
+class ApidojoWorkflow(BaseWorkflowSpec):
   actor_spec: ApidojoActorSpec
-  delete_downloaded_files: bool
-  topic_group_id: UUID
-  pattern_group_id: UUID
-  langs: list[str]
-  append: bool
 
 
 class ApidojoDownloadWorkflow(BaseModel):

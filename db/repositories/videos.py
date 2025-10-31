@@ -337,7 +337,7 @@ class VideoRepository(BaseAsyncRepo):
     videos = await self._session.scalars(stmt)
     return videos.all()
 
-  async def find_unprocessed_videos(self, limit: int | None = 100) -> Sequence[Video]:
+  async def find_unprocessed_videos(self, limit: int = 100) -> Sequence[Video]:
     stmt = (
       select(Video).
       where(~Video.processing.any()).

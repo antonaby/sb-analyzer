@@ -2,6 +2,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from models.common import BaseWorkflowSpec
+
 
 class VideoDownloadSpec(BaseModel):
   video_id: UUID
@@ -13,13 +15,8 @@ class VideoProcessingSpec(BaseModel):
   delete_downloaded_files: bool
 
 
-class VideoBatchProcessingSpec(BaseModel):
+class VideoBatchProcessingSpec(BaseWorkflowSpec):
   limit: int
-  delete_downloaded_files: bool
-  pattern_group_id: UUID
-  topic_group_id: UUID
-  langs: list[str]
-  append: bool
 
 
 class VideoCategorizationSpec(BaseModel):
@@ -45,11 +42,6 @@ class ChallengeTranslationSpec(BaseModel):
   append: bool
 
 
-class VideoProcessingWorkflow(BaseModel):
+class VideoProcessingWorkflow(BaseWorkflowSpec):
   video_id: UUID
   video_processing_id: UUID
-  delete_downloaded_files: bool
-  pattern_group_id: UUID
-  topic_group_id: UUID
-  langs: list[str]
-  append: bool
