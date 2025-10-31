@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, aliased, selectinload, with_loader_criteria
 
 from db.models import Challenge, ChallengeTranslation, ChallengeVideo, ChallengePattern, Video, ChallengeTopic, Topic, \
-  VideoTopic
+  VideoTopic, ChallengePatternGroup
 from db.repositories.common import BaseAsyncRepo, regconfig_for
 
 
@@ -33,6 +33,23 @@ class ChallengeRepository(BaseAsyncRepo):
 
   def __init__(self, session: AsyncSession):
     self._session = session
+
+  async def create_challenge_pattern_group(self, name: str) -> ChallengePatternGroup:
+    stmt = insert(ChallengePatternGroup).values(name=name).returning(ChallengePatternGroup)
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one()
+
+  async def create_challenge_pattern(self, group_id: UUID, value: str, example: str) -> ChallengePattern:
+    stmt = (
+      insert(ChallengePattern).
+      values(group_id=group_id, value=value, example=example).
+      returning(ChallengePattern)
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one()
+
 
   async def get_challenge_patterns(self, challenge_pattern_group_id: UUID) -> Sequence[ChallengePattern]:
     stmt = select(ChallengePattern).where(ChallengePattern.group_id == challenge_pattern_group_id)

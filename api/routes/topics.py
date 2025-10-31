@@ -19,7 +19,7 @@ class CreateTopicGroupRequest(BaseModel):
 
 
 @router.post("/groups")
-async def new_topic(request: CreateTopicGroupRequest, topic_repo: TopicRepository = Depends(get_topic_repo)):
+async def new_topic_group(request: CreateTopicGroupRequest, topic_repo: TopicRepository = Depends(get_topic_repo)):
   topic = await topic_repo.create_topic_group(name=request.name)
   await topic_repo.commit()
   return topic
@@ -33,7 +33,7 @@ class CreateTopicRequest(BaseModel):
 TopicStr = constr(min_length=3)
 class CreateTopicBatchRequest(BaseModel):
   group_id: UUID
-  topics: list[TopicStr] =  Field(min_length=1)
+  topics: list[TopicStr] = Field(min_length=1)
 
 
 @router.post("/batch")
