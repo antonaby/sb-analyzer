@@ -15,6 +15,10 @@ class VideoProcessingSpec(BaseModel):
 class VideoBatchProcessingSpec(BaseModel):
   limit: int
   delete_downloaded_files: bool
+  pattern_group_id: UUID
+  topic_group_id: UUID
+  langs: list[str]
+  append: bool
 
 
 class VideoCategorizationSpec(BaseModel):

@@ -4,7 +4,7 @@ from celery import chain, group
 
 from models.apidojo import ApidojoWorkflow, ApidojoDownloadWorkflow
 from models.videos import VideoProcessingSpec, VideoCategorizationSpec, ChallengeGenSpec, ChallengeCategorizationSpec, \
-  ChallengeTranslationSpec, VideoProcessingWorkflow, VideoDownloadSpec
+  ChallengeTranslationSpec, VideoProcessingWorkflow, VideoDownloadSpec, VideoBatchProcessingSpec
 from worker.main import worker_app
 from worker.tasks.videos import process_video, categorize_video, download_video
 from worker.tasks.challenges import generate_challenges_for_video, categorize_challenge, produce_challenge_translations
@@ -161,3 +161,30 @@ def run_apidojo_download_workflow(workflow: dict):
   )
 
   return workflow_task()
+
+
+@worker_app.task
+def batch_process_videos(spec: dict):
+  from worker.tasks.deps import loop, async_db
+  from core.processors.video import find_unprocessed_videos
+
+  processor_spec = VideoBatchProcessingSpec(**spec)
+  video_ids = loop.run_until_complete(find_unprocessed_videos(async_db, processor_spec.limit))
+
+  tasks = []
+  for video_id in video_ids:
+    video_spec = VideoProcessingWorkflow(
+      video_id=video_id,
+      delete_downloaded_files=processor_spec.delete_downloaded_files,
+      pattern_group_id=processor_spec.pattern_group_id,
+      topic_group_id=processor_spec.topic_group_id,
+      langs=processor_spec.langs,
+      append=processor_spec.append
+    )
+    tasks.append(
+      run_video_processing_workflow.si(video_spec.model_dump(mode="json"))
+    )
+
+  group_task = group(tasks)
+  return group_task()
+

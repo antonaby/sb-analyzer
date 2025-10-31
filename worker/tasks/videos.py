@@ -1,6 +1,4 @@
-from celery import group
-
-from models.videos import VideoProcessingSpec, VideoCategorizationSpec, VideoDownloadSpec, VideoBatchProcessingSpec
+from models.videos import VideoProcessingSpec, VideoCategorizationSpec, VideoDownloadSpec
 from worker.main import worker_app
 
 
@@ -32,22 +30,3 @@ def categorize_video(spec: dict):
   result = loop.run_until_complete(topic_processor.run(topic_spec))
 
   return result.model_dump(mode="json")
-
-
-@worker_app.task
-def batch_process_videos(spec: dict):
-  from worker.tasks.deps import loop, async_db
-  from core.processors.video import find_unprocessed_videos
-
-  processor_spec = VideoBatchProcessingSpec(**spec)
-  video_ids = loop.run_until_complete(find_unprocessed_videos(async_db, processor_spec.limit))
-
-  tasks = []
-  for video_id in video_ids:
-    video_spec = VideoProcessingSpec(video_id=video_id, delete_downloaded_files=processor_spec.delete_downloaded_files)
-    tasks.append(
-      process_video.si(video_spec.model_dump(mode="json"))
-    )
-
-  group_task = group(tasks)
-  return group_task()
