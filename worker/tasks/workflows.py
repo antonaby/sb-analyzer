@@ -43,11 +43,10 @@ def create_challenge_sub_workflow(workflow: dict):
 
   gen_spec = ChallengeGenSpec(
     video_id=video_workflow.video_id,
-    video_processing_id=video_workflow.video_processing_id,
     pattern_group_id=video_workflow.pattern_group_id
   )
   return chain(
-    generate_challenges_for_video.si(gen_spec.model_dump(mode="json")),
+    generate_challenges_for_video.si(gen_spec.model_dump(mode="json"), video_workflow.video_processing_id),
     create_challenge_processing_group.s(
       video_workflow.topic_group_id,
       video_workflow.langs,
@@ -66,14 +65,13 @@ def run_video_processing_workflow(workflow: dict):
   )
   categorization_spec = VideoCategorizationSpec(
     video_id=video_workflow.video_id,
-    video_processing_id=video_workflow.video_processing_id,
     topic_group_id=video_workflow.topic_group_id
   )
 
   video_processing_chain = chain(
     process_video.si(processing_spec.model_dump(mode="json"), video_workflow.video_processing_id),
     group(
-      categorize_video.si(categorization_spec.model_dump(mode="json")),
+      categorize_video.si(categorization_spec.model_dump(mode="json"), video_workflow.video_processing_id),
       create_challenge_sub_workflow.si(workflow)
     )
   )

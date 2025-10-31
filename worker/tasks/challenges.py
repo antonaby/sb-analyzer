@@ -1,13 +1,20 @@
+from uuid import UUID
+
 from models.videos import ChallengeGenSpec, ChallengeCategorizationSpec, ChallengeTranslationSpec
 from worker.main import worker_app
 
 
 @worker_app.task
-def generate_challenges_for_video(spec: dict) -> dict:
+def generate_challenges_for_video(spec: dict, video_processing_id: UUID | None = None) -> dict:
   from worker.tasks.deps import loop, challenge_processor
 
   challenge_gen_spec = ChallengeGenSpec(**spec)
-  result = loop.run_until_complete(challenge_processor.run(challenge_gen_spec))
+  if video_processing_id:
+    coro = challenge_processor.run_workflow(challenge_gen_spec, video_processing_id)
+  else:
+    coro = challenge_processor.run(challenge_gen_spec)
+
+  result = loop.run_until_complete(coro)
 
   return result.model_dump(mode="json")
 

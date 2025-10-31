@@ -20,13 +20,11 @@ class VideoBatchProcessingSpec(BaseWorkflowSpec):
 
 class VideoCategorizationSpec(BaseModel):
   video_id: UUID
-  video_processing_id: UUID
   topic_group_id: UUID
 
 
 class ChallengeGenSpec(BaseModel):
   video_id: UUID
-  video_processing_id: UUID
   pattern_group_id: UUID
 
 

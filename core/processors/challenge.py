@@ -36,18 +36,23 @@ class ChallengeProcessor(JobProcessor):
     super().__init__(session_maker)
     self._challenge_agent = challenge_agent
 
-  async def run(self, spec: ChallengeGenSpec) -> ChallengeProcessorResult:
+  async def run_workflow(self, spec: ChallengeGenSpec, video_processing_id: UUID) -> ChallengeProcessorResult:
     try:
-      video, video_data = await self._get_video_data(spec.video_id)
-
-      run_input = ChallengeGenAgentRun(video=video_data, pattern_group_id=spec.pattern_group_id)
-      agent_response = await self._challenge_agent.run(run_input)
-
-      result = await self._save_challenges(spec, agent_response)
+      result = await self.run(spec)
+      await self._set_challenges_creating_status(video_processing_id, False)
       return result
     except Exception as e:
-      await self._set_challenges_creating_error(spec.video_processing_id)
+      await self._set_challenges_creating_status(video_processing_id, True)
       raise e
+
+  async def run(self, spec: ChallengeGenSpec) -> ChallengeProcessorResult:
+    video, video_data = await self._get_video_data(spec.video_id)
+
+    run_input = ChallengeGenAgentRun(video=video_data, pattern_group_id=spec.pattern_group_id)
+    agent_response = await self._challenge_agent.run(run_input)
+
+    result = await self._save_challenges(spec, agent_response)
+    return result
 
   async def _get_video_data(self, video_id: UUID) -> tuple[Video, TextVideoData]:
 
@@ -61,10 +66,10 @@ class ChallengeProcessor(JobProcessor):
       video_data = full_video_data(video)
       return video, video_data
 
-  async def _set_challenges_creating_error(self, video_processing_id: UUID):
+  async def _set_challenges_creating_status(self, video_processing_id: UUID, with_error: bool):
     async with self._db() as session:
       video_repo = VideoRepository(session)
-      await video_repo.set_challenge_creating(video_processing_id, True)
+      await video_repo.set_challenge_creating(video_processing_id, with_error)
       await session.commit()
 
   async def _save_challenges(self,
@@ -72,9 +77,6 @@ class ChallengeProcessor(JobProcessor):
                              agent_response: ChallengeGenAgentResponse) -> ChallengeProcessorResult:
     total_challenges: list[ChallengeDetails] = []
     async with self._db() as session:
-      video_repo = VideoRepository(session)
-      await video_repo.set_challenge_creating(spec.video_processing_id, False)
-
       challenge_repo = ChallengeRepository(session)
       await challenge_repo.unassign_videos(spec.pattern_group_id, spec.video_id)
 

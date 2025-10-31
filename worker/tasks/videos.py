@@ -29,10 +29,15 @@ def process_video(spec: dict, video_processing_id: UUID | None = None):
 
 
 @worker_app.task
-def categorize_video(spec: dict):
+def categorize_video(spec: dict, video_processing_id: UUID | None = None):
   from worker.tasks.deps import loop, topic_processor
 
   topic_spec = VideoCategorizationSpec(**spec)
-  result = loop.run_until_complete(topic_processor.run(topic_spec))
+  if video_processing_id:
+    coro = topic_processor.run_workflow(topic_spec, video_processing_id)
+  else:
+    coro = topic_processor.run(topic_spec)
+
+  result = loop.run_until_complete(coro)
 
   return result.model_dump(mode="json")

@@ -409,20 +409,24 @@ class TopicProcessor(BaseVideoProcessor):
     super().__init__(async_session)
     self._topic_agent = topic_agent
 
-  async def run(self, spec: VideoCategorizationSpec) -> TopicProcessorResult:
+  async def run_workflow(self, spec: VideoCategorizationSpec, video_processing_id: UUID) -> TopicProcessorResult:
     try:
-      video = await self._find_video(spec.video_id, with_scraped_data=True, with_annotations=True, with_meta=True)
-
-      video_data = full_video_data(video)
-      topics_names = await self._find_topics(spec.topic_group_id)
-      agent_response = await self._topic_agent.run(video_data, topics_names)
-
-      result = await self._save_topics(video, spec.video_processing_id, spec.topic_group_id, agent_response.topics)
-
+      result = await self.run(spec)
+      await self._set_categorization_status(video_processing_id, False)
       return result
     except Exception as e:
-      await self._set_categorization_error(spec.video_processing_id)
+      await self._set_categorization_status(video_processing_id, True)
       raise e
+
+  async def run(self, spec: VideoCategorizationSpec) -> TopicProcessorResult:
+    video = await self._find_video(spec.video_id, with_scraped_data=True, with_annotations=True, with_meta=True)
+
+    video_data = full_video_data(video)
+    topics_names = await self._find_topics(spec.topic_group_id)
+    agent_response = await self._topic_agent.run(video_data, topics_names)
+    result = await self._save_topics(video, spec.topic_group_id, agent_response.topics)
+
+    return result
 
   async def _find_topics(self, topic_group_id: UUID) -> list[TopicName]:
     async with self._db() as session:
@@ -430,21 +434,17 @@ class TopicProcessor(BaseVideoProcessor):
       all_topics = await topic_repo.get_all_topics(topic_group_id)
       return [TopicName(id=t.id, name=t.name) for t in all_topics]
 
-  async def _set_categorization_error(self, video_processing_id: UUID):
+  async def _set_categorization_status(self, video_processing_id: UUID, with_error: bool):
     async with self._db() as session:
       video_repo = VideoRepository(session)
-      await video_repo.set_video_categorization(video_processing_id, True)
+      await video_repo.set_video_categorization(video_processing_id, with_error)
       await session.commit()
 
   async def _save_topics(self,
                          video: Video,
-                         video_processing_id: UUID,
                          topic_group_id: UUID,
                          topics: list[MainTopic]) -> TopicProcessorResult:
     async with self._db() as session:
-      video_repo = VideoRepository(session)
-      await video_repo.set_video_categorization(video_processing_id, False)
-
       video = await session.merge(video, load=False)
 
       topic_repo = TopicRepository(session)
