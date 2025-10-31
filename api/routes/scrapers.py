@@ -79,7 +79,7 @@ async def get_scraper_jobs(
 @router.post("/jobs/run")
 def run_all_scraper_jobs():
   job = run_scrapers.delay()
-  return CeleryJobDetails(celery_job_id=job.id, celery_job_status=job.status)
+  return CeleryJobDetails(celery_job_id=job.id, celery_job_status=job.status, result=job.result)
 
 
 @router.get("/jobs/{job_id}")
@@ -98,7 +98,7 @@ async def run_scraper_job(job_id: UUID, job_repo: JobRepository = Depends(get_jo
     raise HTTPException(404, f"Job {job_id} not found")
 
   job = run_scraper.delay(scraper_job.id)
-  return CeleryJobDetails(celery_job_id=job.id, celery_job_status=job.status)
+  return CeleryJobDetails(celery_job_id=job.id, celery_job_status=job.status, result=job.result)
 
 
 class ScraperJobUpdateRequest(BaseModel):

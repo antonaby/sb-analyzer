@@ -13,7 +13,7 @@ from core.processors.challenge import ChallengeProcessor, ChallengeCategoryProce
 from core.processors.jobs import ScraperJobProcessor
 from core.processors.translations import ChallengeTranslationProcessor
 from core.processors.scraper import ApidojoActorProcessor, ApidojoPostProcessor
-from core.processors.video import VideoProcessor, TopicProcessor
+from core.processors.video import VideoDownloadProcessor, VideoProcessor, TopicProcessor
 from core.transcribe import LemonfoxClient
 from core.video import ClipTaggerClient
 from db.conf import create_db_engine, get_async_session
@@ -53,6 +53,7 @@ challenge_processor = ChallengeProcessor(challenge_agent, async_db)
 challenge_translation_processor = ChallengeTranslationProcessor(translation_agent, async_db)
 challenge_category_processor = ChallengeCategoryProcessor(challenge_category_agent, async_db)
 LOCAL_VIDEO_STORAGE_PATH = var_or_exception("LOCAL_VIDEO_STORAGE_PATH")
+video_download_processor = VideoDownloadProcessor(async_db, LOCAL_VIDEO_STORAGE_PATH)
 video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_db, "./videos", LOCAL_VIDEO_STORAGE_PATH)
 topic_processor = TopicProcessor(topic_agent, async_db)
 scraper_job_processor = ScraperJobProcessor(async_db)
