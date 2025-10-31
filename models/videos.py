@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from models.common import BaseWorkflowSpec
 
@@ -11,7 +11,6 @@ class VideoDownloadSpec(BaseModel):
 
 class VideoProcessingSpec(BaseModel):
   video_id: UUID
-  video_processing_id: UUID
   delete_downloaded_files: bool
 
 
@@ -44,4 +43,4 @@ class ChallengeTranslationSpec(BaseModel):
 
 class VideoProcessingWorkflow(BaseWorkflowSpec):
   video_id: UUID
-  video_processing_id: UUID
+  video_processing_id: UUID | None = Field(None, description="Video Processing Id")

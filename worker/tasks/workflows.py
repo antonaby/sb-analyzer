@@ -62,7 +62,6 @@ def run_video_processing_workflow(workflow: dict):
 
   processing_spec = VideoProcessingSpec(
     video_id=video_workflow.video_id,
-    video_processing_id=video_workflow.video_processing_id,
     delete_downloaded_files=video_workflow.delete_downloaded_files
   )
   categorization_spec = VideoCategorizationSpec(
@@ -72,7 +71,7 @@ def run_video_processing_workflow(workflow: dict):
   )
 
   video_processing_chain = chain(
-    process_video.si(processing_spec.model_dump(mode="json")),
+    process_video.si(processing_spec.model_dump(mode="json"), video_workflow.video_processing_id),
     group(
       categorize_video.si(categorization_spec.model_dump(mode="json")),
       create_challenge_sub_workflow.si(workflow)

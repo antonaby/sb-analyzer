@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from models.videos import VideoProcessingSpec, VideoCategorizationSpec, VideoDownloadSpec
 from worker.main import worker_app
 
@@ -13,12 +15,16 @@ def download_video(spec: dict):
 
 
 @worker_app.task
-def process_video(spec: dict):
+def process_video(spec: dict, video_processing_id: UUID | None = None):
   from worker.tasks.deps import loop, video_processor
 
   processor_spec = VideoProcessingSpec(**spec)
-  processed_video = loop.run_until_complete(video_processor.run(processor_spec))
+  if video_processing_id:
+    coro = video_processor.run_workflow(processor_spec, video_processing_id)
+  else:
+    coro = video_processor.run(processor_spec)
 
+  processed_video = loop.run_until_complete(coro)
   return processed_video.model_dump(mode="json")
 
 

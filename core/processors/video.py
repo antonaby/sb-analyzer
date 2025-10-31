@@ -135,6 +135,15 @@ class VideoProcessor(BaseVideoProcessor):
     path.mkdir(parents=True, exist_ok=True)
 
     self._storage_path = path
+
+  async def run_workflow(self, spec: VideoProcessingSpec, video_processing_id: UUID) -> ProcessedVideo:
+    try:
+      result = await self.run(spec)
+      await self._set_processing_status(video_processing_id, False)
+      return result
+    except Exception as e:
+      await self._set_processing_status(video_processing_id, True)
+      raise e
     
   async def run(self, spec: VideoProcessingSpec) -> ProcessedVideo:
     video_file: VideoFile | None = None
@@ -160,7 +169,6 @@ class VideoProcessor(BaseVideoProcessor):
 
       video = await self._save_video_details(
         video,
-        spec.video_processing_id,
         post_data,
         video_data,
         audio_data,
@@ -169,11 +177,10 @@ class VideoProcessor(BaseVideoProcessor):
 
       return ProcessedVideo(video_id=video.id)
     except Exception as e:
-      await self._set_processing_error(spec.video_processing_id)
       raise e
     finally:
       try:
-        if video_file is not None:
+        if video_file:
           video_file.close()
         if video_source and spec.delete_downloaded_files:
           video_source.delete()
@@ -194,16 +201,15 @@ class VideoProcessor(BaseVideoProcessor):
 
     raise VideoProcessorError(f"Unknown video source {url}")
 
-  async def _set_processing_error(self, video_processing_id: UUID):
+  async def _set_processing_status(self, video_processing_id: UUID, with_error: bool):
     async with self._db() as session:
       video_repo = VideoRepository(session)
-      await video_repo.set_video_processing(video_processing_id, True)
+      await video_repo.set_video_processing(video_processing_id, with_error)
       await session.commit()
         
   async def _save_video_details(
       self,
       video_model: Video,
-      video_processing_id: UUID,
       post_data: PostDetails, video_data: FileVideoData,
       audio_data: FileAudioData, summary: VideoSummary
   ) -> Video:
@@ -216,9 +222,6 @@ class VideoProcessor(BaseVideoProcessor):
     )
     
     async with self._db() as session:
-      repo = VideoRepository(session)
-      await repo.set_video_processing(video_processing_id, False)
-
       video_model = await session.merge(video_model, load=False)
       revision = video_model.revision + 1
 
