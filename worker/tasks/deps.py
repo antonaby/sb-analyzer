@@ -17,6 +17,7 @@ from core.processors.video import VideoProcessor, TopicProcessor
 from core.transcribe import LemonfoxClient
 from core.video import ClipTaggerClient
 from db.conf import create_db_engine, get_async_session
+from utils.common import var_or_exception
 
 # Env
 load_dotenv()
@@ -51,6 +52,7 @@ apidojo_post_processor = ApidojoPostProcessor(apify_client, async_db)
 challenge_processor = ChallengeProcessor(challenge_agent, async_db)
 challenge_translation_processor = ChallengeTranslationProcessor(translation_agent, async_db)
 challenge_category_processor = ChallengeCategoryProcessor(challenge_category_agent, async_db)
-video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_db, "./videos")
+LOCAL_VIDEO_STORAGE_PATH = var_or_exception("LOCAL_VIDEO_STORAGE_PATH")
+video_processor = VideoProcessor(clip_tagger_client, lemonfox_client, summary_agent, async_db, "./videos", LOCAL_VIDEO_STORAGE_PATH)
 topic_processor = TopicProcessor(topic_agent, async_db)
 scraper_job_processor = ScraperJobProcessor(async_db)

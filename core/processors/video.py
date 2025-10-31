@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from core.agents.common import TopicName
 from core.agents.summary import SummaryAgent, VideoSummary
 from core.agents.topic import TopicAgent, MainTopic
-from core.file import AudioFile, UrlVideoSource, VideoFile, VideoSource
+from core.file import AudioFile, UrlVideoSource, VideoFile, VideoSource, FilesystemVideoSource
 from core.processors.common import JobProcessor, PostDetails
 from core.transcribe import FileAudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, FileVideoData, Frame
@@ -61,9 +61,9 @@ class ProcessedVideo(BaseModel):
 
 class VideoDownloadProcessor(BaseVideoProcessor):
 
-  def __init__(self, session_maker: async_sessionmaker[AsyncSession], storage_dir: str):
+  def __init__(self, session_maker: async_sessionmaker[AsyncSession], storage_path: str):
     super().__init__(session_maker)
-    path = Path(storage_dir)
+    path = Path(storage_path)
     path.mkdir(parents=True, exist_ok=True)
 
     self._storage_path = path
@@ -103,7 +103,7 @@ class VideoDownloadProcessor(BaseVideoProcessor):
       safe_name = username.replace("@", "")
       return safe_name
 
-    raise VideoProcessorError(f"Unknown video source {author.source}")
+    raise VideoProcessorError(f"Unknown author source {author.source}")
 
 
 class VideoProcessor(BaseVideoProcessor):
@@ -111,7 +111,7 @@ class VideoProcessor(BaseVideoProcessor):
   def __init__(self,
                ct_client: ClipTaggerClient, lm_client: LemonfoxClient, agent: SummaryAgent,
                async_session: async_sessionmaker[AsyncSession],
-               tmp_dir: str):
+               tmp_dir: str, storage_path: str):
 
     super().__init__(async_session)
     self._log = logging.getLogger("app.videoprocessor")
@@ -119,6 +119,11 @@ class VideoProcessor(BaseVideoProcessor):
     self._lm_client = lm_client
     self._agent = agent
     self._tmp_dir = tmp_dir
+
+    path = Path(storage_path)
+    path.mkdir(parents=True, exist_ok=True)
+
+    self._storage_path = path
     
   async def run(self, spec: VideoProcessingSpec) -> ProcessedVideo:
     video_file: VideoFile | None = None
@@ -132,7 +137,7 @@ class VideoProcessor(BaseVideoProcessor):
 
       last_scraped_data = max(video.scraped_data, key=lambda d: d.created_at)
       post_data = PostDetails(**last_scraped_data.data)
-      video_source = await UrlVideoSource.new(post_data.download_url, self._tmp_dir)
+      video_source = await self._get_video_source(post_data)
 
       audio_file = AudioFile(video_source)
       video_file = VideoFile(video_source)
@@ -156,6 +161,20 @@ class VideoProcessor(BaseVideoProcessor):
           video_source.delete()
       except Exception as e:
         self._log.exception(e)
+
+  async def _get_video_source(self, post_data: PostDetails) -> VideoSource:
+    url = post_data.download_url
+
+    if url.startswith("http://") or url.startswith("https://"):
+      video_source = await UrlVideoSource.new(post_data.download_url, self._tmp_dir)
+      return video_source
+
+    if url.startswith("storage://"):
+      file_url = os.path.join(str(self._storage_path), url.replace("storage://", ""))
+      video_source = FilesystemVideoSource(file_url)
+      return video_source
+
+    raise VideoProcessorError(f"Unknown video source {url}")
 
   async def _set_processing_error(self, video_id: UUID):
     async with self._db() as session:
