@@ -2,11 +2,11 @@ from uuid import UUID
 
 from celery import chain, group
 
-from models.apidojo import ApidojoWorkflow
+from models.apidojo import ApidojoWorkflow, ApidojoDownloadWorkflow
 from models.videos import VideoProcessingSpec, VideoCategorizationSpec, ChallengeGenSpec, ChallengeCategorizationSpec, \
-  ChallengeTranslationSpec, VideoProcessingWorkflow
+  ChallengeTranslationSpec, VideoProcessingWorkflow, VideoDownloadSpec
 from worker.main import worker_app
-from worker.tasks.videos import process_video, categorize_video
+from worker.tasks.videos import process_video, categorize_video, download_video
 from worker.tasks.challenges import generate_challenges_for_video, categorize_challenge, produce_challenge_translations
 from worker.tasks.apidojo import run_apidojo_actor, post_process_apidojo_dataset
 
@@ -122,11 +122,42 @@ def transform_apidojo_actor_run(actor_run: dict) -> dict:
 def run_apidojo_workflow(workflow: dict):
   apidojo_workflow = ApidojoWorkflow(**workflow)
 
-  workflow = chain(
+  workflow_task = chain(
     run_apidojo_actor.s(apidojo_workflow.actor_spec.model_dump(mode="json")),
     transform_apidojo_actor_run.s(),
     post_process_apidojo_dataset.s(),
     create_apidojo_video_processing_group.s(workflow)
   )
 
-  return workflow()
+  return workflow_task()
+
+
+@worker_app.task
+def create_video_download_group(posts: dict):
+  from core.processors.scraper import ApidojoPostProcessResult
+
+  post_process_result = ApidojoPostProcessResult(**posts)
+
+  tasks = []
+  for post in post_process_result.posts:
+    if post.new_video:
+      spec = VideoDownloadSpec(video_id=post.video_id)
+      tasks.append(
+        download_video.si(spec.model_dump(mode="json"))
+      )
+
+  return group(tasks)()
+
+
+@worker_app.task
+def run_apidojo_download_workflow(workflow: dict):
+  apidojo_workflow = ApidojoDownloadWorkflow(**workflow)
+
+  workflow_task = chain(
+    run_apidojo_actor.s(apidojo_workflow.actor_spec.model_dump(mode="json")),
+    transform_apidojo_actor_run.s(),
+    post_process_apidojo_dataset.s(),
+    create_video_download_group.s()
+  )
+
+  return workflow_task()

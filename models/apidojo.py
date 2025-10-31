@@ -42,3 +42,7 @@ class ApidojoWorkflow(BaseModel):
   pattern_group_id: UUID
   langs: list[str]
   append: bool
+
+
+class ApidojoDownloadWorkflow(BaseModel):
+  actor_spec: ApidojoActorSpec
