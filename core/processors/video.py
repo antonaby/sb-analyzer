@@ -158,11 +158,18 @@ class VideoProcessor(BaseVideoProcessor):
       
       summary = await self._agent.run(post_data, video_data, audio_data)
 
-      video = await self._save_video_details(video, post_data, video_data, audio_data, summary)
+      video = await self._save_video_details(
+        video,
+        spec.video_processing_id,
+        post_data,
+        video_data,
+        audio_data,
+        summary
+      )
 
       return ProcessedVideo(video_id=video.id)
     except Exception as e:
-      await self._set_processing_error(spec.video_id)
+      await self._set_processing_error(spec.video_processing_id)
       raise e
     finally:
       try:
@@ -187,15 +194,16 @@ class VideoProcessor(BaseVideoProcessor):
 
     raise VideoProcessorError(f"Unknown video source {url}")
 
-  async def _set_processing_error(self, video_id: UUID):
+  async def _set_processing_error(self, video_processing_id: UUID):
     async with self._db() as session:
       video_repo = VideoRepository(session)
-      await video_repo.set_video_processing(video_id, True)
+      await video_repo.set_video_processing(video_processing_id, True)
       await session.commit()
         
   async def _save_video_details(
       self,
       video_model: Video,
+      video_processing_id: UUID,
       post_data: PostDetails, video_data: FileVideoData,
       audio_data: FileAudioData, summary: VideoSummary
   ) -> Video:
@@ -208,6 +216,9 @@ class VideoProcessor(BaseVideoProcessor):
     )
     
     async with self._db() as session:
+      repo = VideoRepository(session)
+      await repo.set_video_processing(video_processing_id, False)
+
       video_model = await session.merge(video_model, load=False)
       revision = video_model.revision + 1
 
@@ -216,8 +227,6 @@ class VideoProcessor(BaseVideoProcessor):
         "duration": video_data.get_duration(),
         "frames": video_data.get_total_frames()
       }
-      video_model.processing_error = False
-      video_model.processed_at = datetime.now(timezone.utc)
 
       for annotation in annotations:
         annotation.video_id = video_model.id
@@ -401,18 +410,15 @@ class TopicProcessor(BaseVideoProcessor):
     try:
       video = await self._find_video(spec.video_id, with_scraped_data=True, with_annotations=True, with_meta=True)
 
-      if not video.processed_at or video.processing_error:
-        raise VideoProcessorError(f"Video {spec.video_id} unprocessed")
-
       video_data = full_video_data(video)
       topics_names = await self._find_topics(spec.topic_group_id)
       agent_response = await self._topic_agent.run(video_data, topics_names)
 
-      result = await self._save_topics(video, spec.topic_group_id, agent_response.topics)
+      result = await self._save_topics(video, spec.video_processing_id, spec.topic_group_id, agent_response.topics)
 
       return result
     except Exception as e:
-      await self._set_categorization_error(spec.video_id)
+      await self._set_categorization_error(spec.video_processing_id)
       raise e
 
   async def _find_topics(self, topic_group_id: UUID) -> list[TopicName]:
@@ -421,17 +427,22 @@ class TopicProcessor(BaseVideoProcessor):
       all_topics = await topic_repo.get_all_topics(topic_group_id)
       return [TopicName(id=t.id, name=t.name) for t in all_topics]
 
-  async def _set_categorization_error(self, video_id: UUID):
+  async def _set_categorization_error(self, video_processing_id: UUID):
     async with self._db() as session:
       video_repo = VideoRepository(session)
-      await video_repo.set_video_categorization(video_id, True)
+      await video_repo.set_video_categorization(video_processing_id, True)
       await session.commit()
 
-  async def _save_topics(self, video: Video, topic_group_id: UUID, topics: list[MainTopic]) -> TopicProcessorResult:
+  async def _save_topics(self,
+                         video: Video,
+                         video_processing_id: UUID,
+                         topic_group_id: UUID,
+                         topics: list[MainTopic]) -> TopicProcessorResult:
     async with self._db() as session:
+      video_repo = VideoRepository(session)
+      await video_repo.set_video_categorization(video_processing_id, False)
+
       video = await session.merge(video, load=False)
-      video.categorization_error = False
-      video.categorized_at = datetime.now(timezone.utc)
 
       topic_repo = TopicRepository(session)
       await topic_repo.unassign_all_topics(video.id, topic_group_id)

@@ -18,7 +18,8 @@ async def get_video(
   video = await video_repo.get_video_by_id(
     video_id,
     with_annotations=True,
-    with_meta=True
+    with_meta=True,
+    with_processing=True
   )
 
   return full_video_data(video, True, True)

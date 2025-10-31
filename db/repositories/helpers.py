@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from db.models import Video, AnnotationKind, MetaSource, VideoSource, VideoAnnotation
+from db.models import Video, AnnotationKind, MetaSource, VideoSource, VideoAnnotation, VideoProcessing
 
 
 class VideoMeta(BaseModel):
@@ -88,17 +88,19 @@ def full_video_data(video: Video, include_frames: bool = True, include_processin
 
 
 def _get_video_processing_data(video: Video) -> ProcessingData:
+  video_processing = max(video.processing, key=lambda d: d.created_at)
+
   return ProcessingData(
     revision=video.revision,
     extra_data=video.extra_data,
     created_at=video.created_at,
     updated_at=video.updated_at,
-    processed_at=video.processed_at,
-    processing_error=video.processing_error,
-    categorized_at=video.categorized_at,
-    categorization_error=video.categorization_error,
-    challenges_created_at=video.challenges_created_at,
-    challenges_creating_error=video.challenges_creating_error
+    processed_at=video_processing.processed_at,
+    processing_error=video_processing.processing_error,
+    categorized_at=video_processing.categorized_at,
+    categorization_error=video_processing.categorization_error,
+    challenges_created_at=video_processing.challenges_created_at,
+    challenges_creating_error=video_processing.challenges_creating_error
   )
 
 

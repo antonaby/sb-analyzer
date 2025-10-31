@@ -43,6 +43,7 @@ def create_challenge_sub_workflow(workflow: dict):
 
   gen_spec = ChallengeGenSpec(
     video_id=video_workflow.video_id,
+    video_processing_id=video_workflow.video_processing_id,
     pattern_group_id=video_workflow.pattern_group_id
   )
   return chain(
@@ -61,10 +62,12 @@ def run_video_processing_workflow(workflow: dict):
 
   processing_spec = VideoProcessingSpec(
     video_id=video_workflow.video_id,
+    video_processing_id=video_workflow.video_processing_id,
     delete_downloaded_files=video_workflow.delete_downloaded_files
   )
   categorization_spec = VideoCategorizationSpec(
     video_id=video_workflow.video_id,
+    video_processing_id=video_workflow.video_processing_id,
     topic_group_id=video_workflow.topic_group_id
   )
 
@@ -84,26 +87,28 @@ def create_apidojo_video_processing_group(
     posts: dict,
     workflow: dict
 ):
+  from worker.tasks.deps import loop, workflow_processor
   from core.processors.scraper import ApidojoPostProcessResult
 
   post_process_result = ApidojoPostProcessResult(**posts)
   apidojo_workflow = ApidojoWorkflow(**workflow)
 
-  tasks = []
-  for post in post_process_result.posts:
-    if post.new_video:
-      video_workflow = VideoProcessingWorkflow(
-        video_id=post.video_id,
-        delete_downloaded_files=apidojo_workflow.delete_downloaded_files,
-        pattern_group_id=apidojo_workflow.pattern_group_id,
-        topic_group_id=apidojo_workflow.topic_group_id,
-        langs=apidojo_workflow.langs,
-        append=apidojo_workflow.append
-      )
+  result = loop.run_until_complete(
+    workflow_processor.run(
+      topic_group_id=apidojo_workflow.topic_group_id,
+      pattern_group_id=apidojo_workflow.pattern_group_id,
+      posts=post_process_result.posts,
+      delete_downloaded_files=apidojo_workflow.delete_downloaded_files,
+      langs=apidojo_workflow.langs,
+      append=apidojo_workflow.append,
+      only_new=True
+    )
+  )
 
-      tasks.append(
-        run_video_processing_workflow.si(video_workflow.model_dump(mode="json"))
-      )
+  tasks = [
+    run_video_processing_workflow.si(video_workflow.model_dump(mode="json"))
+    for video_workflow in result.video_processing_workflows
+  ]
 
   return group(tasks)()
 

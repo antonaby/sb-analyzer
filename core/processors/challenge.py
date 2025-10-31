@@ -43,10 +43,10 @@ class ChallengeProcessor(JobProcessor):
       run_input = ChallengeGenAgentRun(video=video_data, pattern_group_id=spec.pattern_group_id)
       agent_response = await self._challenge_agent.run(run_input)
 
-      result = await self._save_challenges(video, spec, agent_response)
+      result = await self._save_challenges(spec, agent_response)
       return result
     except Exception as e:
-      await self._set_challenges_creating_error(spec.video_id)
+      await self._set_challenges_creating_error(spec.video_processing_id)
       raise e
 
   async def _get_video_data(self, video_id: UUID) -> tuple[Video, TextVideoData]:
@@ -61,18 +61,19 @@ class ChallengeProcessor(JobProcessor):
       video_data = full_video_data(video)
       return video, video_data
 
-  async def _set_challenges_creating_error(self, video_id: UUID):
+  async def _set_challenges_creating_error(self, video_processing_id: UUID):
     async with self._db() as session:
       video_repo = VideoRepository(session)
-      await video_repo.set_challenge_creating(video_id, True)
+      await video_repo.set_challenge_creating(video_processing_id, True)
       await session.commit()
 
-  async def _save_challenges(self, video: Video, spec: ChallengeGenSpec, agent_response: ChallengeGenAgentResponse) -> ChallengeProcessorResult:
+  async def _save_challenges(self,
+                             spec: ChallengeGenSpec,
+                             agent_response: ChallengeGenAgentResponse) -> ChallengeProcessorResult:
     total_challenges: list[ChallengeDetails] = []
     async with self._db() as session:
-      video = await session.merge(video, load=False)
-      video.challenges_created_at = datetime.now(timezone.utc)
-      video.challenges_creating_error = False
+      video_repo = VideoRepository(session)
+      await video_repo.set_challenge_creating(spec.video_processing_id, False)
 
       challenge_repo = ChallengeRepository(session)
       await challenge_repo.unassign_videos(spec.pattern_group_id, spec.video_id)

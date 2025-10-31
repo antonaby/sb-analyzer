@@ -17,6 +17,7 @@ from db.conf import Base
 if TYPE_CHECKING:
   from .videos import Video
   from .topics import Topic
+  from .workflows import Workflow
 
 
 class ChallengePatternGroup(Base):
@@ -43,6 +44,11 @@ class ChallengePatternGroup(Base):
   )
   challenges: Mapped[list["Challenge"]] = relationship(
     back_populates="group",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
+  workflows: Mapped[list["Workflow"]] = relationship(
+    back_populates="pattern_group",
     cascade="all, delete-orphan",
     passive_deletes=True,
   )

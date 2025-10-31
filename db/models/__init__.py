@@ -7,6 +7,7 @@ from .hashtags import *
 from .videos import *
 from .searches import *
 from .jobs import *
+from .workflows import *
 
 
 __all__ = [
@@ -17,5 +18,6 @@ __all__ = [
   "ChallengePatternGroup", "ChallengePattern", "Challenge", "ChallengeTranslation", "ChallengeVideo", "ChallengeTopic",
   "Hashtag", "VideoHashtag",
   "Search", "VideoSearch",
-  "ScraperJob"
+  "ScraperJob",
+  "Workflow", "VideoProcessing"
 ]

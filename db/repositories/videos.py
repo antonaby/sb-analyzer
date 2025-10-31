@@ -2,14 +2,14 @@ from datetime import datetime
 from typing import Any, Sequence
 from uuid import UUID
 
-from sqlalchemy import or_, select, func, literal_column, desc, delete, update, cast, ARRAY, String
+from sqlalchemy import or_, select, func, literal_column, desc, update, cast, ARRAY, String
 from sqlalchemy.dialects.postgresql import insert as pg_insert, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, with_loader_criteria, joinedload
 from sqlalchemy.sql.selectable import Select
 
 from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource, \
-  VideoSearch, Hashtag, VideoHashtag, VideoTopic
+  VideoSearch, Hashtag, VideoHashtag, VideoTopic, VideoProcessing, Workflow
 from db.repositories.common import BaseAsyncRepo
 
 
@@ -45,7 +45,27 @@ class VideoRepository(BaseAsyncRepo):
   
   def __init__(self, session: AsyncSession):
     self._session = session
-    
+
+  async def create_workflow(self, topic_group_id: UUID, pattern_group_id: UUID) -> Workflow:
+    stmt = (
+      pg_insert(Workflow).
+      values(topic_group_id=topic_group_id, pattern_group_id=pattern_group_id).
+      returning(Workflow)
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one()
+
+  async def create_video_processing(self, workflow_id: UUID, video_id: UUID) -> VideoProcessing:
+    stmt = (
+      pg_insert(VideoProcessing).
+      values(workflow_id=workflow_id, video_id=video_id).
+      returning(VideoProcessing)
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one()
+
   async def upsert_video(
     self, 
     url: str, source: VideoSource, author: Author, 
@@ -198,6 +218,8 @@ class VideoRepository(BaseAsyncRepo):
           with_loader_criteria(VideoMeta, VideoMeta.source.in_(meta_to_load))
         )
 
+    stmt = stmt.options(selectinload(Video.processing))
+
     return stmt
     
   async def get_video_by_id(
@@ -206,7 +228,8 @@ class VideoRepository(BaseAsyncRepo):
       with_scraped_data: bool = False,
       with_annotations: bool = False,
       with_meta: bool = False,
-      with_author: bool = False
+      with_author: bool = False,
+      with_processing: bool = False
   ) -> Video | None:
     stmt = select(Video).where(Video.id == video_id)
     if with_scraped_data:
@@ -217,20 +240,37 @@ class VideoRepository(BaseAsyncRepo):
       stmt = stmt.options(selectinload(Video.video_meta))
     if with_author:
       stmt = stmt.options(joinedload(Video.author))
+    if with_processing:
+      stmt = stmt.options(selectinload(Video.processing))
       
     result = await self._session.execute(stmt)
     return result.scalar_one_or_none()
 
-  async def set_video_processing(self, video_id: UUID, with_error: bool):
-    stmt = update(Video).where(Video.id == video_id).values(processed_at=func.now(), processing_error=with_error)
+  async def set_video_processing(self, video_processing_id: UUID, with_error: bool):
+    stmt = (
+      update(VideoProcessing).
+      where(VideoProcessing.id == video_processing_id).
+      values(processed_at=func.now(), processing_error=with_error)
+    )
+
     await self._session.execute(stmt)
 
-  async def set_video_categorization(self, video_id: UUID, with_error: bool):
-    stmt = update(Video).where(Video.id == video_id).values(categorized_at=func.now(), categorization_error=with_error)
+  async def set_video_categorization(self, video_processing_id: UUID, with_error: bool):
+    stmt = (
+      update(VideoProcessing).
+      where(VideoProcessing.id == video_processing_id).
+      values(categorized_at=func.now(), categorization_error=with_error)
+    )
+
     await self._session.execute(stmt)
 
-  async def set_challenge_creating(self, video_id: UUID, with_error: bool):
-    stmt = update(Video).where(Video.id == video_id).values(challenges_created_at=func.now(), challenges_creating_error=with_error)
+  async def set_challenge_creating(self, video_processing_id: UUID, with_error: bool):
+    stmt = (
+      update(VideoProcessing).
+      where(VideoProcessing.id == video_processing_id).
+      values(challenges_created_at=func.now(), challenges_creating_error=with_error)
+    )
+
     await self._session.execute(stmt)
 
   async def upsert_hashtag(self, name: str, source: VideoSource) -> Hashtag:
@@ -298,7 +338,11 @@ class VideoRepository(BaseAsyncRepo):
     return videos.all()
 
   async def find_unprocessed_videos(self, limit: int | None = 100) -> Sequence[Video]:
-    stmt = select(Video).where(Video.processed_at.is_(None)).order_by(Video.created_at)
+    stmt = (
+      select(Video).
+      where(~Video.processing.any()).
+      order_by(Video.created_at.desc())
+    )
 
     if limit:
       stmt = stmt.limit(limit)

@@ -17,6 +17,7 @@ if TYPE_CHECKING:
   from .hashtags import Hashtag, VideoHashtag
   from .searches import Search, VideoSearch
   from .challenges import ChallengeVideo, Challenge
+  from .workflows import VideoProcessing
 
 
 class Video(Base):
@@ -44,13 +45,6 @@ class Video(Base):
   revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
   extra_data: Mapped[dict | None] = mapped_column(JSONB, default=None)
 
-  processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-  processing_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-  categorized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-  categorization_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-  challenges_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-  challenges_creating_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-
   created_at: Mapped[datetime] = mapped_column(
     DateTime(timezone=True),
     default=func.now(), nullable=False
@@ -62,6 +56,11 @@ class Video(Base):
 
   author: Mapped["Author"] = relationship(back_populates="videos")
 
+  processing: Mapped[list["VideoProcessing"]] = relationship(
+    back_populates="video",
+    cascade="all, delete-orphan",
+    passive_deletes=True,
+  )
   annotations: Mapped[list["VideoAnnotation"]] = relationship(
     back_populates="video",
     cascade="all, delete-orphan",
