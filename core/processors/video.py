@@ -76,9 +76,11 @@ class VideoDownloadProcessor(BaseVideoProcessor):
 
     last_scraped_data = max(video.scraped_data, key=lambda d: d.created_at)
     post_data = PostDetails(**last_scraped_data.data)
+    if post_data.download_url.startswith("storage://"):
+      raise VideoProcessorError(f"Video {video.id} already downloaded")
 
-    author_path = os.path.join(video.source.value, self._get_author_path(video.author))
-    download_path = self._storage_path / author_path
+    video_path = os.path.join(video.source.value, self._get_author_path(video.author), self._get_video_path(video))
+    download_path = self._storage_path / video_path
     video_source = await UrlVideoSource.new(post_data.download_url, str(download_path.resolve()))
 
     new_download_url = os.path.relpath(video_source.get_video_file_path(), self._storage_path.resolve())
@@ -104,6 +106,15 @@ class VideoDownloadProcessor(BaseVideoProcessor):
       return safe_name
 
     raise VideoProcessorError(f"Unknown author source {author.source}")
+
+  @staticmethod
+  def _get_video_path(video: Video) -> str:
+    if video.source == DBVideoSource.tiktok:
+      path = urlparse(video.url).path
+      video_id = path.rstrip('/').split('/')[-1]
+      return video_id
+
+    raise VideoProcessorError(f"Unknown video source {video.source}")
 
 
 class VideoProcessor(BaseVideoProcessor):
