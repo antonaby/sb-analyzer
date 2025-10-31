@@ -97,7 +97,8 @@ class ApidojoPostProcessor(JobProcessor):
         hashtags = [s for s in post.get("hashtags", []) if isinstance(s, str) and s.strip()]
 
         author_details = AuthorDetails(
-          url=author_url, author_from=VideoSource.tiktok,
+          url=author_url,
+          author_from=VideoSource.tiktok,
           verified=channel.get("verified", None),
           followers=channel.get("followers", None),
           total_videos=channel.get("videos", None)

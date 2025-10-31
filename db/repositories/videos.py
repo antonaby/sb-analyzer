@@ -2,10 +2,10 @@ from datetime import datetime
 from typing import Any, Sequence
 from uuid import UUID
 
-from sqlalchemy import or_, select, func, literal_column, desc, delete, update
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import or_, select, func, literal_column, desc, delete, update, cast, ARRAY, String
+from sqlalchemy.dialects.postgresql import insert as pg_insert, JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, with_loader_criteria
+from sqlalchemy.orm import selectinload, with_loader_criteria, joinedload
 from sqlalchemy.sql.selectable import Select
 
 from db.models import Author, AnnotationKind, Video, VideoAnnotation, VideoMeta, ScrapedData, VideoSource, MetaSource, \
@@ -99,6 +99,24 @@ class VideoRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one()
 
+  async def update_download_path(self, scraped_data_id: UUID, download_url: str) -> ScrapedData | None:
+    stmt = (
+      update(ScrapedData).
+      where(ScrapedData.id == scraped_data_id).
+      values(
+        data=func.jsonb_set(
+          ScrapedData.data,
+          cast(["download_url"], ARRAY(String())),
+          cast(download_url, JSONB),
+          True
+        )
+      ).
+      returning(ScrapedData)
+    )
+
+    result = await self._session.execute(stmt)
+    return result.scalar_one_or_none()
+
   async def get_video_by_topic(
       self,
       topic_id: UUID,
@@ -183,11 +201,12 @@ class VideoRepository(BaseAsyncRepo):
     return stmt
     
   async def get_video_by_id(
-    self, 
-    video_id: UUID, 
-    with_scraped_data: bool = False, 
-    with_annotations: bool = False, 
-    with_meta: bool = False
+      self,
+      video_id: UUID,
+      with_scraped_data: bool = False,
+      with_annotations: bool = False,
+      with_meta: bool = False,
+      with_author: bool = False
   ) -> Video | None:
     stmt = select(Video).where(Video.id == video_id)
     if with_scraped_data:
@@ -196,6 +215,8 @@ class VideoRepository(BaseAsyncRepo):
       stmt = stmt.options(selectinload(Video.annotations))
     if with_meta:
       stmt = stmt.options(selectinload(Video.video_meta))
+    if with_author:
+      stmt = stmt.options(joinedload(Video.author))
       
     result = await self._session.execute(stmt)
     return result.scalar_one_or_none()

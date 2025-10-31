@@ -3,6 +3,10 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class VideoDownloadSpec(BaseModel):
+  video_id: UUID
+
+
 class VideoProcessingSpec(BaseModel):
   video_id: UUID
   delete_downloaded_files: bool

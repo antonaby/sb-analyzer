@@ -1,5 +1,8 @@
 import logging
+import os
 from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import urlparse
 from uuid import UUID
 
 from openai import BaseModel
@@ -12,11 +15,12 @@ from core.file import AudioFile, UrlVideoSource, VideoFile, VideoSource
 from core.processors.common import JobProcessor, PostDetails
 from core.transcribe import FileAudioData, LemonfoxClient, Transcription
 from core.video import ClipTaggerClient, FileVideoData, Frame
-from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource
+from db.models import Video, VideoAnnotation, AnnotationKind, VideoMeta, MetaSource, Author, \
+  VideoSource as DBVideoSource, ScrapedData
 from db.repositories.helpers import full_video_data
 from db.repositories.topics import TopicRepository
 from db.repositories.videos import prepare_meta, prepare_annotation, VideoRepository
-from models.videos import VideoProcessingSpec, VideoCategorizationSpec
+from models.videos import VideoProcessingSpec, VideoCategorizationSpec, VideoDownloadSpec
 
 
 class VideoProcessorError(Exception):
@@ -33,7 +37,8 @@ class BaseVideoProcessor(JobProcessor):
       video_id: UUID,
       with_scraped_data: bool = False,
       with_annotations: bool = False,
-      with_meta: bool = False
+      with_meta: bool = False,
+      with_author: bool = False
   ) -> Video:
     async with self._db() as session:
       repo = VideoRepository(session)
@@ -41,7 +46,8 @@ class BaseVideoProcessor(JobProcessor):
         video_id,
         with_scraped_data=with_scraped_data,
         with_annotations=with_annotations,
-        with_meta=with_meta
+        with_meta=with_meta,
+        with_author=with_author
       )
       if not video:
         raise VideoProcessorError(f"Video {video_id} not found")
@@ -51,6 +57,53 @@ class BaseVideoProcessor(JobProcessor):
 
 class ProcessedVideo(BaseModel):
   video_id: UUID
+
+
+class VideoDownloadProcessor(BaseVideoProcessor):
+
+  def __init__(self, session_maker: async_sessionmaker[AsyncSession], storage_dir: str):
+    super().__init__(session_maker)
+    path = Path(storage_dir)
+    path.mkdir(parents=True, exist_ok=True)
+
+    self._storage_path = path
+
+  async def run(self, spec: VideoDownloadSpec) -> ProcessedVideo:
+    video = await self._find_video(spec.video_id, with_scraped_data=True, with_author=True)
+
+    if len(video.scraped_data) == 0:
+      raise VideoProcessorError(f"Video {spec.video_id} has no scraped data")
+
+    last_scraped_data = max(video.scraped_data, key=lambda d: d.created_at)
+    post_data = PostDetails(**last_scraped_data.data)
+
+    author_path = os.path.join(video.source.value, self._get_author_path(video.author))
+    download_path = self._storage_path / author_path
+    video_source = await UrlVideoSource.new(post_data.download_url, str(download_path.resolve()))
+
+    new_download_url = os.path.relpath(video_source.get_video_file_path(), self._storage_path.resolve())
+    await self._save_video_data(
+      last_scraped_data,
+      f"storage://{new_download_url}"
+    )
+
+    return ProcessedVideo(video_id=video.id)
+
+  async def _save_video_data(self, data: ScrapedData, new_download_path: str):
+    async with self._db() as session:
+      repo = VideoRepository(session)
+      await repo.update_download_path(data.id, new_download_path)
+      await session.commit()
+
+  @staticmethod
+  def _get_author_path(author: Author) -> str:
+    if author.source == DBVideoSource.tiktok:
+      parsed = urlparse(author.url)
+      username = parsed.path.lstrip("/")
+      safe_name = username.replace("@", "")
+      return safe_name
+
+    raise VideoProcessorError(f"Unknown video source {author.source}")
 
 
 class VideoProcessor(BaseVideoProcessor):
