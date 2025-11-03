@@ -68,6 +68,15 @@ class VideoDownloadProcessor(BaseVideoProcessor):
 
     self._storage_path = path
 
+  async def run_workflow(self, spec: VideoDownloadSpec, video_processing_id: UUID) -> ProcessedVideo:
+    try:
+      result = await self.run(spec)
+      await self._set_downloaded_status(video_processing_id, False)
+      return result
+    except Exception as e:
+      await self._set_downloaded_status(video_processing_id, True)
+      raise e
+
   async def run(self, spec: VideoDownloadSpec) -> ProcessedVideo:
     video = await self._find_video(spec.video_id, with_scraped_data=True, with_author=True)
 
@@ -95,6 +104,12 @@ class VideoDownloadProcessor(BaseVideoProcessor):
     async with self._db() as session:
       repo = VideoRepository(session)
       await repo.update_download_path(data.id, new_download_path)
+      await session.commit()
+
+  async def _set_downloaded_status(self, video_processing_id: UUID, with_error: bool):
+    async with self._db() as session:
+      video_repo = VideoRepository(session)
+      await video_repo.set_video_downloading(video_processing_id, with_error)
       await session.commit()
 
   @staticmethod

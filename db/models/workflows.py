@@ -75,6 +75,8 @@ class VideoProcessing(Base):
   categorization_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
   challenges_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
   challenges_creating_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+  downloaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+  download_error: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
   created_at: Mapped[datetime] = mapped_column(
     DateTime(timezone=True),

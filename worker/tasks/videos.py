@@ -5,12 +5,16 @@ from worker.main import worker_app
 
 
 @worker_app.task
-def download_video(spec: dict):
+def download_video(spec: dict, video_processing_id: UUID | None = None):
   from worker.tasks.deps import loop, video_download_processor
 
   processor_spec = VideoDownloadSpec(**spec)
-  processed_video = loop.run_until_complete(video_download_processor.run(processor_spec))
+  if video_processing_id:
+    coro = video_download_processor.run_workflow(processor_spec, video_processing_id)
+  else:
+    coro = video_download_processor.run(processor_spec)
 
+  processed_video = loop.run_until_complete(coro)
   return processed_video.model_dump(mode="json")
 
 

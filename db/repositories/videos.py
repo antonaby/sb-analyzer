@@ -246,6 +246,15 @@ class VideoRepository(BaseAsyncRepo):
     result = await self._session.execute(stmt)
     return result.scalar_one_or_none()
 
+  async def set_video_downloading(self, video_processing_id: UUID, with_error: bool):
+    stmt = (
+      update(VideoProcessing).
+      where(VideoProcessing.id == video_processing_id).
+      values(downloaded_at=func.now(), download_error=with_error)
+    )
+
+    await self._session.execute(stmt)
+
   async def set_video_processing(self, video_processing_id: UUID, with_error: bool):
     stmt = (
       update(VideoProcessing).
