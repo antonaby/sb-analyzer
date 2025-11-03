@@ -23,8 +23,7 @@ ai = [
     "yt-dlp>=2025.9.23",
 ]
 api = [
-    "fastapi>=0.118.0",
-    "uvicorn[standard]>=0.37.0",
+    "fastapi[standard]>=0.118.0",
 ]
 db = [
     "asyncpg>=0.30.0",
@@ -38,6 +37,6 @@ dev = [
     "jupyterlab>=4.4.9",
     "pandas>=2.3.3",
 ]
-worker = [
+monitoring = [
     "flower>=2.0.1",
 ]
