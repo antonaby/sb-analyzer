@@ -1,5 +1,7 @@
+import asyncio
 import logging
 from dataclasses import dataclass
+from typing import TypedDict
 from uuid import UUID
 
 from openai import BaseModel
@@ -7,7 +9,10 @@ from pydantic_ai import Agent, ModelSettings, RunContext
 from pydantic_ai.models import Model
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
-from core.agents.common import TemplateManager, TopicName
+from core.agents.common import TemplateManager, TopicName, VideoMetadata
+from core.processors.common import PostDetails
+from core.transcribe import FileAudioData
+from core.video import FileVideoData
 from db.repositories.challenges import ChallengeRepository
 from db.repositories.helpers import TextVideoData
 
@@ -178,5 +183,76 @@ class ChallengeCategoryAgent:
     self._log.debug(
       f"Finish: summary request, input_tokens={usage.input_tokens}, output_tokens={usage.output_tokens}"
     )
+
+    return res.output
+
+
+class ChallengeVideoAnalyzerRun(BaseModel):
+  challenge: str
+  max_frames: int
+  post: PostDetails
+
+
+class ChallengeVideoAnalyzerResponse(BaseModel):
+  accuracy: float
+  reason: str
+
+  class Config:
+    extra = "forbid"
+
+
+class UserPromptInput(TypedDict):
+  challenge: str
+  metadata: VideoMetadata
+  frames: list[dict]
+  transcriptions: list[dict]
+
+
+class ChallengeVideoAnalyzer:
+
+  def __init__(self, model: Model, model_settings: ModelSettings, tpl_mgr: TemplateManager):
+    self._log = logging.getLogger("app.challenge_video_analyzer_agent")
+    self._tpl_mgr = tpl_mgr
+
+    agent = Agent(
+      model,
+      model_settings=model_settings,
+      instructions=self._tpl_mgr.render("challenge_video_analyzer_system", {}),
+      output_type=ChallengeVideoAnalyzerResponse,
+    )
+    self._agent = agent
+
+  async def run(self, run: ChallengeVideoAnalyzerRun, video: FileVideoData, audio: FileAudioData, temperature: float = 0.0) -> ChallengeVideoAnalyzerResponse:
+    basic_frames, transcription = await asyncio.gather(
+      video.get_n_frames(frame_n=run.max_frames),
+      audio.get_transcription()
+    )
+
+    post = run.post
+    user_input: UserPromptInput = {
+      "challenge": run.challenge,
+      "metadata": {
+        "post_from": post.post_from.value,
+        "title": post.title,
+        "description": post.description,
+        "hashtags": post.hashtags,
+        "duration": video.get_duration(),
+        "uploaded_at_iso": post.uploaded_at.isoformat(),
+        "likes": post.likes,
+        "views": post.views,
+        "comments": post.comments
+      },
+      "frames": [f.model_dump() for f in basic_frames],
+      "transcriptions": [t.model_dump() for t in transcription]
+    }
+
+    user_prompt = self._tpl_mgr.render("only_input", {"input": user_input})
+    res = await self._agent.run(
+      user_prompt,
+      model_settings=ModelSettings(temperature=temperature)
+    )
+
+    usage = res.usage()
+    self._log.debug(f"Finish: summary request, input_tokens={usage.input_tokens}, output_tokens={usage.output_tokens}")
 
     return res.output

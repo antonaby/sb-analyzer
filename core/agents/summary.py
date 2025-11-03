@@ -7,7 +7,7 @@ from openai import BaseModel
 from pydantic_ai import Agent, RunContext, ModelSettings
 from pydantic_ai.models import Model
 
-from core.agents.common import TemplateManager
+from core.agents.common import TemplateManager, VideoMetadata
 from core.processors.common import PostDetails
 from core.transcribe import FileAudioData
 from core.video import Frame, FileVideoData
@@ -36,18 +36,6 @@ class VideoSummary(BaseModel):
   
   class Config: # type: ignore
     extra = "forbid"
-
-
-class VideoMetadata(TypedDict):
-  post_from: str
-  title: str
-  description: str
-  hashtags: list[str]
-  duration: float
-  uploaded_at_iso: str
-  likes: int
-  views: int
-  comments: int
 
 
 class UserPromptInput(TypedDict):

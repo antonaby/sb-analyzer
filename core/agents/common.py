@@ -1,4 +1,5 @@
 import os
+from typing import TypedDict
 from uuid import UUID
 
 from jinja2 import Environment, FileSystemLoader, Template
@@ -79,3 +80,15 @@ class TemplateManager:
 class TopicName(BaseModel):
   id: UUID
   name: str
+
+
+class VideoMetadata(TypedDict):
+  post_from: str
+  title: str
+  description: str
+  hashtags: list[str]
+  duration: float
+  uploaded_at_iso: str
+  likes: int
+  views: int
+  comments: int
